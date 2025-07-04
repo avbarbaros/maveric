@@ -1,0 +1,717 @@
+# Dockerfile
+FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libglib2.0-0 \
+    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the package
+COPY . .
+
+# Install MAVERIC
+RUN pip install -e .
+
+# Create cache directory
+RUN mkdir -p /data/maveric_cache
+
+# Set environment variables
+ENV MAVERIC_CACHE_DIR=/data/maveric_cache
+ENV PYTHONUNBUFFERED=1
+
+# Default command
+CMD ["python", "-m", "maveric.cli", "--help"]
+
+---
+
+# docker-compose.yml
+version: '3.8'
+
+services:
+  maveric:
+    build: .
+    image: maveric:latest
+    volumes:
+      - ./data:/data
+      - ./configs:/configs
+      - ./outputs:/outputs
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MAVERIC_CACHE_DIR=/data/maveric_cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: python -m maveric.cli retrieve --config /configs/config.yaml
+
+  jupyter:
+    build: .
+    image: maveric:latest
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data:/data
+      - ./notebooks:/notebooks
+      - ./outputs:/outputs
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    command: jupyter lab --ip=0.0.0.0 --no-browser --allow-root
+
+---
+
+# Makefile
+.PHONY: install test lint format clean docker docs
+
+# Development setup
+install:
+	pip install -e ".[dev]"
+
+# Run tests
+test:
+	pytest tests/ -v --cov=maveric --cov-report=html
+
+# Lint code
+lint:
+	flake8 maveric/ tests/
+	mypy maveric/
+
+# Format code
+format:
+	black maveric/ tests/
+	isort maveric/ tests/
+
+# Clean up
+clean:
+	rm -rf build/
+	rm -rf dist/
+	rm -rf *.egg-info
+	rm -rf .pytest_cache/
+	rm -rf .coverage
+	rm -rf htmlcov/
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+
+# Docker commands
+docker-build:
+	docker build -t maveric:latest .
+
+docker-run:
+	docker run -it --rm \
+		-v $(PWD)/data:/data \
+		-v $(PWD)/configs:/configs \
+		maveric:latest
+
+# Documentation
+docs:
+	cd docs && make html
+
+# Full pipeline example
+example-pipeline:
+	python examples/basic_usage.py
+
+---
+
+# CONTRIBUTING.md
+# Contributing to MAVERIC
+
+We welcome contributions to MAVERIC! This document provides guidelines for contributing to the project.
+
+## Getting Started
+
+1. Fork the repository
+2. Clone your fork:
+   ```bash
+   git clone https://github.com/yourusername/maveric.git
+   cd maveric
+   ```
+3. Create a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+4. Install development dependencies:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+## Development Workflow
+
+1. Create a new branch for your feature:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. Make your changes and ensure tests pass:
+   ```bash
+   make test
+   ```
+
+3. Format and lint your code:
+   ```bash
+   make format
+   make lint
+   ```
+
+4. Commit your changes:
+   ```bash
+   git add .
+   git commit -m "Add your descriptive commit message"
+   ```
+
+5. Push to your fork and create a pull request
+
+## Code Style
+
+- We use [Black](https://github.com/psf/black) for code formatting
+- We use [isort](https://pycqa.github.io/isort/) for import sorting
+- Follow PEP 8 guidelines
+- Add type hints where possible
+- Write descriptive docstrings for all public functions and classes
+
+## Testing
+
+- Write tests for new functionality
+- Ensure all tests pass before submitting PR
+- Aim for high test coverage
+- Use pytest fixtures for common test data
+
+## Adding New Features
+
+### Adding a New Quality Metric
+
+1. Create a new metric class in `maveric/quality/metrics/`:
+   ```python
+   from maveric.quality.metrics.base_metric import BaseQualityMetric
+   
+   class MyNewMetric(BaseQualityMetric):
+       @property
+       def metric_name(self) -> str:
+           return "my_new_metric"
+       
+       def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
+           # Your implementation
+           pass
+   ```
+
+2. Add tests in `tests/test_quality_metrics.py`
+
+3. Update documentation
+
+### Adding a New Dataset
+
+1. Create a dataset handler in `maveric/datasets/`:
+   ```python
+   from maveric.core.base import BaseDataset
+   
+   class MyDataset(BaseDataset):
+       # Implementation
+   ```
+
+2. Register it in `maveric/datasets/__init__.py`
+
+3. Add tests and documentation
+
+## Documentation
+
+- Update docstrings for API changes
+- Update README.md if needed
+- Add examples for new features
+- Update API reference documentation
+
+## Pull Request Process
+
+1. Update the README.md with details of changes if applicable
+2. Update the documentation with any new APIs
+3. The PR must pass all CI checks
+4. Request review from maintainers
+5. Once approved, it will be merged
+
+## Questions?
+
+Feel free to open an issue for any questions about contributing!
+
+---
+
+# CHANGELOG.md
+# Changelog
+
+All notable changes to MAVERIC will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- Initial release of MAVERIC library
+- Core retrieval system with CLIP-based scoring
+- Comprehensive quality metrics (visual, semantic, multimodal)
+- Interactive threshold selection GUI for Jupyter notebooks
+- Quality control dashboard with multiple visualization tabs
+- Model customization with locked-text tuning
+- Support for CIFAR-10, CIFAR-100, and ELEVATER datasets
+- Efficient caching system for images and results
+- Command-line interface for batch processing
+- Docker support for deployment
+- Comprehensive test suite
+- API documentation and examples
+
+### Features
+- **Retrieval Module**
+  - Multi-modal similarity scoring
+  - Reference-based quality assessment
+  - Batch processing with rotation
+  - Progress tracking
+
+- **Quality Metrics**
+  - Resolution scoring
+  - Sharpness detection (Laplacian variance)
+  - Color diversity analysis
+  - Feature richness using pre-trained networks
+  - Multi-modal consistency scoring
+  - Text quality assessment
+
+- **Quality Control**
+  - Threshold-based filtering
+  - Dataset balancing strategies
+  - Class-aware filtering
+  - Statistical analysis
+
+- **Visualization**
+  - Metric distribution plots
+  - Sample image galleries
+  - Class distribution charts
+  - Before/after comparisons
+
+- **Model Customization**
+  - Locked-text CLIP tuning
+  - Regularization to prevent forgetting
+  - Data augmentation support
+  - Multiple optimizer options
+
+## [0.1.0] - 2024-01-XX (Planned)
+
+Initial public release.
+
+---
+
+# .github/workflows/tests.yml
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, '3.10']
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Lint with flake8
+      run: |
+        flake8 maveric tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 maveric tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Test with pytest
+      run: |
+        pytest tests/ -v --cov=maveric --cov-report=xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+---
+
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maveric"
+description = "Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/maveric"
+"Bug Reports" = "https://github.com/yourusername/maveric/issues"
+"Source" = "https://github.com/yourusername/maveric"
+
+[tool.setuptools_scm]
+write_to = "maveric/_version.py"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+---
+
+# docs/installation.md
+# Installation Guide
+
+## Requirements
+
+- Python 3.8 or higher
+- CUDA-capable GPU (recommended)
+- At least 8GB RAM
+- 50GB+ free disk space for caching
+
+## Quick Install
+
+### Using pip
+
+```bash
+pip install maveric
+```
+
+### From source
+
+```bash
+git clone https://github.com/yourusername/maveric.git
+cd maveric
+pip install -e .
+```
+
+### Development installation
+
+```bash
+git clone https://github.com/yourusername/maveric.git
+cd maveric
+pip install -e ".[dev]"
+```
+
+## Docker Installation
+
+### Build image
+
+```bash
+docker build -t maveric:latest .
+```
+
+### Run with GPU support
+
+```bash
+docker run --gpus all -it \
+    -v $(pwd)/data:/data \
+    -v $(pwd)/configs:/configs \
+    maveric:latest
+```
+
+### Using docker-compose
+
+```bash
+docker-compose up
+```
+
+## Platform-Specific Instructions
+
+### Linux
+
+Most straightforward installation:
+
+```bash
+# Install system dependencies (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install python3-pip python3-dev
+
+# Install MAVERIC
+pip install maveric
+```
+
+### macOS
+
+```bash
+# Install using Homebrew Python
+brew install python@3.9
+pip3 install maveric
+```
+
+Note: GPU acceleration not available on macOS. Will use CPU.
+
+### Windows
+
+```bash
+# Using Anaconda (recommended)
+conda create -n maveric python=3.9
+conda activate maveric
+pip install maveric
+```
+
+## Verification
+
+Verify installation:
+
+```python
+import maveric
+print(maveric.__version__)
+
+# Check CLIP model loading
+from maveric import MAVERIC
+m = MAVERIC()
+print("Installation successful!")
+```
+
+## Common Issues
+
+### CUDA not found
+
+If you see CUDA-related errors but have a GPU:
+
+```bash
+# Install PyTorch with CUDA support
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+```
+
+### Memory errors
+
+For large-scale processing:
+- Reduce batch size in configuration
+- Enable disk caching
+- Use chunked processing
+
+### Import errors
+
+Ensure all dependencies are installed:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Next Steps
+
+- See the [Quick Start Guide](quickstart.md)
+- Read the [API Reference](api_reference.md)
+- Try the [Example Notebooks](examples/)
+
+---
+
+# docs/architecture.md
+# MAVERIC Architecture
+
+## System Overview
+
+MAVERIC follows a modular architecture designed for extensibility and maintainability:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│                 │     │                  │     │                 │
+│    Retrieval    │────▶│ Quality Control  │────▶│  Customization  │
+│                 │     │                  │     │                 │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │                       │                         │
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Cache Manager  │     │  Visualizations  │     │    Training     │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+```
+
+## Core Components
+
+### 1. Retrieval System
+
+The retrieval system handles:
+- Loading source datasets
+- Computing multi-modal embeddings
+- Scoring samples against reference data
+- Managing batch processing
+
+Key classes:
+- `Retriever`: Main retrieval engine
+- `CacheManager`: Handles image and result caching
+- `DatasetHandler`: Abstract interface for datasets
+
+### 2. Quality Control
+
+Quality control includes:
+- Multiple quality metrics (visual, semantic, multimodal)
+- Configurable filtering pipelines
+- Dataset balancing strategies
+
+Key classes:
+- `QualityController`: Orchestrates quality assessment
+- `BaseQualityMetric`: Abstract base for metrics
+- `QualityFilter`: Abstract base for filters
+
+### 3. Model Customization
+
+Customization features:
+- Locked-text tuning approach
+- Regularization to prevent forgetting
+- Flexible training configurations
+
+Key classes:
+- `ModelCustomizer`: Manages customization pipeline
+- `CustomizedCLIP`: Modified CLIP model
+- `Trainer`: Handles training loop
+
+## Design Patterns
+
+### Factory Pattern
+
+Used for creating datasets and models:
+
+```python
+dataset = DatasetFactory.create_dataset("cifar100")
+model = ModelFactory.create_model("clip", model_name="ViT-B/32")
+```
+
+### Strategy Pattern
+
+Quality metrics implement a common interface:
+
+```python
+class BaseQualityMetric(ABC):
+    @abstractmethod
+    def compute(self, image, metadata) -> float:
+        pass
+```
+
+### Builder Pattern
+
+Configuration uses builder pattern:
+
+```python
+config = MAVERICConfig()
+    .set_cache_dir("/path/to/cache")
+    .set_device("cuda")
+    .build()
+```
+
+## Data Flow
+
+1. **Retrieval Phase**
+   - Load source dataset
+   - Compute embeddings for each sample
+   - Score against reference embeddings
+   - Save results with rotation
+
+2. **Quality Control Phase**
+   - Load retrieval results
+   - Apply quality metrics
+   - Filter based on thresholds
+   - Balance dataset if needed
+
+3. **Customization Phase**
+   - Create data loaders from filtered data
+   - Fine-tune vision encoder
+   - Evaluate on target dataset
+   - Save best model
+
+## Extension Points
+
+### Adding New Metrics
+
+```python
+class MyMetric(BaseQualityMetric):
+    def compute(self, image, metadata):
+        # Your implementation
+        return score
+```
+
+### Adding New Datasets
+
+```python
+class MyDataset(BaseDataset):
+    @property
+    def class_names(self):
+        return ["class1", "class2"]
+    
+    def get_reference_samples(self, n_per_class):
+        # Return reference images
+        pass
+```
+
+### Custom Filters
+
+```python
+class MyFilter(QualityFilter):
+    def apply(self, data):
+        # Filter logic
+        return filtered_data
+```
+
+## Performance Considerations
+
+1. **Caching**: Aggressive caching of images and embeddings
+2. **Batch Processing**: Configurable batch sizes
+3. **GPU Utilization**: Automatic device selection
+4. **Memory Management**: Rotation-based saving for large datasets
+
+## Security Considerations
+
+- No execution of arbitrary code
+- Validated input parsing
+- Secure default configurations
+- Sandboxed file operations

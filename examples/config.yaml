@@ -1,0 +1,56 @@
+# Example MAVERIC configuration file
+
+# Model configuration
+clip_model: "ViT-B/32"
+device: "auto"
+
+# Cache configuration
+cache_base_dir: "/path/to/maveric_cache"
+enable_image_cache: true
+cache_format: "jpg"
+cache_quality: 95
+
+# Retrieval configuration
+batch_size: 32
+num_workers: 0
+n_reference_images: 10
+retrieval_rotation_size: 1000
+max_retries: 3
+request_timeout: 5
+
+# Quality metrics
+quality_metrics:
+  - resolution
+  - sharpness
+  - color_diversity
+  - feature_richness
+  - multimodal_consistency
+
+# Metric weights for composite scoring
+metric_weights:
+  img2img: 0.40
+  txt2txt: 0.20
+  img2txt: 0.20
+  txt2img: 0.20
+
+# Default quality thresholds
+default_thresholds:
+  weighted_class_score: 0.493
+  consistency: 0.796
+  resolution_score: 0.370
+  sharpness_score: 0.880
+  color_score: 0.768
+
+# Dataset balancing
+balance_min_samples: 15
+balance_max_samples: 200
+balance_enable_oversampling: false
+
+# Logging
+log_level: "INFO"
+log_to_file: true
+
+# Visualization
+viz_style: "seaborn"
+viz_dpi: 100
+viz_save_figures: false

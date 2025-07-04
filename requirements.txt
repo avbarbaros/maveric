@@ -1,0 +1,39 @@
+# Core dependencies
+torch>=1.9.0
+torchvision>=0.10.0
+transformers>=4.20.0
+datasets>=2.0.0
+
+# CLIP and vision
+ftfy
+regex
+tqdm
+opencv-python>=4.5.0
+Pillow>=8.0.0
+
+# Data processing and ML
+numpy>=1.19.0
+pandas>=1.3.0
+scikit-learn>=0.24.0
+scipy>=1.7.0
+
+# Visualization
+matplotlib>=3.3.0
+seaborn>=0.11.0
+
+# Interactive components (for Jupyter)
+ipywidgets>=7.6.0
+jupyter>=1.0.0
+
+# Text processing
+langdetect>=1.0.9
+
+# HTTP and networking
+requests>=2.25.0
+urllib3>=1.26.0
+
+# Configuration
+PyYAML>=5.4.0
+
+# Optional but recommended
+# wandb>=0.12.0  # for experiment tracking
