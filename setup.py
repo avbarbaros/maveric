@@ -13,7 +13,7 @@ setup(
     version="0.1.0",
     author="Ali V. Barbaros",
     author_email="alivalabarbaros@gmail.com",
-    description="Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency",
+    description="Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency (MAVERIC)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/avbarbaros/maveric",
