@@ -1,6 +1,6 @@
 """Factory for creating dataset handlers."""
 
-from typing import Dict, Type, Optional
+from typing import Dict, Type, Optional, List
 from ..core.base import BaseDataset
 from ..core.exceptions import DatasetError
 

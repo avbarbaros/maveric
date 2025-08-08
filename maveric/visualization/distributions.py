@@ -20,7 +20,7 @@ class MetricsVisualizer(BaseComponent):
     """
     
     def __init__(self, 
-                 style: str = 'seaborn',
+                 style: str = 'default',
                  figsize: Tuple[int, int] = (10, 6),
                  dpi: int = 100):
         """
@@ -37,8 +37,17 @@ class MetricsVisualizer(BaseComponent):
         self.dpi = dpi
         
         # Set style
-        plt.style.use(style)
-        sns.set_palette("husl")
+        try:
+            plt.style.use(style)
+        except OSError:
+            # Fallback to default if style is not available
+            plt.style.use('default')
+        
+        try:
+            sns.set_palette("husl")
+        except Exception:
+            # Continue without seaborn if not available
+            pass
     
     def plot_metric_distribution(self,
                                data: pd.DataFrame,

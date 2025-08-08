@@ -42,10 +42,10 @@ class TestMAVERICConfig:
         
         Path(f.name).unlink()
     
-    def test_save_load_json(self):
+    def test_save_load_json(self, tmp_path):
         """Test saving and loading JSON config."""
         config = MAVERICConfig(
-            cache_base_dir="/test/cache",
+            cache_base_dir=str(tmp_path / "cache"),
             device="cpu"
         )
         
@@ -53,7 +53,7 @@ class TestMAVERICConfig:
             config.to_json(f.name)
             loaded_config = MAVERICConfig.from_json(f.name)
             
-        assert loaded_config.cache_base_dir == "/test/cache"
+        assert loaded_config.cache_base_dir == str(tmp_path / "cache")
         assert loaded_config.device == "cpu"
         
         Path(f.name).unlink()

@@ -141,7 +141,7 @@ class QualityResult:
     
     # Sample data - before and after filtering
     filtered_samples: List[Dict[str, Any]]  # Samples that passed quality thresholds
-    original_samples: List[Dict[str, Any]]   # Original unfiltered samples for comparison
+    original_samples: List[Dict[str, Any]]  # Original unfiltered samples for comparison
     
     # Configuration used for filtering
     thresholds: Dict[str, float]  # Quality thresholds applied during filtering
@@ -197,9 +197,9 @@ class QualityResult:
         """Generate human-readable text summary of quality control results."""
         # Build summary with overall statistics
         summary = f"Quality Control Results:\n"
-        summary += f"  Original samples: {self.original_count:,}\n"    # Format with thousands separator
+        summary += f"  Original samples: {self.original_count:,}\n"   # Format with thousands separator
         summary += f"  Filtered samples: {self.filtered_count:,}\n"   # Format with thousands separator
-        summary += f"  Retention rate: {self.retention_rate:.1%}\n"      # Format as percentage
+        summary += f"  Retention rate: {self.retention_rate:.1%}\n"   # Format as percentage
         summary += f"  Balance strategy: {self.balance_strategy}\n"
         
         # Add per-class breakdown if available

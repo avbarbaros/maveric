@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 import numpy as np
+import torch
 from PIL import Image
 
 from maveric.retrieval import CacheManager, Retriever

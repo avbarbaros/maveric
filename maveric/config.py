@@ -22,7 +22,7 @@ class MAVERICConfig:
     model_cache_dir: Optional[str] = None
     
     # Cache configuration
-    cache_base_dir: str = "/content/drive/MyDrive/MAVERIC_Cache"
+    cache_base_dir: str = "./cache"
     enable_image_cache: bool = True
     cache_format: str = "jpg"
     cache_quality: int = 95  # JPEG quality for cached images
@@ -69,7 +69,7 @@ class MAVERICConfig:
     log_file_path: Optional[str] = None
     
     # Visualization configuration
-    viz_style: str = "seaborn"
+    viz_style: str = "default"
     viz_dpi: int = 100
     viz_save_figures: bool = False
     viz_figure_dir: Optional[str] = None

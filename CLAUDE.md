@@ -28,6 +28,8 @@ pip install -e ".[dev,docs]"
 ```
 
 ### Testing
+
+#### Basic Testing
 ```bash
 # Run all tests
 pytest
@@ -41,6 +43,38 @@ pytest tests/test_quality_metrics.py
 # Run specific test
 pytest tests/test_main.py::test_retrieve
 ```
+
+#### Headless Environment Testing
+For Docker, CI/CD, or remote environments without display:
+
+```bash
+# Set matplotlib backend and run tests
+MPLBACKEND=Agg pytest
+
+# Alternative: set in environment
+export MPLBACKEND=Agg
+pytest
+```
+
+#### Common Test Issues and Solutions
+
+**Import Errors:**
+- Missing `openai-clip`: `pip install openai-clip`
+- Missing `torch`/`torchvision`: Install appropriate version for your system
+- `libGL.so.1` errors: Use `opencv-python-headless` instead of `opencv-python`
+
+**Matplotlib/Visualization Issues:**
+- `seaborn` style not found: Updated to use 'default' style
+- Display errors in headless environments: Set `MPLBACKEND=Agg`
+
+**PIL API Changes:**
+- `Image.BLUR` deprecated: Use `ImageFilter.BLUR` instead
+- Import `ImageFilter` from PIL for filtering operations
+
+**Test Environment Issues:**
+- Use `tmp_path` fixture for temporary directories
+- Mock external dependencies properly
+- Import all required modules in test files (`torch`, `numpy`, etc.)
 
 ### Code Quality
 ```bash

@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 import pandas as pd
+import numpy as np
 
 from maveric import MAVERIC, MAVERICConfig
 from maveric.core.interfaces import RetrievalResult, QualityResult
@@ -32,6 +33,9 @@ class TestMAVERIC:
     @patch('maveric.main.REACTDatasetHandler')
     def test_retrieve(self, mock_handler, maveric):
         """Test retrieval functionality."""
+        # Mock cache manager to return None (no cached results)
+        maveric.cache_manager.load_results = Mock(return_value=None)
+        
         # Mock dataset handler
         mock_handler.return_value = Mock()
         
@@ -39,13 +43,13 @@ class TestMAVERIC:
         maveric.retriever.retrieve = Mock(
             return_value=RetrievalResult(
                 samples=[{'id': 1, 'score': 0.9}],
-                source_dataset='test',
+                source_dataset='react-test-dataset',
                 target_dataset='cifar10'
             )
         )
         
         result = maveric.retrieve(
-            dataset_name='test-dataset',
+            dataset_name='react-test-dataset',
             target_dataset='cifar10',
             num_samples=100
         )

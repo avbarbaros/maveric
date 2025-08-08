@@ -3,6 +3,7 @@
 import re
 from typing import Any, Dict, List
 from langdetect import detect, LangDetectException
+from PIL import Image
 
 from .base_metric import BaseQualityMetric
 

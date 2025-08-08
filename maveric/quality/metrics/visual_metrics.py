@@ -211,12 +211,12 @@ class FeatureRichnessMetric(BaseQualityMetric):
         
         # Image preprocessing
         self.transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
+            transforms.Resize(256),              # Resize to 256x256
+            transforms.CenterCrop(224),          # Crop center 224x224 (ResNet input size)
+            transforms.ToTensor(),               # Convert PIL to tensor
+            transforms.Normalize(                # Normalize with ImageNet stats
+                mean=[0.485, 0.456, 0.406],      # ImageNet mean values
+                std=[0.229, 0.224, 0.225]        # ImageNet standard deviation
             )
         ])
     

@@ -1,6 +1,3 @@
-"""Base classes for MAVERIC components."""
-
-# Import necessary modules for abstract base classes and type hints
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 # Python's standard logging framework
@@ -11,6 +8,16 @@ from PIL import Image
 import numpy as np
 import pandas as pd
 
+"""
+Base classes for MAVERIC components.
+
+Import necessary modules for abstract base classes and type hints
+ABC (Abstract Base Class) is used to create abstract base classes that:
+1. Provide the foundation for creating abstract classes that cannot be instantiated directly
+2. Interface Definition: Forces subclasses to implement required methods marked with @abstractmethod
+3. Contract Enforcement: Ensures all dataset handlers and metrics follow the same interface
+4. Runtime Validation: Python will raise TypeError if you try to instantiate a class that inherits from ABC but doesn't implement all abstract methods
+"""
 
 class BaseComponent(ABC):
     """
@@ -49,6 +56,7 @@ class BaseComponent(ABC):
 
 class BaseDataset(BaseComponent):
     """
+    Inherits ABC through BaseComponent
     Abstract base class for all dataset handlers (CIFAR, Elevater, etc.).
     All dataset implementations should inherit from this class.
     """
@@ -57,7 +65,7 @@ class BaseDataset(BaseComponent):
     @abstractmethod
     def name(self) -> str:
         """Abstract property - each dataset must define its name."""
-        pass
+        pass # No implementation - subclasses must provide this
     
     @property
     @abstractmethod
@@ -111,6 +119,7 @@ class BaseDataset(BaseComponent):
 
 class BaseMetric(BaseComponent):
     """
+    Inherits ABC through BaseComponent
     Abstract base class for all quality metrics (sharpness, resolution, etc.).
     All quality metric implementations should inherit from this class.
     """

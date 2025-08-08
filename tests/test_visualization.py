@@ -4,6 +4,8 @@ import pytest
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from unittest.mock import patch, Mock
+from PIL import Image
 
 from maveric.visualization import MetricsVisualizer, SampleVisualizer
 

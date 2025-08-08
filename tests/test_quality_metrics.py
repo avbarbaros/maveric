@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from maveric.quality.metrics import (
     ResolutionMetric,
@@ -54,7 +54,7 @@ class TestVisualMetrics:
         assert 0 <= score <= 1.0
         
         # Blurred image should have lower score
-        blurred = sample_image.filter(Image.BLUR)
+        blurred = sample_image.filter(ImageFilter.BLUR)
         blurred_score = metric.compute(blurred, metadata)
         assert blurred_score < score
     

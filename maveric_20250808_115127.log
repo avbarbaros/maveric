@@ -1,0 +1,32 @@
+2025-08-08 11:51:27,348 - maveric.MAVERIC - INFO - MAVERIC initialized successfully
+2025-08-08 11:51:27,360 - maveric.MAVERIC - INFO - MAVERIC initialized successfully
+2025-08-08 11:51:27,365 - maveric.MAVERIC - INFO - Starting retrieval from react-test-dataset for cifar10
+2025-08-08 11:51:27,365 - maveric.MAVERIC - INFO - Retrieved 1 samples
+2025-08-08 11:51:27,372 - maveric.MAVERIC - INFO - MAVERIC initialized successfully
+2025-08-08 11:51:27,381 - maveric.MAVERIC - INFO - Filtered to 80 samples
+2025-08-08 11:51:27,387 - maveric.MAVERIC - INFO - MAVERIC initialized successfully
+2025-08-08 11:51:27,394 - maveric.MAVERIC - INFO - Saved configuration to /tmp/pytest-of-codespace/pytest-8/test_save_load_config0/test_config.yaml
+2025-08-08 11:51:27,406 - maveric.Retriever - INFO - Loading CLIP model: ViT-B/32
+2025-08-08 11:51:32,510 - maveric.MAVERIC - INFO - MAVERIC initialized successfully
+2025-08-08 11:51:32,526 - maveric.QualityController - INFO - Loaded 1000 samples
+2025-08-08 11:51:32,531 - maveric.QualityController - INFO - Loaded 1000 samples
+2025-08-08 11:51:32,538 - maveric.QualityController - INFO - Loaded 1000 samples
+2025-08-08 11:51:32,542 - maveric.ThresholdFilter - INFO - Threshold filtering: 1000 → 17 samples (1.7% retained)
+2025-08-08 11:51:32,542 - maveric.QualityController - INFO - Filtered data: 17 samples (1.7% retention)
+2025-08-08 11:51:32,546 - maveric.QualityController - INFO - Loaded 1000 samples
+2025-08-08 11:51:32,549 - maveric.ThresholdFilter - INFO - Threshold filtering: 1000 → 33 samples (3.3% retained)
+2025-08-08 11:51:32,549 - maveric.QualityController - INFO - Filtered data: 33 samples (3.3% retention)
+2025-08-08 11:51:32,553 - maveric.BalancedFilter - INFO - Original distribution: 33 samples across 3 classes
+2025-08-08 11:51:32,553 - maveric.BalancedFilter - INFO - Target samples per class: 10
+2025-08-08 11:51:32,558 - maveric.BalancedFilter - INFO - Balanced dataset: 30 samples, 3 classes
+2025-08-08 11:51:32,562 - maveric.QualityController - INFO - Loaded 1000 samples
+2025-08-08 11:51:32,565 - maveric.ThresholdFilter - INFO - Threshold filtering: 1000 → 21 samples (2.1% retained)
+2025-08-08 11:51:32,565 - maveric.QualityController - INFO - Filtered data: 21 samples (2.1% retention)
+2025-08-08 11:51:32,573 - maveric.ThresholdFilter - INFO - Threshold filtering: 5 → 2 samples (40.0% retained)
+2025-08-08 11:51:32,578 - maveric.BalancedFilter - INFO - Original distribution: 5 samples across 2 classes
+2025-08-08 11:51:32,578 - maveric.BalancedFilter - INFO - Target samples per class: 2
+2025-08-08 11:51:32,581 - maveric.BalancedFilter - INFO - Balanced dataset: 4 samples, 2 classes
+2025-08-08 11:51:33,390 - maveric.CacheManager - INFO - Saved 2 results to test_dataset_results_1.json
+2025-08-08 11:51:33,392 - maveric.CacheManager - INFO - Loaded 2 total results from 1 files
+2025-08-08 11:51:33,396 - maveric.Retriever - INFO - Loading CLIP model: ViT-B/32
+2025-08-08 11:51:33,722 - maveric.Retriever - INFO - Creating reference embeddings for test_dataset

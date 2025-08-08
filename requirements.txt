@@ -5,10 +5,13 @@ transformers>=4.20.0
 datasets>=2.0.0
 
 # CLIP and vision
+openai-clip>=1.0.1
 ftfy
 regex
 tqdm
-opencv-python>=4.5.0
+# Use opencv-python-headless for Docker/headless environments
+# Use opencv-python for environments with display
+opencv-python-headless>=4.5.0
 Pillow>=8.0.0
 
 # Data processing and ML
