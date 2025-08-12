@@ -42,7 +42,7 @@ def setup_maveric_from_config(config):
             clip_model=config['clip_model'],
             batch_size=config['batch_size'],
             device=config['device'],
-            enable_caching=config['caching']['enable_image_cache']
+            enable_image_cache=config['caching']['enable_image_cache']
         )
         
         # Initialize MAVERIC
