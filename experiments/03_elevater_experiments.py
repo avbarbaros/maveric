@@ -16,7 +16,7 @@ from typing import Dict, List, Any
 # Import MAVERIC components
 from maveric import MAVERIC, MAVERICConfig
 from maveric.datasets import get_dataset
-from maveric.utils.logging import setup_logger
+from maveric.utils.logging import setup_logging
 
 def load_experiment_config():
     """Load experiment configuration."""
@@ -341,9 +341,10 @@ def main():
         return False
     
     # Setup logger
-    setup_logger(
+    setup_logging(
         log_file=config['logging']['log_file'],
-        level=config['logging']['level']
+        level=config['logging']['level'],
+        log_to_file=True
     )
     
     # Initialize MAVERIC
