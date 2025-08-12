@@ -54,8 +54,7 @@ def install_system_dependencies():
         "libsm6",           # For OpenCV 
         "libxext6",         # For OpenCV
         "libxrender-dev",   # For OpenCV
-        "libgomp1",         # For PyTorch
-        "git"               # For cloning repo
+        "libgomp1"          # For PyTorch
     ]
     
     for package in packages:
@@ -69,8 +68,8 @@ def setup_environment():
     os.environ['MPLBACKEND'] = 'Agg'
     
     # Set cache directories on Google Drive
-    os.environ['MAVERIC_CACHE_DIR'] = '/content/drive/MyDrive/maveric_cache'
-    os.environ['HF_HOME'] = '/content/drive/MyDrive/huggingface_cache'
+    os.environ['MAVERIC_CACHE_DIR'] = '/content/drive/MyDrive/MAVERIC/maveric_cache'
+    os.environ['HF_HOME'] = '/content/drive/MyDrive/MAVERIC/huggingface_cache'
     
     print("Environment variables set:")
     print(f"MPLBACKEND: {os.environ.get('MPLBACKEND')}")
@@ -84,15 +83,15 @@ def clone_maveric_repo():
     repo_url = "https://github.com/avbarbaros/maveric.git"
     
     # Remove existing directory if it exists
-    if os.path.exists("/content/maveric"):
-        run_command("rm -rf /content/maveric", "Removing existing maveric directory")
+    if os.path.exists("/content/drive/MyDrive/MAVERIC/repo/maveric"):
+        run_command("rm -rf /content/drive/MyDrive/MAVERIC/repo/maveric", "Removing existing maveric directory")
     
     # Clone the repository
-    result = run_command(f"git clone {repo_url} /content/maveric", "Cloning MAVERIC repository")
-    
+    result = run_command(f"git clone {repo_url} /content/drive/MyDrive/MAVERIC/repo/maveric", "Cloning MAVERIC repository")
+
     if result is not None:
         # Change to maveric directory
-        os.chdir("/content/maveric")
+        os.chdir("/content/drive/MyDrive/MAVERIC/repo/maveric")
         print("✅ Successfully cloned and changed to MAVERIC directory")
         return True
     else:
@@ -104,12 +103,12 @@ def install_maveric():
     print("🐍 Installing MAVERIC using official method...")
     
     # Make sure we're in the maveric directory
-    if not os.path.exists("/content/maveric/requirements.txt"):
+    if not os.path.exists("/content/drive/MyDrive/MAVERIC/repo/maveric/requirements.txt"):
         print("❌ requirements.txt not found. Please run clone_maveric_repo() first.")
         return False
-    
-    os.chdir("/content/maveric")
-    
+
+    os.chdir("/content/drive/MyDrive/MAVERIC/repo/maveric")
+
     # Follow README.md installation instructions exactly:
     # 1. Install dependencies first
     result1 = run_command("pip install -r requirements.txt", "Installing dependencies from requirements.txt")
@@ -164,9 +163,9 @@ def main():
     setup_environment()
     
     # Clone repository
-    if not clone_maveric_repo():
-        print("❌ Failed to clone repository. Exiting.")
-        return False
+    # if not clone_maveric_repo():
+    #     print("❌ Failed to clone repository. Exiting.")
+    #     return False
     
     # Install MAVERIC using official method
     if not install_maveric():
@@ -180,7 +179,6 @@ def main():
         print("📋 Installation Summary:")
         print("✅ System dependencies installed")
         print("✅ Environment configured for headless operation")
-        print("✅ MAVERIC repository cloned")
         print("✅ Dependencies installed from requirements.txt")
         print("✅ MAVERIC installed in development mode")
         print("✅ All imports working correctly")

@@ -20,7 +20,7 @@ sns.set_palette("husl")
 
 def load_experiment_config():
     """Load experiment configuration."""
-    config_path = os.environ.get('MAVERIC_CONFIG_PATH', '/content/maveric/experiments/maveric_config.yaml')
+    config_path = os.environ.get('MAVERIC_CONFIG_PATH', '/content/drive/MyDrive/MAVERIC/repo/maveric/experiments/maveric_config.yaml')
     
     try:
         with open(config_path, 'r') as f:
@@ -109,7 +109,7 @@ def create_results_dataframe(results: Dict[str, Any]) -> pd.DataFrame:
     print(f"✅ DataFrame created with {len(df)} rows and {len(df.columns)} columns")
     return df
 
-def generate_summary_statistics(df: pd.DataFrame, config: Dict) -> Dict[str, Any]:
+def generate_summary_statistics(df: pd.DataFrame, config: Dict, experiment_info: Dict = None) -> Dict[str, Any]:
     """Generate summary statistics from results."""
     print("📈 Generating summary statistics...")
     
@@ -118,7 +118,7 @@ def generate_summary_statistics(df: pd.DataFrame, config: Dict) -> Dict[str, Any
     
     stats = {
         'experiment_overview': {
-            'total_datasets': len(df),
+            'processed_datasets': len(df),
             'successful_experiments': len(successful_df),
             'failed_experiments': len(df) - len(successful_df),
             'success_rate': len(successful_df) / len(df) * 100 if len(df) > 0 else 0,
@@ -126,6 +126,19 @@ def generate_summary_statistics(df: pd.DataFrame, config: Dict) -> Dict[str, Any
             'average_execution_time': df['execution_time'].mean()
         }
     }
+    
+    # Add selection information if available
+    if experiment_info:
+        stats['experiment_overview']['total_available_datasets'] = len(config.get('elevater', {}).get('datasets', []))
+        stats['experiment_overview']['selected_datasets'] = experiment_info.get('selected_datasets', df['dataset_name'].tolist())
+        stats['experiment_overview']['selection_count'] = len(stats['experiment_overview']['selected_datasets'])
+        
+        # Calculate selection rate
+        total_available = stats['experiment_overview']['total_available_datasets']
+        if total_available > 0:
+            stats['experiment_overview']['selection_rate'] = (stats['experiment_overview']['selection_count'] / total_available) * 100
+        else:
+            stats['experiment_overview']['selection_rate'] = 100
     
     if len(successful_df) > 0:
         stats['data_statistics'] = {
@@ -262,7 +275,7 @@ def create_visualizations(df: pd.DataFrame, results: Dict, output_dir: str):
         
         plt.yticks(y_pos, sorted_df['dataset_name'])
         plt.xlabel('Retention Rate (%)')
-        plt.title('MAVERIC Quality Filtering: Retention Rates by Dataset')
+        plt.title('MAVERIC Quality Filtering: Retention Rates by Selected Dataset')
         plt.axvline(sorted_df['retention_rate'].mean(), color='black', linestyle='--', 
                    label=f'Average: {sorted_df["retention_rate"].mean():.1f}%')
         
@@ -291,8 +304,20 @@ def generate_analysis_report(df: pd.DataFrame, stats: Dict, results: Dict, outpu
         
         # Executive Summary
         f.write("## Executive Summary\n\n")
+        processed_count = stats['experiment_overview']['processed_datasets']
         f.write(f"This report analyzes the effectiveness of MAVERIC's quality-driven filtering ")
-        f.write(f"approach across {stats['experiment_overview']['total_datasets']} ELEVATER datasets.\n\n")
+        f.write(f"approach across {processed_count} selected ELEVATER datasets.\n\n")
+        
+        # Add dataset selection information if available
+        if 'selected_datasets' in stats['experiment_overview']:
+            total_available = stats['experiment_overview']['total_available_datasets']
+            selected_count = stats['experiment_overview']['selection_count']
+            selection_rate = stats['experiment_overview']['selection_rate']
+            
+            f.write(f"**Dataset Selection:**\n")
+            f.write(f"- **Available Datasets:** {total_available}\n")
+            f.write(f"- **Selected for Processing:** {selected_count} ({selection_rate:.1f}%)\n")
+            f.write(f"- **Selected Datasets:** {', '.join(stats['experiment_overview']['selected_datasets'])}\n\n")
         
         if 'data_statistics' in stats:
             f.write(f"**Key Findings:**\n")
@@ -304,7 +329,7 @@ def generate_analysis_report(df: pd.DataFrame, stats: Dict, results: Dict, outpu
         # Experiment Overview
         f.write("## Experiment Overview\n\n")
         exp_overview = stats['experiment_overview']
-        f.write(f"- **Total Datasets Processed:** {exp_overview['total_datasets']}\n")
+        f.write(f"- **Datasets Processed:** {exp_overview['processed_datasets']}\n")
         f.write(f"- **Successful Experiments:** {exp_overview['successful_experiments']}\n")
         f.write(f"- **Failed Experiments:** {exp_overview['failed_experiments']}\n")
         f.write(f"- **Success Rate:** {exp_overview['success_rate']:.1f}%\n")
@@ -416,6 +441,24 @@ def generate_analysis_report(df: pd.DataFrame, stats: Dict, results: Dict, outpu
     
     print(f"✅ Analysis report saved to: {report_path}")
 
+def display_dataset_selection_info(experiment_info: Dict, config: Dict):
+    """Display information about dataset selection."""
+    if 'selected_datasets' in experiment_info:
+        selected_datasets = experiment_info['selected_datasets']
+        available_datasets = config.get('elevater', {}).get('datasets', [])
+        
+        print(f"\n📊 Dataset Selection Overview:")
+        print(f"   • Available datasets: {len(available_datasets)}")
+        print(f"   • Selected datasets: {len(selected_datasets)}")
+        print(f"   • Selection rate: {len(selected_datasets) / len(available_datasets) * 100:.1f}%")
+        
+        if len(selected_datasets) < len(available_datasets):
+            not_selected = [d for d in available_datasets if d not in selected_datasets]
+            print(f"\n   Selected: {', '.join(selected_datasets)}")
+            print(f"   Not selected: {', '.join(not_selected)}")
+        else:
+            print(f"   All available datasets were selected for processing")
+
 def main():
     """Main analysis function."""
     print("🚀 Starting MAVERIC Results Analysis...")
@@ -438,8 +481,14 @@ def main():
     # Create results DataFrame
     df = create_results_dataframe(results)
     
+    # Extract experiment info for enhanced statistics
+    experiment_info = results['summary'].get('experiment_info', {})
+    
+    # Display dataset selection information
+    display_dataset_selection_info(experiment_info, config)
+    
     # Generate statistics
-    stats = generate_summary_statistics(df, config)
+    stats = generate_summary_statistics(df, config, experiment_info)
     
     # Create visualizations
     create_visualizations(df, results, results_dir)
@@ -454,7 +503,9 @@ def main():
     print("📊 Key Results:")
     exp_overview = stats['experiment_overview']
     print(f"   • Success Rate: {exp_overview['success_rate']:.1f}%")
-    print(f"   • Total Datasets: {exp_overview['total_datasets']}")
+    print(f"   • Processed Datasets: {exp_overview['processed_datasets']}")
+    if 'selection_count' in exp_overview:
+        print(f"   • Selected from: {exp_overview['total_available_datasets']} available datasets")
     print(f"   • Execution Time: {exp_overview['total_execution_time']:.1f}s")
     
     if 'data_statistics' in stats:

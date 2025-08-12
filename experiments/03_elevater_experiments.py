@@ -20,8 +20,8 @@ from maveric.utils.logging import setup_logger
 
 def load_experiment_config():
     """Load experiment configuration."""
-    config_path = os.environ.get('MAVERIC_CONFIG_PATH', '/content/maveric/experiments/maveric_config.yaml')
-    
+    config_path = os.environ.get('MAVERIC_CONFIG_PATH', '/content/drive/MyDrive/MAVERIC/repo/maveric/experiments/maveric_config.yaml')
+
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
@@ -195,14 +195,15 @@ def run_single_dataset_experiment(maveric, dataset_name: str, config: Dict) -> D
     
     return results
 
-def save_experiment_summary(all_results: List[Dict], config: Dict):
+def save_experiment_summary(all_results: List[Dict], config: Dict, selected_datasets: List[str]):
     """Save overall experiment summary."""
     print("\n📋 Generating experiment summary...")
     
     summary = {
         'experiment_info': {
             'start_time': datetime.now().isoformat(),
-            'total_datasets': len(config['elevater']['datasets']),
+            'total_datasets': len(selected_datasets),
+            'selected_datasets': selected_datasets,
             'config': config
         },
         'results_summary': {
@@ -234,6 +235,77 @@ def save_experiment_summary(all_results: List[Dict], config: Dict):
     
     print(f"✅ Experiment summary saved to: {summary_path}")
     return summary
+
+def display_dataset_options(datasets: List[str]) -> None:
+    """Display all available ELEVATER dataset options to the user."""
+    print("\n📊 Available ELEVATER Datasets:")
+    print("=" * 50)
+    for i, dataset in enumerate(datasets, 1):
+        print(f"  {i:2d}. {dataset}")
+    print("=" * 50)
+    print(f"Total: {len(datasets)} datasets available")
+
+def get_user_dataset_selection(datasets: List[str]) -> List[str]:
+    """Get user selection for which datasets to process."""
+    while True:
+        print("\n🎯 Dataset Selection Options:")
+        print("  • Enter numbers (e.g., '1,3,5' or '1-5,8,10')")
+        print("  • Enter 'all' to run all datasets")
+        print("  • Enter 'q' to quit")
+        
+        user_input = input("\nYour selection: ").strip().lower()
+        
+        if user_input == 'q':
+            print("👋 Exiting...")
+            return []
+        
+        if user_input == 'all':
+            print(f"✅ Selected all {len(datasets)} datasets")
+            return datasets
+        
+        try:
+            selected_indices = []
+            
+            # Parse comma-separated values and ranges
+            for part in user_input.split(','):
+                part = part.strip()
+                if '-' in part:
+                    # Handle range (e.g., "1-5")
+                    start, end = map(int, part.split('-'))
+                    selected_indices.extend(range(start, end + 1))
+                else:
+                    # Handle single number
+                    selected_indices.append(int(part))
+            
+            # Validate indices
+            selected_indices = list(set(selected_indices))  # Remove duplicates
+            invalid_indices = [i for i in selected_indices if i < 1 or i > len(datasets)]
+            
+            if invalid_indices:
+                print(f"❌ Invalid selection(s): {invalid_indices}. Valid range: 1-{len(datasets)}")
+                continue
+            
+            # Convert to dataset names
+            selected_datasets = [datasets[i-1] for i in sorted(selected_indices)]
+            
+            print(f"\n✅ Selected {len(selected_datasets)} dataset(s):")
+            for i, dataset in enumerate(selected_datasets, 1):
+                print(f"  {i}. {dataset}")
+            
+            # Confirm selection
+            confirm = input(f"\nProceed with these {len(selected_datasets)} datasets? (y/n): ").strip().lower()
+            if confirm in ['y', 'yes']:
+                return selected_datasets
+            else:
+                print("Let's try again...")
+                continue
+                
+        except ValueError:
+            print("❌ Invalid input format. Please use numbers, ranges (1-5), or 'all'")
+            continue
+        except Exception as e:
+            print(f"❌ Error parsing selection: {e}")
+            continue
 
 def update_experiment_log(dataset_name: str, status: str, config: Dict):
     """Update the experiment log with progress."""
@@ -269,7 +341,7 @@ def main():
         return False
     
     # Setup logger
-    logger = setup_logger(
+    setup_logger(
         log_file=config['logging']['log_file'],
         level=config['logging']['level']
     )
@@ -280,19 +352,27 @@ def main():
         print("❌ Failed to initialize MAVERIC. Exiting.")
         return False
     
-    # Get list of datasets to process
-    datasets = config['elevater']['datasets']
-    print(f"📊 Will process {len(datasets)} ELEVATER datasets:")
-    for i, dataset in enumerate(datasets, 1):
-        print(f"  {i}. {dataset}")
+    # Get list of available datasets
+    available_datasets = config['elevater']['datasets']
     
-    print("\n" + "="*70)
+    # Display dataset options to user
+    display_dataset_options(available_datasets)
     
-    # Run experiments on each dataset
+    # Get user selection
+    selected_datasets = get_user_dataset_selection(available_datasets)
+    
+    if not selected_datasets:
+        print("❌ No datasets selected or user quit. Exiting.")
+        return False
+    
+    print(f"\n🎯 Processing {len(selected_datasets)} selected dataset(s)")
+    print("=" * 70)
+    
+    # Run experiments on selected datasets
     all_results = []
     
-    for i, dataset_name in enumerate(datasets, 1):
-        print(f"\n🔄 Processing dataset {i}/{len(datasets)}: {dataset_name}")
+    for i, dataset_name in enumerate(selected_datasets, 1):
+        print(f"\n🔄 Processing dataset {i}/{len(selected_datasets)}: {dataset_name}")
         
         try:
             # Run experiment for this dataset
@@ -308,7 +388,7 @@ def main():
                 with open(intermediate_path, 'w') as f:
                     json.dump(all_results, f, indent=2)
             
-            print(f"✅ Dataset {i}/{len(datasets)} completed: {dataset_name}")
+            print(f"✅ Dataset {i}/{len(selected_datasets)} completed: {dataset_name}")
             
         except KeyboardInterrupt:
             print("\n⚠️  Experiment interrupted by user")
@@ -327,7 +407,7 @@ def main():
     # Generate final summary
     print("\n" + "="*70)
     print("📊 Generating final experiment summary...")
-    summary = save_experiment_summary(all_results, config)
+    summary = save_experiment_summary(all_results, config, selected_datasets)
     
     # Print final results
     print("\n🎉 ELEVATER Experiments Completed!")

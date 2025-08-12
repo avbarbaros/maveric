@@ -23,7 +23,7 @@ def mount_google_drive():
 
 def load_config():
     """Load MAVERIC configuration from YAML file."""
-    config_path = "/content/maveric/experiments/maveric_config.yaml"
+    config_path = "/content/drive/MyDrive/MAVERIC/repo/maveric/experiments/maveric_config.yaml"
     
     try:
         with open(config_path, 'r') as f:
@@ -48,7 +48,7 @@ def create_cache_directories(config):
         f"{base_cache_dir}/models",
         f"{base_cache_dir}/results",
         f"{base_cache_dir}/datasets",
-        "/content/drive/MyDrive/huggingface_cache",
+        "/content/drive/MyDrive/MAVERIC/huggingface_cache",
         results_dir,
         f"{results_dir}/elevater_results",
         f"{results_dir}/quality_reports",
@@ -74,11 +74,11 @@ def setup_environment_variables(config):
     env_vars = {
         'MAVERIC_CACHE_DIR': config['cache_base_dir'],
         'MAVERIC_RESULTS_DIR': config['results_dir'],
-        'HF_HOME': '/content/drive/MyDrive/huggingface_cache',
-        'HF_DATASETS_CACHE': '/content/drive/MyDrive/huggingface_cache/datasets',
-        'TRANSFORMERS_CACHE': '/content/drive/MyDrive/huggingface_cache/transformers',
+        'HF_HOME': '/content/drive/MyDrive/MAVERIC/huggingface_cache',
+        'HF_DATASETS_CACHE': '/content/drive/MyDrive/MAVERIC/huggingface_cache/datasets',
+        'TRANSFORMERS_CACHE': '/content/drive/MyDrive/MAVERIC/huggingface_cache/transformers',
         'MPLBACKEND': 'Agg',
-        'MAVERIC_CONFIG_PATH': '/content/maveric/experiments/maveric_config.yaml'
+        'MAVERIC_CONFIG_PATH': '/content/drive/MyDrive/MAVERIC/repo/maveric/experiments/maveric_config.yaml'
     }
     
     for var, value in env_vars.items():
@@ -195,7 +195,7 @@ def copy_config_to_drive(config):
     """Copy the config file to Google Drive for persistence."""
     print("📋 Copying configuration to Google Drive...")
     
-    source_config = "/content/maveric/experiments/maveric_config.yaml"
+    source_config = "/content/drive/MyDrive/MAVERIC/repo/maveric/experiments/maveric_config.yaml"
     dest_config = f"{config['results_dir']}/maveric_config.yaml"
     
     try:
@@ -212,9 +212,9 @@ def main():
     print("=" * 60)
     
     # Mount Google Drive
-    if not mount_google_drive():
-        print("❌ Failed to mount Google Drive. Exiting.")
-        return False
+    # if not mount_google_drive():
+    #     print("❌ Failed to mount Google Drive. Exiting.")
+    #     return False
     
     # Load configuration
     config = load_config()
