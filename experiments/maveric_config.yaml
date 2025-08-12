@@ -2,8 +2,8 @@
 # Optimized for ELEVATER datasets experiments
 
 # Base configuration
-cache_base_dir: "/content/drive/MyDrive/maveric_cache"
-results_dir: "/content/drive/MyDrive/maveric_experiments"
+cache_base_dir: "/content/drive/MyDrive/MAVERIC/maveric_cache"
+results_dir: "/content/drive/MyDrive/MAVERIC/maveric_experiments"
 
 # Model settings optimized for T4 GPU (16GB VRAM)
 clip_model: "ViT-B/32"  # Fastest and most memory efficient
@@ -48,7 +48,7 @@ processing:
 logging:
   level: "INFO"
   save_logs: true
-  log_file: "/content/drive/MyDrive/maveric_experiments/maveric.log"
+  log_file: "/content/drive/MyDrive/MAVERIC/maveric_experiments/maveric.log"
   
 # Experiment settings
 experiment:

@@ -61,7 +61,7 @@ from maveric import MAVERIC, MAVERICConfig
 
 # Initialize MAVERIC
 config = MAVERICConfig(
-    cache_base_dir="/path/to/cache",
+    cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache",
     clip_model="ViT-B/32"
 )
 maveric = MAVERIC(config)
@@ -313,7 +313,7 @@ The experiments use `experiments/maveric_config.yaml` for configuration:
 
 ### Expected Results Structure
 
-After running all experiments, you'll find in `/content/drive/MyDrive/maveric_experiments/`:
+After running all experiments, you'll find in `/content/drive/MyDrive/MAVERIC/maveric_experiments/`:
 ```
 maveric_experiments/
 ├── maveric_config.yaml                 # Configuration backup

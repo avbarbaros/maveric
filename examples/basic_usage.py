@@ -4,7 +4,7 @@ from maveric import MAVERIC, MAVERICConfig, TrainingConfig
 
 # Initialize MAVERIC
 config = MAVERICConfig(
-    cache_base_dir="/path/to/cache",
+    cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache",
     clip_model="ViT-B/32",
     device="cuda"
 )

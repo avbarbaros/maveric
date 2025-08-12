@@ -28,7 +28,7 @@ from maveric import MAVERIC, MAVERICConfig
 maveric = MAVERIC()
 
 # Initialize with custom config
-config = MAVERICConfig(cache_base_dir="/path/to/cache")
+config = MAVERICConfig(cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache")
 maveric = MAVERIC(config)
 
 # Load from config file
@@ -112,7 +112,7 @@ config = MAVERICConfig(
     device="auto",
     
     # Cache settings
-    cache_base_dir="/path/to/cache",
+    cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache",
     enable_image_cache=True,
     cache_format="jpg",
     
@@ -451,7 +451,7 @@ DatasetFactory.register("my_dataset", MyDataset)
 
 ```python
 # 1. Initialize
-maveric = MAVERIC(MAVERICConfig(cache_base_dir="./cache"))
+maveric = MAVERIC(MAVERICConfig(cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache"))
 
 # 2. Retrieve
 retrieval_result = maveric.retrieve(

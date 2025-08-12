@@ -5,7 +5,7 @@ clip_model: "ViT-B/32"
 device: "auto"
 
 # Cache configuration
-cache_base_dir: "/path/to/maveric_cache"
+cache_base_dir: "/content/drive/MyDrive/MAVERIC/maveric_cache"
 enable_image_cache: true
 cache_format: "jpg"
 cache_quality: 95
