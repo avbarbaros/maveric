@@ -1,0 +1,117 @@
+# MAVERIC Configuration for Google Colab T4 GPU Environment
+# Optimized for ELEVATER datasets experiments
+
+# Base configuration
+cache_base_dir: "/content/drive/MyDrive/maveric_cache"
+results_dir: "/content/drive/MyDrive/maveric_experiments"
+
+# Model settings optimized for T4 GPU (16GB VRAM)
+clip_model: "ViT-B/32"  # Fastest and most memory efficient
+batch_size: 64          # Optimal for T4 memory
+device: "cuda"
+max_memory_gb: 14       # Leave 2GB for system
+
+# Quality thresholds for ELEVATER experiments
+# These can be adjusted based on your requirements
+quality_thresholds:
+  # Visual quality metrics
+  sharpness_score: 0.7      # Image sharpness (0-1)
+  resolution_score: 0.6     # Minimum resolution quality
+  color_diversity: 0.5      # Color distribution diversity
+  brightness_score: 0.4     # Brightness quality
+  contrast_score: 0.4       # Contrast quality
+  
+  # Semantic quality metrics  
+  consistency: 0.7          # Text-image consistency
+  text_quality: 0.6         # Text readability/quality
+  semantic_richness: 0.5    # Semantic feature richness
+  
+  # Multimodal metrics
+  clip_similarity: 0.6      # CLIP text-image similarity
+  cross_modal_alignment: 0.5 # Cross-modal feature alignment
+
+# Caching settings for efficiency
+caching:
+  enable_image_cache: true
+  enable_embedding_cache: true
+  enable_results_cache: true
+  cache_compression: true
+  max_cache_size_gb: 5      # Limit cache size on Google Drive
+
+# Dataset processing settings
+processing:
+  max_samples_per_dataset: 100000  # Limit for memory management
+  shuffle_data: true
+  seed: 42                         # For reproducible results
+  
+# Logging and monitoring
+logging:
+  level: "INFO"
+  save_logs: true
+  log_file: "/content/drive/MyDrive/maveric_experiments/maveric.log"
+  
+# Experiment settings
+experiment:
+  save_intermediate_results: true
+  checkpoint_frequency: 1000      # Save every N samples
+  generate_visualizations: true
+  save_sample_images: true
+  max_visualization_samples: 100
+
+# ELEVATER dataset specific settings
+elevater:
+  # List of ELEVATER datasets to process
+  datasets:
+    - "Cars"
+    - "CIFAR10" 
+    - "CIFAR100"
+    - "DTD"
+    - "EuroSAT"
+    - "FER2013"
+    - "FGVCAircraft"
+    - "Flowers102"
+    - "Food101"
+    - "GTSRB"
+    - "HatefulMemes"
+    - "MNIST"
+    - "OxfordIIITPet"
+    - "PCAM"
+    - "RESISC45"
+    - "RenderedSST2"
+    - "StanfordCars"
+    - "STL10"
+    - "SUN397"
+    - "SVHN"
+    
+  # Retrieval settings for each dataset
+  retrieval:
+    num_samples: 10000        # Number of samples to retrieve per dataset
+    similarity_threshold: 0.7  # Minimum similarity for retrieval
+    diversification: true      # Enable diversity in retrieval
+    
+  # Quality control settings
+  quality_control:
+    enable_filtering: true
+    balance_classes: true     # Balance classes after filtering
+    min_samples_per_class: 10 # Minimum samples to keep per class
+
+# Performance optimization
+performance:
+  num_workers: 4            # DataLoader workers
+  prefetch_factor: 2        # Data prefetching
+  pin_memory: true          # Pin memory for GPU transfer
+  
+# Output settings
+output:
+  save_filtered_datasets: true
+  save_quality_reports: true
+  save_visualizations: true
+  export_format: "json"     # json, csv, parquet
+  
+# Model customization settings (if enabled)
+customization:
+  enable_fine_tuning: false  # Set to true if you want to fine-tune models
+  epochs: 5
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  save_checkpoints: true

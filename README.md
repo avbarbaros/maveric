@@ -202,6 +202,182 @@ maveric customize --input filtered.json --model openai/clip-vit-base-patch32 --e
 maveric visualize --input results.json --output-dir ./plots
 ```
 
+## ELEVATER Experiments on Google Colab
+
+To evaluate MAVERIC's quality-driven filtering effectiveness across all ELEVATER datasets on Google Colab T4 GPU:
+
+### Prerequisites
+- Google Colab account with T4 GPU runtime
+- Google Drive with 10+ GB free space
+- Stable internet connection
+- 3-4 hours of computation time
+
+### Overview
+
+These experiments systematically test MAVERIC's ability to improve dataset quality through intelligent filtering across 20 diverse computer vision datasets from the ELEVATER benchmark.
+
+### ELEVATER Datasets Processed
+
+The experiments process these 20 datasets:
+- Cars, CIFAR10, CIFAR100, DTD, EuroSAT, FER2013
+- FGVCAircraft, Flowers102, Food101, GTSRB, HatefulMemes
+- MNIST, OxfordIIITPet, PCAM, RESISC45, RenderedSST2
+- StanfordCars, STL10, SUN397, SVHN
+
+### Experiment Scripts
+
+The `experiments/` folder contains sequentially numbered scripts for running comprehensive ELEVATER dataset experiments:
+
+#### 1. Setup and Installation (`01_colab_setup.py`)
+**Purpose**: Install MAVERIC and dependencies on Google Colab T4 environment
+**Usage**:
+```python
+python /content/maveric/experiments/01_colab_setup.py
+```
+**Expected Behavior**:
+- Checks GPU availability and system information
+- Installs system dependencies for headless environment
+- Sets up environment variables (`MPLBACKEND=Agg`)
+- Clones MAVERIC repository from GitHub
+- Installs dependencies from `requirements.txt`
+- Installs MAVERIC in development mode
+- Tests installation with import checks
+- **Duration**: ~10-15 minutes
+
+#### 2. Google Drive Cache Setup (`02_google_drive_setup.py`)
+**Purpose**: Configure Google Drive integration for caching and results storage
+**Usage**:
+```python
+python /content/maveric/experiments/02_google_drive_setup.py
+```
+**Expected Behavior**:
+- Mounts Google Drive to `/content/drive`
+- Loads configuration from `maveric_config.yaml`
+- Creates cache directory structure on Google Drive
+- Sets up environment variables for cache paths
+- Tests read/write access to cache directories
+- Shows disk usage and space availability
+- Creates experiment log template with dataset checklist
+- **Duration**: ~2-3 minutes
+
+#### 3. ELEVATER Datasets Experiments (`03_elevater_experiments.py`)
+**Purpose**: Run MAVERIC quality filtering on all 20 ELEVATER datasets
+**Usage**:
+```python
+python /content/maveric/experiments/03_elevater_experiments.py
+```
+**Expected Behavior**:
+- Processes datasets: Cars, CIFAR10/100, DTD, EuroSAT, FER2013, FGVCAircraft, Flowers102, Food101, GTSRB, HatefulMemes, MNIST, OxfordIIITPet, PCAM, RESISC45, RenderedSST2, StanfordCars, STL10, SUN397, SVHN
+- For each dataset:
+  - Retrieves samples using CLIP embedding similarity
+  - Applies quality assessment metrics (visual, semantic, multimodal)
+  - Filters data based on configured thresholds
+  - Saves detailed results and summaries
+  - Generates visualizations (quality distributions, sample galleries)
+  - Updates experiment progress log
+- Creates comprehensive experiment summary with aggregate statistics
+- **Duration**: ~2-3 hours (5-10 minutes per dataset)
+- **Output**: Individual results per dataset + overall summary
+
+#### 4. Results Analysis and Visualization (`04_results_analysis.py`)
+**Purpose**: Analyze experiment results and generate comprehensive reports
+**Usage**:
+```python
+python /content/maveric/experiments/04_results_analysis.py
+```
+**Expected Behavior**:
+- Loads experiment results from all datasets
+- Creates pandas DataFrame for statistical analysis
+- Generates summary statistics (retention rates, quality scores, execution times)
+- Creates comprehensive visualizations:
+  - Success rate pie chart
+  - Retention rate distribution histogram
+  - Sample counts by dataset
+  - Execution time analysis
+  - Quality scores heatmap
+  - Detailed retention rate comparison
+- Generates markdown analysis report with:
+  - Executive summary with key findings
+  - Dataset-specific performance results
+  - Quality metrics analysis
+  - Conclusions and recommendations
+- **Duration**: ~5-10 minutes
+
+### Configuration
+
+The experiments use `experiments/maveric_config.yaml` for configuration:
+- **Quality Thresholds**: Adjustable quality filtering thresholds for different metrics
+- **Processing Settings**: Batch sizes, sample limits, caching options optimized for T4 GPU
+- **ELEVATER Datasets**: Complete list of 20 datasets to process
+- **Output Settings**: Results format, visualization options, experiment tracking
+
+### Expected Results Structure
+
+After running all experiments, you'll find in `/content/drive/MyDrive/maveric_experiments/`:
+```
+maveric_experiments/
+├── maveric_config.yaml                 # Configuration backup
+├── experiment_log.md                   # Progress tracking with checkboxes
+├── elevater_experiment_summary.json    # Overall experiment results
+├── maveric_analysis_report.md          # Comprehensive analysis report
+├── maveric.log                         # Detailed execution logs
+├── elevater_results/                   # Individual dataset results
+│   ├── Cars/
+│   ├── CIFAR10/
+│   └── ... (20 datasets)
+└── analysis_visualizations/            # Charts and plots
+    ├── experiment_overview.png
+    └── retention_rates_detailed.png
+```
+
+### Key Research Insights
+
+The experiments will quantify MAVERIC's effectiveness by measuring:
+- **Retention Rates**: Percentage of data passing quality filters per dataset
+- **Quality Score Distributions**: How quality metrics vary across datasets
+- **Filtering Effectiveness**: Data reduction vs. quality improvement trade-offs
+- **Processing Efficiency**: Execution times and resource utilization
+- **Cross-Dataset Patterns**: Which datasets benefit most from quality filtering
+
+### Configuration Options
+
+Edit `experiments/maveric_config.yaml` to adjust:
+- **Quality Thresholds**: Adjustable quality filtering thresholds for different metrics
+- **Processing Settings**: Batch sizes, sample limits, caching options optimized for T4 GPU
+- **ELEVATER Datasets**: Complete list of 20 datasets to process
+- **Output Settings**: Results format, visualization options, experiment tracking
+
+### Troubleshooting
+
+**Common Issues:**
+- GPU not detected: Ensure T4 runtime is selected in Colab
+- Google Drive mounting fails: Re-authenticate Drive permissions
+- Out of memory errors: Reduce batch_size in config
+- Long execution times: Check internet connection stability
+
+**Performance Tips:**
+- Use GPU runtime for faster processing
+- Keep Colab tab active to prevent timeouts
+- Monitor Google Drive storage space
+- Run during off-peak hours for better performance
+
+### Running the Complete Pipeline
+
+Execute scripts in sequence:
+```bash
+# Step 1: Setup (run once)
+python /content/maveric/experiments/01_colab_setup.py
+
+# Step 2: Configure cache (run once) 
+python /content/maveric/experiments/02_google_drive_setup.py
+
+# Step 3: Run experiments (main analysis)
+python /content/maveric/experiments/03_elevater_experiments.py
+
+# Step 4: Generate analysis report
+python /content/maveric/experiments/04_results_analysis.py
+```
+
 ## Documentation
 
 Full documentation is available at [https://maveric.readthedocs.io](https://maveric.readthedocs.io)
