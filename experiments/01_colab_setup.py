@@ -122,6 +122,14 @@ def test_installation():
     """Test if MAVERIC is properly installed."""
     print("🧪 Testing MAVERIC installation...")
     
+    # Ensure we're in the correct directory for imports
+    maveric_dir = "/content/drive/MyDrive/MAVERIC/repo/maveric"
+    if os.path.exists(maveric_dir):
+        os.chdir(maveric_dir)
+        # Add maveric directory to Python path
+        sys.path.insert(0, maveric_dir)
+        print(f"✅ Changed to MAVERIC directory: {maveric_dir}")
+    
     try:
         # Test PyTorch and CUDA
         import torch
@@ -145,6 +153,8 @@ def test_installation():
         return True
     except ImportError as e:
         print(f"❌ Import error: {e}")
+        print("💡 Tip: Make sure you're running this from the correct directory")
+        print("💡 Try: cd /content/drive/MyDrive/MAVERIC/repo/maveric && python ../../01_colab_setup.py")
         return False
 
 def main():
