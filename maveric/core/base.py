@@ -33,9 +33,16 @@ class BaseComponent(ABC):
             name: Component name for logging (defaults to class name)
         """
         # Use provided name or default to class name
-        self.name = name or self.__class__.__name__
+        self._component_name = name or self.__class__.__name__
         # Create a logger with namespace maveric.{component_name}
-        self.logger = logging.getLogger(f"maveric.{self.name}")
+        self.logger = logging.getLogger(f"maveric.{self._component_name}")
+    
+    @property
+    def name(self) -> str:
+        """
+        Get component name. Can be overridden by subclasses.
+        """
+        return getattr(self, '_component_name', self.__class__.__name__)
         
     def log_info(self, message: str):
         """Log info-level messages for normal operations."""
