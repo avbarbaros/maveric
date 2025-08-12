@@ -15,7 +15,7 @@ from typing import Dict, List, Any
 
 # Import MAVERIC components
 from maveric import MAVERIC, MAVERICConfig
-from maveric.datasets import get_dataset_handler
+from maveric.datasets import get_dataset
 from maveric.utils.logging import setup_logger
 
 def load_experiment_config():
