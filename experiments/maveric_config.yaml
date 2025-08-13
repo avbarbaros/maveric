@@ -50,6 +50,9 @@ logging:
   level: "INFO"
   save_logs: true
   log_file: "/content/drive/MyDrive/MAVERIC/maveric_experiments/maveric.log"
+
+# Progress display settings
+enable_real_time_stats: true  # Show real-time download/cache statistics during retrieval
   
 # Experiment settings
 experiment:

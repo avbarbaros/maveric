@@ -11,6 +11,7 @@ from .config import MAVERICConfig, TrainingConfig
 from .core.base import BaseComponent
 from .core.interfaces import RetrievalResult, QualityResult, CustomizationResult
 from .core.exceptions import MAVERICError, ConfigurationError
+from .core.progress import RealTimeStats
 from .retrieval import Retriever, CacheManager
 from .retrieval.dataset_handlers import REACTDatasetHandler
 from .quality import QualityController
@@ -40,6 +41,9 @@ class MAVERIC(BaseComponent):
         # Set configuration
         self.config = config or MAVERICConfig()
         
+        # Initialize real-time stats based on config
+        self.real_time_stats = RealTimeStats(enable_display=self.config.enable_real_time_stats) if self.config.enable_real_time_stats else None
+        
         # Validate configuration
         warnings = self.config.validate()
         if warnings:
@@ -65,7 +69,8 @@ class MAVERIC(BaseComponent):
             base_dir=self.config.cache_base_dir,
             enable_image_cache=self.config.enable_image_cache,
             cache_format=self.config.cache_format,
-            cache_quality=self.config.cache_quality
+            cache_quality=self.config.cache_quality,
+            stats_callback=self.real_time_stats.update_stats if self.real_time_stats else None
         )
         
         # Retriever
@@ -143,6 +148,10 @@ class MAVERIC(BaseComponent):
         )
         
         self.log_info(f"Retrieved {result.total_samples} samples")
+        
+        # Finalize real-time stats display
+        if self.real_time_stats:
+            self.real_time_stats.final_display()
         
         return result
     
@@ -340,6 +349,17 @@ class MAVERIC(BaseComponent):
             Dictionary with cache statistics
         """
         return self.cache_manager.get_cache_stats()
+    
+    def get_real_time_stats(self) -> Dict[str, Any]:
+        """
+        Get current real-time statistics snapshot.
+        
+        Returns:
+            Dictionary containing current download/cache statistics
+        """
+        if self.real_time_stats:
+            return self.real_time_stats.get_current_stats()
+        return {}
     
     def clear_cache(self, cache_type: str = 'all'):
         """

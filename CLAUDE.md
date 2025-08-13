@@ -109,9 +109,16 @@ maveric visualize --input results.json --output-dir ./plots
 
 MAVERIC uses dataclass-based configuration in `config.py`:
 
-- **MAVERICConfig**: Main system configuration (models, caching, quality thresholds)
+- **MAVERICConfig**: Main system configuration (models, caching, quality thresholds, progress display)
 - **TrainingConfig**: Model training parameters
 - **ExperimentConfig**: Experiment management and tracking
+
+Key configuration options:
+- `enable_real_time_stats`: Show live download/cache statistics during retrieval (default: true)
+- `clip_model`: CLIP model to use (default: "ViT-B/32")
+- `cache_base_dir`: Directory for caching downloaded images and results
+- `batch_size`: Processing batch size
+- `quality_metrics`: List of quality metrics to compute
 
 Configuration can be loaded from YAML/JSON files:
 ```python

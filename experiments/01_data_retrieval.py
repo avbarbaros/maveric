@@ -8,6 +8,7 @@ import os
 import sys
 import yaml
 import argparse
+import logging
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -16,6 +17,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from maveric import MAVERIC
 from maveric.config import MAVERICConfig
+        
+
+def configure_logging():
+    """Configure logging to suppress download warnings."""
+    # Set CacheManager warnings to ERROR level to suppress them
+    cache_logger = logging.getLogger('maveric.CacheManager')
+    cache_logger.setLevel(logging.ERROR)
+    
+    # Keep other maveric loggers at INFO level for important messages
+    maveric_logger = logging.getLogger('maveric')
+    maveric_logger.setLevel(logging.INFO)
 
 
 def load_config_file(config_path: str) -> Dict:
@@ -132,7 +144,7 @@ def setup_maveric(config: Dict) -> MAVERIC:
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True)
         )
         
-        # Initialize MAVERIC
+        # Initialize MAVERIC (real-time stats are enabled by default)
         maveric = MAVERIC(maveric_config)
         print("✅ MAVERIC initialized successfully")
         return maveric
@@ -145,6 +157,9 @@ def setup_maveric(config: Dict) -> MAVERIC:
 def main():
     """Main data retrieval function."""
     args = parse_arguments()
+    
+    # Configure logging to suppress download warnings
+    configure_logging()
     
     print("🚀 Starting MAVERIC Data Retrieval...")
     print(f"📋 Configuration file: {args.config}")
@@ -165,7 +180,7 @@ def main():
     print(f"📈 Samples per retrieval: {num_samples}")
     
     try:
-        # Setup MAVERIC
+        # Setup MAVERIC 
         maveric = setup_maveric(config)
         if not maveric:
             print("❌ Failed to initialize MAVERIC")
@@ -207,12 +222,28 @@ def main():
         print(f"✅ Results saved to: {output_path}")
         print(f"📊 Total samples retrieved: {len(retrieval_result.samples)}")
         
-        # Display cache statistics
+        # Display final cache statistics
         cache_stats = maveric.get_cache_stats()
         if cache_stats:
-            print("\n📦 Cache Statistics:")
-            for key, value in cache_stats.items():
-                print(f"   {key}: {value}")
+            print("\n📈 Final Download Summary:")
+            successful = cache_stats.get('downloads_successful', 0)
+            failed = cache_stats.get('downloads_failed', 0)
+            cache_hits = cache_stats.get('cache_hits', 0)
+            
+            print(f"   ✅ Successful downloads: {successful}")
+            print(f"   ❌ Failed downloads: {failed}")
+            print(f"   🎯 Cache hits: {cache_hits}")
+            
+            if successful + failed > 0:
+                success_rate = (successful / (successful + failed)) * 100
+                print(f"   📊 Success rate: {success_rate:.1f}%")
+            
+            # Show other cache info
+            cache_size = cache_stats.get('cache_size', {})
+            if cache_size:
+                images_mb = cache_size.get('images_mb', 0)
+                if images_mb > 0:
+                    print(f"   💾 Image cache size: {images_mb:.1f} MB")
         
         print("\n🎉 Data retrieval completed successfully!")
         return True

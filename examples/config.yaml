@@ -50,6 +50,9 @@ balance_enable_oversampling: false
 log_level: "INFO"
 log_to_file: true
 
+# Progress display
+enable_real_time_stats: true
+
 # Visualization
 viz_style: "seaborn"
 viz_dpi: 100

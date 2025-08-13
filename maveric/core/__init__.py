@@ -22,6 +22,7 @@ from .exceptions import (
     ModelError,
     CacheError
 )
+from .progress import RealTimeStats
 
 __all__ = [
     "BaseComponent",
@@ -31,6 +32,7 @@ __all__ = [
     "QualityResult",
     "CustomizationResult",
     "ProgressCallback",
+    "RealTimeStats",
     "MAVERICError",
     "ConfigurationError",
     "DatasetError",

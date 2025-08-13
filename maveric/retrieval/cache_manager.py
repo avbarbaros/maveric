@@ -26,7 +26,8 @@ class CacheManager(BaseComponent):
                  base_dir: str,
                  enable_image_cache: bool = True,
                  cache_format: str = "jpg",
-                 cache_quality: int = 95):
+                 cache_quality: int = 95,
+                 stats_callback: Optional[callable] = None):
         """
         Initialize cache manager.
         
@@ -42,6 +43,7 @@ class CacheManager(BaseComponent):
         self.enable_image_cache = enable_image_cache
         self.cache_format = cache_format.lower()
         self.cache_quality = cache_quality
+        self.stats_callback = stats_callback
         
         # Create cache directories
         self.image_cache_dir = self.base_dir / 'image_cache'
@@ -55,7 +57,9 @@ class CacheManager(BaseComponent):
             'cache_hits': 0,
             'cache_misses': 0,
             'images_cached': 0,
-            'bytes_saved': 0
+            'bytes_saved': 0,
+            'downloads_successful': 0,
+            'downloads_failed': 0
         }
     
     def _create_directories(self):
@@ -142,6 +146,11 @@ class CacheManager(BaseComponent):
                     # Force load to verify integrity
                     image.load()
                     self.stats['cache_hits'] += 1
+                    
+                    # Call stats callback if provided
+                    if self.stats_callback:
+                        self.stats_callback(self.stats.copy())
+                        
                     return image.convert('RGB')
                 except Exception as e:
                     self.log_warning(f"Corrupted cache file {cache_filename}: {e}")
@@ -184,8 +193,13 @@ class CacheManager(BaseComponent):
                 # Cache it
                 self.cache_image(url, image)
                 
-                # Track bandwidth saved
+                # Track bandwidth saved and successful download
                 self.stats['bytes_saved'] += len(response.content)
+                self.stats['downloads_successful'] += 1
+                
+                # Call stats callback if provided
+                if self.stats_callback:
+                    self.stats_callback(self.stats.copy())
                 
                 return image
                 
@@ -194,6 +208,13 @@ class CacheManager(BaseComponent):
                 if attempt < max_retries - 1:
                     time.sleep(1)  # Brief delay before retry
         
+        # Track failed download (after all retries exhausted)
+        self.stats['downloads_failed'] += 1
+        
+        # Call stats callback if provided
+        if self.stats_callback:
+            self.stats_callback(self.stats.copy())
+            
         return None
     
     def save_results(self, 

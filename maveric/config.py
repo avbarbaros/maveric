@@ -68,6 +68,9 @@ class MAVERICConfig:
     log_to_file: bool = True
     log_file_path: Optional[str] = None
     
+    # Progress display configuration
+    enable_real_time_stats: bool = True
+    
     # Visualization configuration
     viz_style: str = "default"
     viz_dpi: int = 100
