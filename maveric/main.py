@@ -142,8 +142,8 @@ class MAVERIC(BaseComponent):
         result = self.retriever.retrieve(
             dataset_handler=dataset_handler,
             target_dataset=target_dataset,
-            num_samples=num_samples,
             rotation_size=self.config.retrieval_rotation_size,
+            num_samples=num_samples,
             start_index=start_index
         )
         

@@ -282,7 +282,7 @@ class QualityResult:
         return summary
     
     def export_training_dataset_json(self, target_dataset: str, dataset_id: int = 1, 
-                                    output_dir: str = "./results") -> str:
+                                    output_dir: str = "./results", rotation_size: Optional[int] = None) -> str:
         """
         Export quality-filtered results in the specified training dataset JSON format.
         
@@ -290,9 +290,10 @@ class QualityResult:
             target_dataset: Name of target dataset (e.g., 'cifar10', 'imagenet')
             dataset_id: Dataset ID for filename generation
             output_dir: Output directory for the JSON file
+            rotation_size: Number of samples per file (None for single file)
             
         Returns:
-            Path to the exported JSON file
+            Path to the exported JSON file(s) - returns the first file path
         """
         import json
         from pathlib import Path
@@ -316,14 +317,36 @@ class QualityResult:
             
             formatted_samples.append(formatted_sample)
         
-        # Generate filename and save
-        filename = f"{target_dataset}_training_maveric_dataset{dataset_id}.json"
-        output_path = Path(output_dir) / filename
-        
-        with open(output_path, 'w') as f:
-            json.dump(formatted_samples, f, indent=2)
-        
-        return str(output_path)
+        # Export files based on rotation size
+        if rotation_size is None or len(formatted_samples) <= rotation_size:
+            # Single file export
+            filename = f"{target_dataset}_training_maveric_dataset{dataset_id}.json"
+            output_path = Path(output_dir) / filename
+            
+            with open(output_path, 'w') as f:
+                json.dump(formatted_samples, f, indent=2)
+                
+            return str(output_path)
+        else:
+            # Multiple file export with rotation
+            output_paths = []
+            file_id = 1
+            
+            for i in range(0, len(formatted_samples), rotation_size):
+                batch = formatted_samples[i:i + rotation_size]
+                filename = f"{target_dataset}_training_maveric_dataset{dataset_id}_part{file_id}.json"
+                output_path = Path(output_dir) / filename
+                
+                with open(output_path, 'w') as f:
+                    json.dump(batch, f, indent=2)
+                
+                output_paths.append(str(output_path))
+                file_id += 1
+            
+            print(f"📁 Exported {len(output_paths)} training dataset files")
+            
+            # Return the first file path for backward compatibility
+            return output_paths[0]
 
 
 @dataclass

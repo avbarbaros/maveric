@@ -12,6 +12,9 @@ batch_size: 64          # Optimal for T4 memory
 device: "cuda"
 max_memory_gb: 14       # Leave 2GB for system
 
+# Retrieval settings
+retrieval_rotation_size: 1000  # Samples per file when saving intermediate results
+
 # Quality thresholds for ELEVATER experiments
 # These can be adjusted based on your requirements
 quality_thresholds:

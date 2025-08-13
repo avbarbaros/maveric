@@ -211,15 +211,28 @@ def main():
             for class_name, stats in sorted(quality_result.class_statistics.items()):
                 print(f"   {class_name}: {stats['filtered_count']}/{stats['original_count']} ({stats['retention_rate']:.1%})")
         
-        # Export using the built-in method
-        print("💾 Exporting training dataset JSON...")
+        # Export using the built-in method with rotation size from config
+        rotation_size = config.get('retrieval_rotation_size', 1000)
+        total_samples = len(quality_result.filtered_samples)
+        
+        if total_samples > rotation_size:
+            num_files = (total_samples + rotation_size - 1) // rotation_size  # Ceiling division
+            print(f"💾 Exporting training dataset JSON ({total_samples} samples → {num_files} files, {rotation_size} samples per file)...")
+        else:
+            print(f"💾 Exporting training dataset JSON ({total_samples} samples → 1 file)...")
+            
         output_path = quality_result.export_training_dataset_json(
             target_dataset=target_dataset,
             dataset_id=args.dataset_id,
-            output_dir=args.output_dir
+            output_dir=args.output_dir,
+            rotation_size=rotation_size
         )
         
-        print(f"✅ Training dataset saved to: {output_path}")
+        if total_samples > rotation_size:
+            print(f"✅ Training dataset files saved to: {args.output_dir}")
+            print(f"   First file: {output_path}")
+        else:
+            print(f"✅ Training dataset saved to: {output_path}")
         
         # Display sample from output
         if quality_result.filtered_samples:

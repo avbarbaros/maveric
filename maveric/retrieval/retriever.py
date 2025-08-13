@@ -259,8 +259,8 @@ class Retriever(BaseComponent):
     def retrieve(self,
                 dataset_handler: DatasetHandler,
                 target_dataset: str,
+                rotation_size: int,
                 num_samples: Optional[int] = None,
-                rotation_size: int = 1000,
                 start_index: int = 0,
                 progress_callback: Optional[ProgressCallback] = None) -> RetrievalResult:
         """
@@ -269,8 +269,8 @@ class Retriever(BaseComponent):
         Args:
             dataset_handler: Dataset handler instance
             target_dataset: Target dataset name
+            rotation_size: Samples per file rotation (from config.retrieval_rotation_size)
             num_samples: Number of samples to retrieve (None for all)
-            rotation_size: Samples per file rotation
             start_index: Starting index
             progress_callback: Progress tracking callback
             
