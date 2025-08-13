@@ -159,19 +159,24 @@ def test_installation():
     """Test MAVERIC installation."""
     print("🧪 Testing installation...")
     
-    # Change to repository root directory for imports
-    original_dir = os.getcwd()
-    repo_root = os.path.dirname(os.path.abspath(__file__))  # experiments directory
-    repo_root = os.path.dirname(repo_root)  # go up to repository root
-    os.chdir(repo_root)
-    
     try:
         import torch
         print(f"✅ PyTorch {torch.__version__}")
         print(f"✅ CUDA: {torch.cuda.is_available()}")
         
+        # Force reload of modules in case they were cached
+        import importlib
+        import sys
+        
+        # Remove any cached modules
+        modules_to_remove = [name for name in sys.modules.keys() if name.startswith('maveric')]
+        for module in modules_to_remove:
+            del sys.modules[module]
+        
+        # Try importing maveric
         import maveric
-        from maveric import MAVERIC, MAVERICConfig
+        from maveric.main import MAVERIC  
+        from maveric.config import MAVERICConfig
         print("✅ MAVERIC imported")
         
         import clip
@@ -179,10 +184,9 @@ def test_installation():
         return True
     except ImportError as e:
         print(f"❌ Import error: {e}")
+        print("ℹ️  This might be normal if running outside the repository")
+        print("ℹ️  Try importing maveric in a new Python session")
         return False
-    finally:
-        # Restore original directory
-        os.chdir(original_dir)
 
 def copy_config_to_drive(config, source_config_path):
     """Copy configuration to Google Drive for persistence."""
