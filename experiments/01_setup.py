@@ -44,12 +44,23 @@ def install_system_dependencies():
 
 def mount_google_drive():
     """Mount Google Drive."""
-    print("📂 Mounting Google Drive...")
+    print("📂 Checking Google Drive...")
+    
+    # Check if Google Drive is already mounted
+    if os.path.exists('/content/drive/MyDrive'):
+        print("✅ Google Drive already mounted")
+        return True
+    
     try:
         from google.colab import drive
+        print("📂 Mounting Google Drive...")
         drive.mount('/content/drive')
         print("✅ Google Drive mounted")
         return True
+    except ImportError:
+        print("⚠️  Not running in Google Colab - skipping Drive mount")
+        print("ℹ️  Make sure your paths point to accessible directories")
+        return True  # Return True to continue execution
     except Exception as e:
         print(f"❌ Error mounting Drive: {e}")
         return False
