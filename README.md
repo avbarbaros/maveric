@@ -228,39 +228,45 @@ The experiments process these 20 datasets:
 
 The `experiments/` folder contains sequentially numbered scripts for running comprehensive ELEVATER dataset experiments:
 
-#### 1. Setup and Installation (`01_colab_setup.py`)
-**Purpose**: Install MAVERIC and dependencies on Google Colab T4 environment
+#### 1. Setup and Installation (`01_setup.py`)
+**Purpose**: Complete MAVERIC setup including installation and Google Drive integration
 **Usage**:
 ```python
-python /content/maveric/experiments/01_colab_setup.py
+python /content/maveric/experiments/01_setup.py --config /path/to/maveric_config.yaml
 ```
+**Command Line Options**:
+- `--config`, `-c`: Path to MAVERIC configuration YAML file (required)
+- `--help`, `-h`: Show help message and usage examples
+
+**Example Usage**:
+```bash
+# Using relative path
+python 01_setup.py --config ./maveric_config.yaml
+
+# Using absolute path 
+python 01_setup.py --config /content/drive/MyDrive/MAVERIC/config.yaml
+
+# Short form
+python 01_setup.py -c maveric_config.yaml
+```
+
 **Expected Behavior**:
+- Validates configuration file exists and is valid YAML
 - Checks GPU availability and system information
 - Installs system dependencies for headless environment
-- Sets up environment variables (`MPLBACKEND=Agg`)
-- Clones MAVERIC repository from GitHub
+- Mounts Google Drive to `/content/drive`
+- Sets up environment variables from config (`MPLBACKEND=Agg`, cache paths)
+- Creates cache directory structure on Google Drive
+- Clones MAVERIC repository from GitHub (if needed)
 - Installs dependencies from `requirements.txt`
 - Installs MAVERIC in development mode
 - Tests installation with import checks
+- Tests read/write access to cache directories
+- Backs up configuration to Google Drive
+- Shows setup summary with disk usage and configuration details
 - **Duration**: ~10-15 minutes
 
-#### 2. Google Drive Cache Setup (`02_google_drive_setup.py`)
-**Purpose**: Configure Google Drive integration for caching and results storage
-**Usage**:
-```python
-python /content/maveric/experiments/02_google_drive_setup.py
-```
-**Expected Behavior**:
-- Mounts Google Drive to `/content/drive`
-- Loads configuration from `maveric_config.yaml`
-- Creates cache directory structure on Google Drive
-- Sets up environment variables for cache paths
-- Tests read/write access to cache directories
-- Shows disk usage and space availability
-- Creates experiment log template with dataset checklist
-- **Duration**: ~2-3 minutes
-
-#### 3. ELEVATER Datasets Experiments (`03_elevater_experiments.py`)
+#### 2. ELEVATER Datasets Experiments (`03_elevater_experiments.py`)
 **Purpose**: Run MAVERIC quality filtering on all 20 ELEVATER datasets
 **Usage**:
 ```python
@@ -279,7 +285,7 @@ python /content/maveric/experiments/03_elevater_experiments.py
 - **Duration**: ~2-3 hours (5-10 minutes per dataset)
 - **Output**: Individual results per dataset + overall summary
 
-#### 4. Results Analysis and Visualization (`04_results_analysis.py`)
+#### 3. Results Analysis and Visualization (`04_results_analysis.py`)
 **Purpose**: Analyze experiment results and generate comprehensive reports
 **Usage**:
 ```python
@@ -365,17 +371,27 @@ Edit `experiments/maveric_config.yaml` to adjust:
 
 Execute scripts in sequence:
 ```bash
-# Step 1: Setup (run once)
-python /content/maveric/experiments/01_colab_setup.py
+# Step 1: Setup and configuration (run once)
+python /content/maveric/experiments/01_setup.py --config /content/maveric/experiments/maveric_config.yaml
 
-# Step 2: Configure cache (run once) 
-python /content/maveric/experiments/02_google_drive_setup.py
-
-# Step 3: Run experiments (main analysis)
+# Step 2: Run experiments (main analysis)
 python /content/maveric/experiments/03_elevater_experiments.py
 
-# Step 4: Generate analysis report
+# Step 3: Generate analysis report
 python /content/maveric/experiments/04_results_analysis.py
+```
+
+**Alternative setup options**:
+```bash
+# Using relative path (if running from experiments directory)
+cd /content/maveric/experiments
+python 01_setup.py --config ./maveric_config.yaml
+
+# Using custom config file
+python 01_setup.py --config /path/to/custom_config.yaml
+
+# Show help and usage examples
+python 01_setup.py --help
 ```
 
 ## Documentation
