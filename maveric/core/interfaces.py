@@ -130,6 +130,75 @@ class RetrievalResult:
             return []
         # Return all metrics that have computed statistics
         return list(self.score_statistics.keys())
+    
+    def export_retrieved_dataset_json(self, target_dataset: str, dataset_id: int = 1, 
+                                     output_dir: str = "./results") -> str:
+        """
+        Export retrieval results in the specified retrieved dataset JSON format.
+        
+        Args:
+            target_dataset: Name of target dataset (e.g., 'cifar10', 'imagenet')
+            dataset_id: Dataset ID for filename generation
+            output_dir: Output directory for the JSON file
+            
+        Returns:
+            Path to the exported JSON file
+        """
+        import json
+        from pathlib import Path
+        from ..datasets.elevater_datasets import ELEVATERDataset
+        
+        # Create output directory if it doesn't exist
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Get class names for the target dataset
+        if target_dataset in ELEVATERDataset.ELEVATER_DATASETS:
+            elevater_dataset = ELEVATERDataset(target_dataset)
+            class_names = elevater_dataset.class_names
+        else:
+            # Fallback: extract class names from available columns in samples
+            df = self.to_dataframe()
+            class_columns = [col for col in df.columns if col.startswith('Class_')]
+            class_names = [col.replace('Class_', '').replace('_hybrid_score', '') 
+                          for col in class_columns if col.endswith('_hybrid_score')]
+        
+        # Format samples according to specification
+        formatted_samples = []
+        
+        for sample in self.samples:
+            formatted_sample = {
+                'id': int(sample.get('id', sample.get('sample_id', 0))),
+                'url': str(sample.get('url', '')),
+                'text': str(sample.get('text', ''))
+            }
+            
+            # Add class-specific scores
+            for class_name in class_names:
+                class_prefix = f'Class_{class_name}'
+                formatted_sample[f'{class_prefix}_hybrid_score'] = float(sample.get(f'{class_prefix}_hybrid_score', 0.0))
+                formatted_sample[f'{class_prefix}_img2img'] = float(sample.get(f'{class_prefix}_img2img', 0.0))
+                formatted_sample[f'{class_prefix}_txt2txt'] = float(sample.get(f'{class_prefix}_txt2txt', 0.0))
+                formatted_sample[f'{class_prefix}_img2txt'] = float(sample.get(f'{class_prefix}_img2txt', 0.0))
+                formatted_sample[f'{class_prefix}_txt2img'] = float(sample.get(f'{class_prefix}_txt2img', 0.0))
+                formatted_sample[f'{class_prefix}_consistency'] = float(sample.get(f'{class_prefix}_consistency', 0.0))
+            
+            # Add quality metrics
+            formatted_sample['resolution_score'] = float(sample.get('resolution_score', 0.0))
+            formatted_sample['sharpness_score'] = float(sample.get('sharpness_score', 0.0))
+            formatted_sample['color_score'] = float(sample.get('color_score', 0.0))
+            formatted_sample['feature_resnet_mean'] = float(sample.get('feature_resnet_mean', 0.0))
+            formatted_sample['feature_resnet_std'] = float(sample.get('feature_resnet_std', 0.0))
+            
+            formatted_samples.append(formatted_sample)
+        
+        # Generate filename and save
+        filename = f"{target_dataset}_retrieved_maveric_dataset{dataset_id}.json"
+        output_path = Path(output_dir) / filename
+        
+        with open(output_path, 'w') as f:
+            json.dump(formatted_samples, f, indent=2)
+        
+        return str(output_path)
 
 
 @dataclass
@@ -211,6 +280,50 @@ class QualityResult:
                 summary += f"({stats['retention_rate']:.1%})\n"  # Show filtered/original (retention%)
         
         return summary
+    
+    def export_training_dataset_json(self, target_dataset: str, dataset_id: int = 1, 
+                                    output_dir: str = "./results") -> str:
+        """
+        Export quality-filtered results in the specified training dataset JSON format.
+        
+        Args:
+            target_dataset: Name of target dataset (e.g., 'cifar10', 'imagenet')
+            dataset_id: Dataset ID for filename generation
+            output_dir: Output directory for the JSON file
+            
+        Returns:
+            Path to the exported JSON file
+        """
+        import json
+        from pathlib import Path
+        
+        # Create output directory if it doesn't exist
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Format samples according to training dataset specification
+        formatted_samples = []
+        
+        for sample in self.filtered_samples:
+            formatted_sample = {
+                'id': int(sample.get('id', sample.get('sample_id', 0))),
+                'url': str(sample.get('url', '')),
+                'label': str(sample.get('label', sample.get('class', ''))),
+                'text': str(sample.get('text', '')),
+                'weighted_class_score': float(sample.get('weighted_class_score', 
+                                            sample.get('hybrid_score', 0.0))),
+                'consistency': float(sample.get('consistency', 0.0))
+            }
+            
+            formatted_samples.append(formatted_sample)
+        
+        # Generate filename and save
+        filename = f"{target_dataset}_training_maveric_dataset{dataset_id}.json"
+        output_path = Path(output_dir) / filename
+        
+        with open(output_path, 'w') as f:
+            json.dump(formatted_samples, f, indent=2)
+        
+        return str(output_path)
 
 
 @dataclass

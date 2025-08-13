@@ -389,4 +389,37 @@ class MAVERIC(BaseComponent):
             raise ValueError("Configuration file must be .yaml or .json")
         
         return cls(config)
+    
+    @staticmethod
+    def get_available_elevater_datasets() -> Dict[str, Dict[str, Any]]:
+        """
+        Get list of available ELEVATER datasets.
+        
+        Returns:
+            Dictionary mapping dataset names to their properties
+        """
+        from .datasets.elevater_datasets import ELEVATERDataset
+        return ELEVATERDataset.ELEVATER_DATASETS
+    
+    @staticmethod
+    def display_elevater_datasets() -> List[str]:
+        """
+        Display all available ELEVATER datasets and return the sorted list.
+        
+        Returns:
+            Sorted list of dataset names
+        """
+        from .datasets.elevater_datasets import ELEVATERDataset
+        
+        datasets = list(ELEVATERDataset.ELEVATER_DATASETS.keys())
+        
+        print("\n📊 Available ELEVATER Datasets:")
+        print("=" * 60)
+        for i, dataset in enumerate(sorted(datasets), 1):
+            dataset_info = ELEVATERDataset.ELEVATER_DATASETS[dataset]
+            print(f"  {i:2d}. {dataset:<20} ({dataset_info['num_classes']} classes)")
+        print("=" * 60)
+        print(f"Total: {len(datasets)} datasets available")
+        
+        return sorted(datasets)
 

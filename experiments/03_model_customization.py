@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""
+MAVERIC Model Customization Experiment
+Processes training dataset JSON and outputs the best performing CLIP model.
+"""
+
+import json
+import os
+import sys
+import yaml
+import argparse
+from pathlib import Path
+from typing import Dict, List, Optional
+
+# Add maveric to path if running directly
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from maveric import MAVERIC
+from maveric.config import MAVERICConfig, TrainingConfig
+from maveric.core.interfaces import QualityResult
+
+
+def load_config_file(config_path: str) -> Dict:
+    """Load MAVERIC configuration from YAML file."""
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        print(f"✅ Configuration loaded from: {config_path}")
+        return config
+    except Exception as e:
+        print(f"❌ Error loading configuration: {e}")
+        return None
+
+
+def load_training_dataset(file_path: str) -> Optional[List[Dict]]:
+    """Load training dataset JSON file."""
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        print(f"✅ Training dataset loaded from: {file_path}")
+        print(f"📊 Total training samples: {len(data)}")
+        return data
+    except Exception as e:
+        print(f"❌ Error loading training dataset: {e}")
+        return None
+
+
+def convert_to_quality_result(data: List[Dict]) -> QualityResult:
+    """Convert training dataset JSON to QualityResult object."""
+    # For model customization, we treat the training data as both original and filtered
+    # since it's already been through quality control
+    return QualityResult(
+        filtered_samples=data,
+        original_samples=data,  # Same as filtered since already curated
+        thresholds={},  # Already applied in previous step
+        balance_strategy="applied"
+    )
+
+
+def extract_dataset_info_from_filename(filename: str) -> tuple:
+    """Extract dataset name and ID from the input filename."""
+    # Extract from filename like "cifar10_training_maveric_dataset1.json"
+    basename = Path(filename).stem  # Remove extension
+    if '_training_maveric_dataset' in basename:
+        parts = basename.split('_training_maveric_dataset')
+        dataset_name = parts[0]
+        dataset_id = int(parts[1]) if parts[1].isdigit() else 1
+        return dataset_name, dataset_id
+    return "unknown", 1
+
+
+def get_class_names_from_data(data: List[Dict]) -> List[str]:
+    """Extract unique class names from the training data."""
+    labels = set()
+    for sample in data:
+        if 'label' in sample:
+            labels.add(sample['label'])
+    return sorted(list(labels))
+
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="MAVERIC Model Customization",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python 03_model_customization.py --input cifar10_training_maveric_dataset1.json --config maveric_config.yaml
+  python 03_model_customization.py -i results/imagenet_training_maveric_dataset1.json -c config.yaml --epochs 10
+        """
+    )
+    
+    parser.add_argument(
+        '--input', '-i',
+        type=str,
+        required=True,
+        help='Path to training dataset JSON file'
+    )
+    
+    parser.add_argument(
+        '--config', '-c',
+        type=str,
+        required=True,
+        help='Path to MAVERIC configuration YAML file'
+    )
+    
+    parser.add_argument(
+        '--output-dir', '-o',
+        type=str,
+        default='./models',
+        help='Output directory for model checkpoints (default: ./models)'
+    )
+    
+    parser.add_argument(
+        '--epochs',
+        type=int,
+        default=None,
+        help='Number of training epochs (overrides config)'
+    )
+    
+    parser.add_argument(
+        '--learning-rate',
+        type=float,
+        default=None,
+        help='Learning rate (overrides config)'
+    )
+    
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=None,
+        help='Batch size (overrides config)'
+    )
+    
+    return parser.parse_args()
+
+
+def setup_maveric(config: Dict) -> MAVERIC:
+    """Setup MAVERIC instance with configuration."""
+    print("🔧 Setting up MAVERIC...")
+    
+    try:
+        # Create MAVERICConfig object from loaded config
+        maveric_config = MAVERICConfig(
+            cache_base_dir=config['cache_base_dir'],
+            clip_model=config.get('clip_model', 'ViT-B/32'),
+            batch_size=config.get('batch_size', 32),
+            device=config.get('device', 'auto'),
+            enable_image_cache=config.get('caching', {}).get('enable_image_cache', True)
+        )
+        
+        # Initialize MAVERIC
+        maveric = MAVERIC(maveric_config)
+        print("✅ MAVERIC initialized successfully")
+        return maveric
+        
+    except Exception as e:
+        print(f"❌ Error setting up MAVERIC: {e}")
+        return None
+
+
+def create_training_config(config: Dict, args) -> TrainingConfig:
+    """Create training configuration from config file and CLI arguments."""
+    # Get training config from main config
+    training_cfg = config.get('training', {})
+    
+    # Override with command line arguments if provided
+    epochs = args.epochs if args.epochs is not None else training_cfg.get('epochs', 10)
+    learning_rate = args.learning_rate if args.learning_rate is not None else training_cfg.get('learning_rate', 1e-4)
+    batch_size = args.batch_size if args.batch_size is not None else training_cfg.get('batch_size', 16)
+    
+    return TrainingConfig(
+        epochs=epochs,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        weight_decay=training_cfg.get('weight_decay', 0.01),
+        warmup_steps=training_cfg.get('warmup_steps', 100),
+        save_strategy=training_cfg.get('save_strategy', 'epoch'),
+        evaluation_strategy=training_cfg.get('evaluation_strategy', 'epoch'),
+        logging_steps=training_cfg.get('logging_steps', 50),
+        save_total_limit=training_cfg.get('save_total_limit', 3),
+        use_regularization=training_cfg.get('use_regularization', True),
+        checkpoint_dir=args.output_dir
+    )
+
+
+def main():
+    """Main model customization function."""
+    args = parse_arguments()
+    
+    print("🚀 Starting MAVERIC Model Customization...")
+    print(f"📁 Input file: {args.input}")
+    print(f"📋 Configuration file: {args.config}")
+    
+    # Validate input files exist
+    if not os.path.exists(args.input):
+        print(f"❌ Input file not found: {args.input}")
+        return False
+    
+    if not os.path.exists(args.config):
+        print(f"❌ Configuration file not found: {args.config}")
+        return False
+    
+    try:
+        # Load configuration
+        config = load_config_file(args.config)
+        if not config:
+            print("❌ Failed to load configuration")
+            return False
+        
+        # Load training dataset
+        training_data = load_training_dataset(args.input)
+        if not training_data:
+            print("❌ Failed to load training dataset")
+            return False
+        
+        # Extract dataset information from filename
+        target_dataset, dataset_id = extract_dataset_info_from_filename(args.input)
+        print(f"🎯 Target dataset: {target_dataset}")
+        print(f"🆔 Dataset ID: {dataset_id}")
+        
+        # Extract class names from training data
+        class_names = get_class_names_from_data(training_data)
+        print(f"📊 Number of classes: {len(class_names)}")
+        print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+        
+        # Setup MAVERIC
+        maveric = setup_maveric(config)
+        if not maveric:
+            print("❌ Failed to initialize MAVERIC")
+            return False
+        
+        # Create output directory
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Convert to QualityResult
+        print("🔄 Converting to QualityResult...")
+        quality_result = convert_to_quality_result(training_data)
+        
+        # Create training configuration
+        training_config = create_training_config(config, args)
+        print(f"⚙️  Training configuration:")
+        print(f"   Epochs: {training_config.epochs}")
+        print(f"   Learning rate: {training_config.learning_rate}")
+        print(f"   Batch size: {training_config.batch_size}")
+        print(f"   Weight decay: {training_config.weight_decay}")
+        
+        # Perform model customization
+        print("🤖 Starting model customization...")
+        customization_result = maveric.customize_model(
+            quality_result=quality_result,
+            model_name=config.get('clip_model', 'ViT-B/32'),
+            training_config=training_config,
+            target_dataset=target_dataset
+        )
+        
+        if customization_result is None:
+            print("❌ Model customization failed")
+            return False
+        
+        print("✅ Model customization completed successfully!")
+        
+        # Display results
+        print("\n📊 Customization Results:")
+        print(f"   Base model: {customization_result.base_model_name}")
+        print(f"   Training samples: {customization_result.training_samples:,}")
+        print(f"   Zero-shot baseline: {customization_result.zero_shot_baseline:.2f}%")
+        print(f"   Test accuracy: {customization_result.test_accuracy:.2f}%")
+        print(f"   Improvement: {customization_result.improvement:+.2f}%")
+        
+        if customization_result.checkpoint_path:
+            print(f"   Model saved to: {customization_result.checkpoint_path}")
+        
+        # Display top-performing classes
+        if customization_result.class_accuracies:
+            print(f"\n🏆 Top 5 performing classes:")
+            sorted_classes = sorted(customization_result.class_accuracies.items(), 
+                                  key=lambda x: x[1], reverse=True)[:5]
+            for i, (class_name, accuracy) in enumerate(sorted_classes, 1):
+                print(f"   {i}. {class_name}: {accuracy:.1f}%")
+        
+        # Save detailed results
+        results_file = Path(args.output_dir) / f"{target_dataset}_customization_results_{dataset_id}.json"
+        with open(results_file, 'w') as f:
+            json.dump({
+                'model_name': customization_result.model_name,
+                'base_model_name': customization_result.base_model_name,
+                'target_dataset': target_dataset,
+                'training_samples': customization_result.training_samples,
+                'test_accuracy': customization_result.test_accuracy,
+                'zero_shot_baseline': customization_result.zero_shot_baseline,
+                'improvement': customization_result.improvement,
+                'class_accuracies': customization_result.class_accuracies,
+                'training_config': customization_result.training_config,
+                'checkpoint_path': customization_result.checkpoint_path
+            }, f, indent=2)
+        
+        print(f"📁 Results saved to: {results_file}")
+        
+        print("\n🎉 Model customization completed successfully!")
+        print(f"🤖 Best performing model available at: {customization_result.checkpoint_path}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error during model customization: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)
