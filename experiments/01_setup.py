@@ -128,7 +128,7 @@ def create_directories(config):
 
 def install_maveric(config):
     """Install MAVERIC package."""
-    print("🐍 Installing MAVERIC...")
+    print("🐍 Installing MAVERIC package and all dependencies...")
     
     # Clone if needed
     maveric_base_dir = config['maveric_base_dir']
@@ -150,6 +150,12 @@ def test_installation():
     """Test MAVERIC installation."""
     print("🧪 Testing installation...")
     
+    # Change to repository root directory for imports
+    original_dir = os.getcwd()
+    repo_root = os.path.dirname(os.path.abspath(__file__))  # experiments directory
+    repo_root = os.path.dirname(repo_root)  # go up to repository root
+    os.chdir(repo_root)
+    
     try:
         import torch
         print(f"✅ PyTorch {torch.__version__}")
@@ -165,6 +171,9 @@ def test_installation():
     except ImportError as e:
         print(f"❌ Import error: {e}")
         return False
+    finally:
+        # Restore original directory
+        os.chdir(original_dir)
 
 def copy_config_to_drive(config, source_config_path):
     """Copy configuration to Google Drive for persistence."""
