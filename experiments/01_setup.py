@@ -188,19 +188,6 @@ def test_installation():
         print("ℹ️  Try importing maveric in a new Python session")
         return False
 
-def copy_config_to_drive(config, source_config_path):
-    """Copy configuration to Google Drive for persistence."""
-    print("📋 Backing up configuration...")
-    
-    dest_config = f"{config['results_dir']}/maveric_config.yaml"
-    
-    try:
-        shutil.copy2(source_config_path, dest_config)
-        print(f"✅ Configuration backed up to: {dest_config}")
-        return dest_config
-    except Exception as e:
-        print(f"❌ Config backup failed: {e}")
-        return None
 
 def test_cache_access(config):
     """Test read/write access to cache directories."""
@@ -314,8 +301,6 @@ def main():
         print("❌ Cache access test failed")
         return False
     
-    # Backup configuration
-    copy_config_to_drive(config, args.config)
     
     # Show completion summary
     show_summary(config)
