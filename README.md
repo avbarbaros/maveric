@@ -29,12 +29,42 @@ pip install maveric
 git clone https://github.com/avbarbaros/maveric.git
 cd maveric
 
-# Install dependencies first
+# Install system dependencies (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y $(cat system-requirements.txt | grep -v "^#" | xargs)
+
+# Install Python dependencies
 pip install -r requirements.txt
 
 # Install in development mode
 pip install -e ".[dev]"
 ```
+
+### System Requirements
+MAVERIC requires several system packages for computer vision and ML operations. These are listed in `system-requirements.txt`:
+
+- `libgl1-mesa-glx`: OpenGL support for OpenCV image operations
+- `libglib2.0-0`: GLib library for low-level system operations
+- `libsm6`: X11 Session Management library for GUI applications
+- `libxext6`: X11 Extension library for display operations  
+- `libxrender-dev`: X11 Render extension for graphics rendering
+- `libgomp1`: GNU OpenMP runtime for parallel processing
+
+### Automated Setup Script
+For Google Colab or automated environments, use the provided setup script:
+
+```bash
+cd experiments
+python 01_setup.py --config maveric_config.yaml
+```
+
+This script will:
+- Install system dependencies from `system-requirements.txt`
+- Mount Google Drive (if in Colab)
+- Set up environment variables including `MAVERIC_BASE_DIR`
+- Create necessary directories based on configuration
+- Install MAVERIC package and dependencies
+- Validate the installation
 
 ### Docker/Headless Environment Setup
 For environments without display (Docker, CI/CD, remote servers):
@@ -59,9 +89,11 @@ export MPLBACKEND=Agg
 ```python
 from maveric import MAVERIC, MAVERICConfig
 
-# Initialize MAVERIC
+# Initialize MAVERIC with base directory configuration
 config = MAVERICConfig(
+    maveric_base_dir="/content/drive/MyDrive/MAVERIC",  # Base directory for all MAVERIC files
     cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache",
+    results_dir="/content/drive/MyDrive/MAVERIC/maveric_experiments", 
     clip_model="ViT-B/32"
 )
 maveric = MAVERIC(config)
@@ -87,6 +119,54 @@ customization_result = maveric.customize_model(
     quality_result,
     model_name="openai/clip-vit-base-patch32"
 )
+```
+
+## Configuration
+
+MAVERIC uses YAML-based configuration for easy management. The configuration system supports hierarchical directory structure through the `maveric_base_dir` parameter.
+
+### Configuration File Structure
+
+```yaml
+# Base configuration - all paths will be relative to this
+maveric_base_dir: "/content/drive/MyDrive/MAVERIC"
+cache_base_dir: "/content/drive/MyDrive/MAVERIC/maveric_cache"
+results_dir: "/content/drive/MyDrive/MAVERIC/maveric_experiments"
+
+# Model settings
+clip_model: "ViT-B/32"
+batch_size: 64
+device: "cuda"
+
+# Quality thresholds
+quality_thresholds:
+  sharpness_score: 0.7
+  consistency: 0.7
+  clip_similarity: 0.6
+```
+
+### Environment Variables
+
+The setup script automatically configures these environment variables:
+
+- `MAVERIC_BASE_DIR`: Base directory for all MAVERIC files
+- `MAVERIC_CACHE_DIR`: Directory for caching images and embeddings  
+- `MAVERIC_RESULTS_DIR`: Directory for experiment results and logs
+- `MAVERIC_CONFIG_PATH`: Path to the configuration file
+- `HF_HOME`: Hugging Face model cache directory
+
+### Loading Configuration
+
+```python
+from maveric import MAVERIC
+
+# Load from YAML file
+maveric = MAVERIC.from_config_file('experiments/maveric_config.yaml')
+
+# Or use environment variable
+import os
+config_path = os.getenv('MAVERIC_CONFIG_PATH', 'maveric_config.yaml')
+maveric = MAVERIC.from_config_file(config_path)
 ```
 
 ## Testing

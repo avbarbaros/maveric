@@ -1,0 +1,20 @@
+# System packages required for MAVERIC computer vision and ML operations
+# Install with: apt-get install -y $(cat system-requirements.txt | grep -v "^#" | xargs)
+
+# OpenGL support for OpenCV image processing operations
+libgl1-mesa-glx
+
+# GLib library for low-level system operations used by various Python packages
+libglib2.0-0
+
+# X11 Session Management library for GUI applications and matplotlib
+libsm6
+
+# X11 Extension library for display operations and visualization
+libxext6
+
+# X11 Render extension for graphics rendering and image display
+libxrender-dev
+
+# GNU OpenMP runtime for parallel processing in PyTorch/NumPy operations
+libgomp1

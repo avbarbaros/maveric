@@ -34,13 +34,22 @@ def check_gpu():
     return False
 
 def install_system_dependencies():
-    """Install system dependencies."""
+    """Install system dependencies from system-requirements.txt."""
     print("📦 Installing system dependencies...")
     run_command("apt-get update -qq", "Updating packages")
     
-    packages = ["libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev", "libgomp1"]
-    for package in packages:
-        run_command(f"apt-get install -y {package}", f"Installing {package}")
+    # Read system requirements from file
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    system_req_path = os.path.join(repo_root, "system-requirements.txt")
+    
+    if os.path.exists(system_req_path):
+        with open(system_req_path, 'r') as f:
+            packages = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+        
+        for package in packages:
+            run_command(f"apt-get install -y {package}", f"Installing {package}")
+    else:
+        print("⚠️  system-requirements.txt not found, skipping system dependencies")
 
 def mount_google_drive():
     """Mount Google Drive."""
