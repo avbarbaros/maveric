@@ -141,12 +141,14 @@ def setup_maveric(config: Dict) -> MAVERIC:
             clip_model=config.get('clip_model', 'ViT-B/32'),
             batch_size=config.get('batch_size', 32),
             device=config.get('device', 'auto'),
-            enable_image_cache=config.get('caching', {}).get('enable_image_cache', True)
+            enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
+            retrieval_rotation_size=config.get('retrieval_rotation_size', 1000)
         )
         
         # Initialize MAVERIC (real-time stats are enabled by default)
         maveric = MAVERIC(maveric_config)
         print("✅ MAVERIC initialized successfully")
+        print(f"🔄 Rotation size configured: {maveric_config.retrieval_rotation_size}")
         return maveric
         
     except Exception as e:

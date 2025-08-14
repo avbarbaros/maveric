@@ -326,6 +326,7 @@ class Retriever(BaseComponent):
         self.log_info(f"Preparing reference embeddings for {target_dataset}...")
         ref_embeddings, text_embeddings = self.prepare_reference_embeddings(target_dataset)
         self.log_info(f"Reference embeddings prepared: {len(ref_embeddings)} classes, {sum(len(v) for v in ref_embeddings.values())} total embeddings")
+        print(f"📊 Reference embeddings ready: {len(ref_embeddings)} classes")
         
         # Initialize storage
         all_samples = []
