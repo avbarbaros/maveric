@@ -181,6 +181,7 @@ class Retriever(BaseComponent):
             with open(filepath, 'w') as f:
                 json.dump(batch, f, indent=2)
             
+            print(f"📁 Exported rotation file: {filename} ({len(batch)} samples)")
             self.log_info(f"Exported rotation file: {filename} ({len(batch)} samples)")
             
         except Exception as e:
@@ -231,6 +232,10 @@ class Retriever(BaseComponent):
             
             # Compute class scores
             class_scores = {}
+            
+            if not self.reference_embeddings:
+                self.log_warning("No reference embeddings available for class score computation")
+                return {}, {}
             
             for class_name in self.reference_embeddings.keys():
                 # Similarity computations
@@ -287,7 +292,9 @@ class Retriever(BaseComponent):
             return class_scores, quality_scores
             
         except Exception as e:
-            self.log_warning(f"Error processing sample: {e}")
+            self.log_warning(f"Error processing sample {image_url[:50]}...: {str(e)}")
+            import traceback
+            self.log_debug(f"Full traceback: {traceback.format_exc()}")
             return {}, {}
     
     def retrieve(self,
@@ -316,7 +323,9 @@ class Retriever(BaseComponent):
             RetrievalResult with all retrieved samples
         """
         # Prepare reference embeddings
-        self.prepare_reference_embeddings(target_dataset)
+        self.log_info(f"Preparing reference embeddings for {target_dataset}...")
+        ref_embeddings, text_embeddings = self.prepare_reference_embeddings(target_dataset)
+        self.log_info(f"Reference embeddings prepared: {len(ref_embeddings)} classes, {sum(len(v) for v in ref_embeddings.values())} total embeddings")
         
         # Initialize storage
         all_samples = []
@@ -353,6 +362,7 @@ class Retriever(BaseComponent):
             class_scores, quality_scores = self.compute_sample_scores(url, text)
             
             if not class_scores or not quality_scores:
+                self.log_warning(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
             # Create sample record
@@ -375,6 +385,10 @@ class Retriever(BaseComponent):
             all_samples.append(sample)
             processed_count += 1
             
+            # Log batch progress
+            if processed_count % 10 == 0 or len(current_batch) % 5 == 0:
+                self.log_info(f"Batch progress: {len(current_batch)}/{rotation_size} samples, total processed: {processed_count}")
+            
             # Update progress
             if progress_callback:
                 progress_callback.update(
@@ -385,6 +399,8 @@ class Retriever(BaseComponent):
             
             # Save batch if needed
             if len(current_batch) >= rotation_size:
+                print(f"🔄 Rotation size ({rotation_size}) reached! Exporting batch #{file_id}...")
+                
                 if self.cache_manager:
                     self.cache_manager.save_results(
                         current_batch,
@@ -422,6 +438,7 @@ class Retriever(BaseComponent):
         
         # Export remaining batch if requested
         if current_batch and export_rotation_files and rotation_export_dir:
+            print(f"📝 Exporting final batch #{file_id} with {len(current_batch)} remaining samples...")
             self._export_rotation_file(
                 current_batch,
                 target_dataset,
