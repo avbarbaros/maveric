@@ -11,28 +11,47 @@ clip_model: "ViT-B/32"  # Fastest and most memory efficient
 batch_size: 64          # Optimal for T4 memory
 device: "cuda"
 max_memory_gb: 14       # Leave 2GB for system
+model_cache_dir: null   # Use default model cache location
 
 # Retrieval settings
 retrieval_rotation_size: 1000  # Samples per file when saving intermediate results
+n_reference_images: 10         # Number of reference images for similarity matching
+max_retries: 3                 # Maximum download retry attempts
+request_timeout: 5             # Request timeout in seconds
+
+# Quality metrics to compute
+quality_metrics:
+  - "resolution"
+  - "sharpness" 
+  - "color_diversity"
+  - "feature_richness"
+  - "multimodal_consistency"
+
+# Metric weights for composite scoring
+metric_weights:
+  img2img: 0.40    # Image-to-image similarity weight
+  txt2txt: 0.20    # Text-to-text similarity weight
+  img2txt: 0.20    # Image-to-text consistency weight
+  txt2img: 0.20    # Text-to-image consistency weight
 
 # Quality thresholds for ELEVATER experiments
 # These can be adjusted based on your requirements
 quality_thresholds:
   # Visual quality metrics
-  sharpness_score: 0.7      # Image sharpness (0-1)
-  resolution_score: 0.6     # Minimum resolution quality
-  color_diversity: 0.5      # Color distribution diversity
-  brightness_score: 0.4     # Brightness quality
-  contrast_score: 0.4       # Contrast quality
+  sharpness_score: 0.1      # Image sharpness (0-1)
+  resolution_score: 0.1     # Minimum resolution quality
+  color_diversity: 0.1      # Color distribution diversity
+  brightness_score: 0.1     # Brightness quality
+  contrast_score: 0.1       # Contrast quality
   
   # Semantic quality metrics  
-  consistency: 0.7          # Text-image consistency
-  text_quality: 0.6         # Text readability/quality
-  semantic_richness: 0.5    # Semantic feature richness
+  consistency: 0.1          # Text-image consistency
+  text_quality: 0.1         # Text readability/quality
+  semantic_richness: 0.1    # Semantic feature richness
   
   # Multimodal metrics
-  clip_similarity: 0.6      # CLIP text-image similarity
-  cross_modal_alignment: 0.5 # Cross-modal feature alignment
+  clip_similarity: 0.1      # CLIP text-image similarity
+  cross_modal_alignment: 0.1 # Cross-modal feature alignment
 
 # Caching settings for efficiency
 caching:
@@ -41,6 +60,8 @@ caching:
   enable_results_cache: true
   cache_compression: true
   max_cache_size_gb: 5      # Limit cache size on Google Drive
+  cache_format: "jpg"       # Image cache format
+  cache_quality: 95         # JPEG quality for cached images
 
 # Dataset processing settings
 processing:
@@ -51,8 +72,9 @@ processing:
 # Logging and monitoring
 logging:
   level: "INFO"
-  save_logs: true
-  log_file: "/content/drive/MyDrive/MAVERIC/maveric_experiments/maveric.log"
+  log_to_file: true
+  log_file_path: "/content/drive/MyDrive/MAVERIC/maveric_experiments/maveric.log"
+  save_logs: true  # Legacy setting, use log_to_file instead
 
 # Progress display settings
 enable_real_time_stats: true  # Show real-time download/cache statistics during retrieval
@@ -100,7 +122,9 @@ elevater:
   quality_control:
     enable_filtering: true
     balance_classes: true     # Balance classes after filtering
-    min_samples_per_class: 10 # Minimum samples to keep per class
+    min_samples_per_class: 1 # Minimum samples to keep per class
+    max_samples_per_class: 200 # Maximum samples to keep per class
+    enable_oversampling: false # Enable oversampling for small classes
 
 # Performance optimization
 performance:
@@ -114,6 +138,13 @@ output:
   save_quality_reports: true
   save_visualizations: true
   export_format: "json"     # json, csv, parquet
+
+# Visualization settings
+visualization:
+  style: "default"          # Matplotlib style
+  dpi: 100                  # Figure DPI
+  save_figures: false       # Save plots to files
+  figure_dir: null          # Directory for saved figures
   
 # Model customization settings (if enabled)
 customization:

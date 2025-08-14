@@ -124,7 +124,15 @@ def setup_maveric(config: Dict) -> MAVERIC:
             batch_size=config.get('batch_size', 32),
             device=config.get('device', 'auto'),
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
-            default_thresholds=config.get('quality_thresholds', {})
+            default_thresholds=config.get('quality_thresholds', {}),
+            balance_min_samples=config.get('elevater', {}).get('quality_control', {}).get('min_samples_per_class', 15),
+            # Additional configuration mappings
+            retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
+            enable_real_time_stats=config.get('enable_real_time_stats', True),
+            metric_weights=config.get('metric_weights', {}),
+            num_workers=config.get('performance', {}).get('num_workers', 4),
+            log_level=config.get('logging', {}).get('level', 'INFO'),
+            viz_save_figures=config.get('experiment', {}).get('save_visualizations', False)
         )
         
         # Initialize MAVERIC
