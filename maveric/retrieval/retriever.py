@@ -185,6 +185,7 @@ class Retriever(BaseComponent):
             self.log_info(f"Exported rotation file: {filename} ({len(batch)} samples)")
             
         except Exception as e:
+            print(f"❌ Failed to export rotation file: {e}")
             self.log_warning(f"Failed to export rotation file: {e}")
     
     def compute_sample_scores(self, 
@@ -234,7 +235,7 @@ class Retriever(BaseComponent):
             class_scores = {}
             
             if not self.reference_embeddings:
-                self.log_warning("No reference embeddings available for class score computation")
+                self.log_debug("No reference embeddings available for class score computation")
                 return {}, {}
             
             for class_name in self.reference_embeddings.keys():
@@ -292,7 +293,8 @@ class Retriever(BaseComponent):
             return class_scores, quality_scores
             
         except Exception as e:
-            self.log_warning(f"Error processing sample {image_url[:50]}...: {str(e)}")
+            # Log to debug level instead of warning to reduce console output
+            self.log_debug(f"Error processing sample {image_url[:50]}...: {str(e)}")
             import traceback
             self.log_debug(f"Full traceback: {traceback.format_exc()}")
             return {}, {}
@@ -363,7 +365,8 @@ class Retriever(BaseComponent):
             class_scores, quality_scores = self.compute_sample_scores(url, text)
             
             if not class_scores or not quality_scores:
-                self.log_warning(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
+                # Log to debug level instead of warning to reduce console output
+                self.log_debug(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
             # Create sample record
