@@ -204,23 +204,28 @@ def main():
             target_dataset=selected_dataset.lower(),
             num_samples=num_samples,
             start_index=0,
-            cache_results=True
+            cache_results=True,
+            export_rotation_files=True,
+            rotation_export_dir=args.output_dir
         )
         
         if retrieval_result is None or len(retrieval_result.samples) == 0:
             print(f"❌ No samples retrieved for {selected_dataset}")
             return False
         
-        # Export using the built-in method
-        print("💾 Exporting retrieved dataset JSON...")
-        output_path = retrieval_result.export_retrieved_dataset_json(
-            target_dataset=selected_dataset,
-            dataset_id=args.dataset_id,
-            output_dir=args.output_dir
-        )
-        
-        print(f"✅ Results saved to: {output_path}")
         print(f"📊 Total samples retrieved: {len(retrieval_result.samples)}")
+        print(f"✅ Rotation files automatically exported to: {args.output_dir}")
+        
+        # List the rotation files that were created
+        from pathlib import Path
+        output_dir_path = Path(args.output_dir)
+        rotation_files = sorted(output_dir_path.glob(f"{selected_dataset.lower()}_raw_maveric_*.json"))
+        if rotation_files:
+            print(f"📋 Created {len(rotation_files)} rotation files:")
+            for file_path in rotation_files:
+                print(f"   ✅ {file_path.name}")
+        else:
+            print("⚠️  No rotation files found - samples may not have reached rotation size")
         
         # Display final cache statistics
         cache_stats = maveric.get_cache_stats()

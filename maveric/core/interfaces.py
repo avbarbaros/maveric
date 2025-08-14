@@ -199,6 +199,61 @@ class RetrievalResult:
             json.dump(formatted_samples, f, indent=2)
         
         return str(output_path)
+    
+    @classmethod
+    def from_rotation_files(cls, 
+                           dataset_name: str,
+                           input_dir: str,
+                           source_dataset: str = "unknown") -> 'RetrievalResult':
+        """
+        Create RetrievalResult by loading all rotation files from a directory.
+        
+        Args:
+            dataset_name: Target dataset name (e.g., 'cifar10', 'imagenet')
+            input_dir: Directory containing rotation files  
+            source_dataset: Source dataset name for metadata
+            
+        Returns:
+            RetrievalResult with all samples from rotation files
+        """
+        import json
+        from pathlib import Path
+        
+        input_path = Path(input_dir)
+        if not input_path.exists():
+            raise ValueError(f"Input directory does not exist: {input_dir}")
+        
+        # Find all rotation files: {dataset_name}_raw_maveric_*.json
+        pattern = f"{dataset_name.lower()}_raw_maveric_*.json"
+        rotation_files = sorted(input_path.glob(pattern))
+        
+        if not rotation_files:
+            raise ValueError(f"No rotation files found matching pattern: {pattern}")
+        
+        # Load all samples from rotation files
+        all_samples = []
+        for file_path in rotation_files:
+            try:
+                with open(file_path, 'r') as f:
+                    batch_samples = json.load(f)
+                    if isinstance(batch_samples, list):
+                        all_samples.extend(batch_samples)
+                    else:
+                        all_samples.append(batch_samples)
+            except Exception as e:
+                raise ValueError(f"Failed to load rotation file {file_path}: {e}")
+        
+        # Create RetrievalResult
+        return cls(
+            samples=all_samples,
+            source_dataset=source_dataset,
+            target_dataset=dataset_name,
+            config={
+                'loaded_from_rotation_files': True,
+                'num_rotation_files': len(rotation_files),
+                'input_directory': str(input_dir)
+            }
+        )
 
 
 @dataclass

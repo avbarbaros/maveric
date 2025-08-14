@@ -101,7 +101,9 @@ class MAVERIC(BaseComponent):
                  target_dataset: str,
                  num_samples: Optional[int] = None,
                  start_index: int = 0,
-                 cache_results: bool = True) -> RetrievalResult:
+                 cache_results: bool = True,
+                 export_rotation_files: bool = True,
+                 rotation_export_dir: Optional[str] = None) -> RetrievalResult:
         """
         Retrieve and score samples from source dataset for target dataset.
         
@@ -111,6 +113,8 @@ class MAVERIC(BaseComponent):
             num_samples: Number of samples to retrieve (None for all)
             start_index: Index to start retrieval from
             cache_results: Whether to cache retrieval results
+            export_rotation_files: Whether to export rotation files during retrieval (default: True)
+            rotation_export_dir: Directory to export rotation files (default: cache results dir)
             
         Returns:
             RetrievalResult object containing retrieved samples and metadata
@@ -144,7 +148,9 @@ class MAVERIC(BaseComponent):
             target_dataset=target_dataset,
             rotation_size=self.config.retrieval_rotation_size,
             num_samples=num_samples,
-            start_index=start_index
+            start_index=start_index,
+            export_rotation_files=export_rotation_files,
+            rotation_export_dir=rotation_export_dir
         )
         
         self.log_info(f"Retrieved {result.total_samples} samples")
@@ -156,7 +162,7 @@ class MAVERIC(BaseComponent):
         return result
     
     def quality_control(self,
-                       data: Union[RetrievalResult, pd.DataFrame, str],
+                       data: Union[RetrievalResult, pd.DataFrame, str, tuple],
                        thresholds: Optional[Dict[str, float]] = None,
                        weights: Optional[Dict[str, float]] = None,
                        balance_strategy: str = 'median',
@@ -165,7 +171,11 @@ class MAVERIC(BaseComponent):
         Apply quality control filtering to retrieved samples.
         
         Args:
-            data: RetrievalResult, DataFrame, or path to saved results
+            data: Can be:
+                - RetrievalResult object
+                - DataFrame with samples
+                - Path to single JSON file  
+                - Tuple of (dataset_name, directory_path) to load rotation files
             thresholds: Quality thresholds (uses config defaults if None)
             weights: Metric weights (uses config defaults if None)
             balance_strategy: Dataset balancing strategy
@@ -181,6 +191,16 @@ class MAVERIC(BaseComponent):
         # Load data
         if isinstance(data, RetrievalResult):
             self.quality_controller.load_data(data.to_dataframe())
+        elif isinstance(data, tuple) and len(data) == 2:
+            # Load from rotation files: (dataset_name, directory_path)
+            dataset_name, directory_path = data
+            retrieval_result = RetrievalResult.from_rotation_files(
+                dataset_name=dataset_name,
+                input_dir=directory_path,
+                source_dataset="react-vl/react-retrieval-datasets"
+            )
+            self.log_info(f"Loaded {len(retrieval_result.samples)} samples from {retrieval_result.config['num_rotation_files']} rotation files")
+            self.quality_controller.load_data(retrieval_result.to_dataframe())
         else:
             self.quality_controller.load_data(data)
         

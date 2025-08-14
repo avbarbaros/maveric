@@ -61,16 +61,23 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python 02_data_curation.py --input cifar10_retrieved_maveric_dataset1.json --config maveric_config.yaml
-  python 02_data_curation.py -i results/imagenet_retrieved_maveric_dataset1.json -c config.yaml
+  python 02_data_curation.py --input-dir ./results --dataset-name cifar10 --config maveric_config.yaml
+  python 02_data_curation.py -i ./results -d imagenet -c config.yaml
         """
     )
     
     parser.add_argument(
-        '--input', '-i',
+        '--input-dir', '-i',
         type=str,
         required=True,
-        help='Path to retrieved dataset JSON file'
+        help='Directory containing rotation files from data retrieval'
+    )
+    
+    parser.add_argument(
+        '--dataset-name', '-d',
+        type=str,
+        required=True,
+        help='Target dataset name (e.g., cifar10, imagenet) to process rotation files'
     )
     
     parser.add_argument(
@@ -144,12 +151,13 @@ def main():
     args = parse_arguments()
     
     print("🚀 Starting MAVERIC Data Curation (Quality Control)...")
-    print(f"📁 Input file: {args.input}")
+    print(f"📁 Input directory: {args.input_dir}")
+    print(f"🎯 Target dataset: {args.dataset_name}")
     print(f"📋 Configuration file: {args.config}")
     
-    # Validate input files exist
-    if not os.path.exists(args.input):
-        print(f"❌ Input file not found: {args.input}")
+    # Validate input directory and config file exist
+    if not os.path.exists(args.input_dir):
+        print(f"❌ Input directory not found: {args.input_dir}")
         return False
     
     if not os.path.exists(args.config):
@@ -163,34 +171,16 @@ def main():
             print("❌ Failed to load configuration")
             return False
         
-        # Load retrieved dataset
-        retrieved_data = load_retrieved_dataset(args.input)
-        if not retrieved_data:
-            print("❌ Failed to load retrieved dataset")
-            return False
-        
-        # Extract dataset name from filename
-        target_dataset = extract_dataset_name_from_filename(args.input)
-        print(f"🎯 Target dataset: {target_dataset}")
-        
         # Setup MAVERIC
         maveric = setup_maveric(config)
         if not maveric:
             print("❌ Failed to initialize MAVERIC")
             return False
         
-        # Convert to RetrievalResult
-        print("🔄 Converting to RetrievalResult...")
-        retrieval_result = convert_to_retrieval_result(
-            retrieved_data,
-            source_dataset="react-vl/react-retrieval-datasets",
-            target_dataset=target_dataset
-        )
-        
-        # Apply quality control
-        print("🔍 Applying quality control filtering...")
+        # Apply quality control using rotation files directly
+        print("🔍 Loading rotation files and applying quality control filtering...")
         quality_result = maveric.quality_control(
-            data=retrieval_result,
+            data=(args.dataset_name, args.input_dir),
             thresholds=config.get('quality_thresholds'),
             weights=config.get('metric_weights'),
             balance_strategy=args.balance_strategy
@@ -222,7 +212,7 @@ def main():
             print(f"💾 Exporting training dataset JSON ({total_samples} samples → 1 file)...")
             
         output_path = quality_result.export_training_dataset_json(
-            target_dataset=target_dataset,
+            target_dataset=args.dataset_name,
             dataset_id=args.dataset_id,
             output_dir=args.output_dir,
             rotation_size=rotation_size

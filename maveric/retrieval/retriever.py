@@ -152,6 +152,40 @@ class Retriever(BaseComponent):
         
         return self.reference_embeddings, self.text_embeddings
     
+    def _export_rotation_file(self,
+                             batch: List[Dict],
+                             target_dataset: str,
+                             file_id: int,
+                             export_dir: str):
+        """
+        Export rotation file with proper naming convention.
+        
+        Args:
+            batch: List of sample dictionaries to export
+            target_dataset: Target dataset name
+            file_id: File identifier
+            export_dir: Directory to export the file to
+        """
+        import json
+        from pathlib import Path
+        
+        try:
+            # Create export directory if it doesn't exist
+            Path(export_dir).mkdir(parents=True, exist_ok=True)
+            
+            # Create filename: {datasetName}_raw_maveric_{file_id}.json
+            filename = f"{target_dataset.lower()}_raw_maveric_{file_id}.json"
+            filepath = Path(export_dir) / filename
+            
+            # Save the batch
+            with open(filepath, 'w') as f:
+                json.dump(batch, f, indent=2)
+            
+            self.log_info(f"Exported rotation file: {filename} ({len(batch)} samples)")
+            
+        except Exception as e:
+            self.log_warning(f"Failed to export rotation file: {e}")
+    
     def compute_sample_scores(self, 
                             image_url: str,
                             text: str,
@@ -262,7 +296,9 @@ class Retriever(BaseComponent):
                 rotation_size: int,
                 num_samples: Optional[int] = None,
                 start_index: int = 0,
-                progress_callback: Optional[ProgressCallback] = None) -> RetrievalResult:
+                progress_callback: Optional[ProgressCallback] = None,
+                export_rotation_files: bool = True,
+                rotation_export_dir: Optional[str] = None) -> RetrievalResult:
         """
         Retrieve and score samples from dataset.
         
@@ -273,6 +309,8 @@ class Retriever(BaseComponent):
             num_samples: Number of samples to retrieve (None for all)
             start_index: Starting index
             progress_callback: Progress tracking callback
+            export_rotation_files: Whether to export rotation files during retrieval
+            rotation_export_dir: Directory to export rotation files (None = no export)
             
         Returns:
             RetrievalResult with all retrieved samples
@@ -354,6 +392,16 @@ class Retriever(BaseComponent):
                         file_id,
                         prefix="raw_maveric"
                     )
+                
+                # Export rotation file if requested
+                if export_rotation_files and rotation_export_dir:
+                    self._export_rotation_file(
+                        current_batch,
+                        target_dataset,
+                        file_id,
+                        rotation_export_dir
+                    )
+                
                 current_batch = []
                 file_id += 1
             
@@ -370,6 +418,15 @@ class Retriever(BaseComponent):
                 target_dataset,
                 file_id,
                 prefix="raw_maveric"
+            )
+        
+        # Export remaining batch if requested
+        if current_batch and export_rotation_files and rotation_export_dir:
+            self._export_rotation_file(
+                current_batch,
+                target_dataset,
+                file_id,
+                rotation_export_dir
             )
         
         # Complete progress
