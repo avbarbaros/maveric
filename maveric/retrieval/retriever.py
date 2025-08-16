@@ -308,6 +308,7 @@ class Retriever(BaseComponent):
                 rotation_size: int,
                 num_samples: Optional[int] = None,
                 start_index: int = 0,
+                start_file_id: int = 1,
                 progress_callback: Optional[ProgressCallback] = None,
                 export_rotation_files: bool = True,
                 rotation_export_dir: Optional[str] = None) -> RetrievalResult:
@@ -320,6 +321,7 @@ class Retriever(BaseComponent):
             rotation_size: Samples per file rotation (from config.retrieval_rotation_size)
             num_samples: Number of samples to retrieve (None for all)
             start_index: Starting index
+            start_file_id: Starting file sequence number for rotation files (default: 1)
             progress_callback: Progress tracking callback
             export_rotation_files: Whether to export rotation files during retrieval
             rotation_export_dir: Directory to export rotation files (None = no export)
@@ -336,7 +338,7 @@ class Retriever(BaseComponent):
         # Initialize storage
         all_samples = []
         processed_count = 0
-        file_id = 1
+        file_id = start_file_id
         current_batch = []
         
         # Determine total samples

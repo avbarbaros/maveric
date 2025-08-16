@@ -102,6 +102,7 @@ class MAVERIC(BaseComponent):
                  target_dataset: str,
                  num_samples: Optional[int] = None,
                  start_index: int = 0,
+                 start_file_id: int = 1,
                  cache_results: bool = True,
                  export_rotation_files: bool = True,
                  rotation_export_dir: Optional[str] = None) -> RetrievalResult:
@@ -113,6 +114,7 @@ class MAVERIC(BaseComponent):
             target_dataset: Target dataset name (e.g., 'cifar10', 'cifar100', 'imagenet')
             num_samples: Number of samples to retrieve (None for all)
             start_index: Index to start retrieval from
+            start_file_id: Starting file sequence number for rotation files (default: 1)
             cache_results: Whether to cache retrieval results
             export_rotation_files: Whether to export rotation files during retrieval (default: True)
             rotation_export_dir: Directory to export rotation files (default: cache results dir)
@@ -150,6 +152,7 @@ class MAVERIC(BaseComponent):
             rotation_size=self.config.retrieval_rotation_size,
             num_samples=num_samples,
             start_index=start_index,
+            start_file_id=start_file_id,
             export_rotation_files=export_rotation_files,
             rotation_export_dir=rotation_export_dir
         )

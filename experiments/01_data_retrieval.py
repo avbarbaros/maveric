@@ -48,6 +48,42 @@ def load_config_file(config_path: str) -> Dict:
         return None
 
 
+def get_user_file_sequence(start_index: int) -> int:
+    """Get user selection for starting file sequence number."""
+    # Suggest a reasonable starting file number based on start_index
+    suggested_file_id = max(1, (start_index // 500) + 1) if start_index > 0 else 1
+    
+    while True:
+        print(f"\n📁 Output File Sequence Selection:")
+        print(f"  • Starting index: {start_index:,}")
+        print(f"  • Suggested file sequence: {suggested_file_id} (based on batch size 500)")
+        print(f"  • Output format: datasetname_raw_maveric_{{sequence}}.json")
+        print("  • Enter file sequence number (e.g., '1', '5', '10')")
+        print("  • Enter 'q' to quit")
+        
+        user_input = input(f"\nFile sequence number (default: {suggested_file_id}): ").strip().lower()
+        
+        if user_input == 'q':
+            print("👋 Exiting...")
+            return None
+        
+        # Use suggested value if user just presses enter
+        if user_input == '':
+            user_input = str(suggested_file_id)
+        
+        try:
+            file_seq = int(user_input)
+            if file_seq >= 1:
+                print(f"✅ Starting file sequence: {file_seq}")
+                return file_seq
+            else:
+                print("❌ File sequence must be >= 1")
+                continue
+        except ValueError:
+            print("❌ Invalid input. Please enter a valid number or 'q' to quit.")
+            continue
+
+
 def get_user_start_index(dataset_size: int) -> int:
     """Get user selection for starting index with dataset size information."""
     max_index = dataset_size - 1  # 0-based indexing
@@ -243,6 +279,12 @@ def main():
             print("❌ No starting index selected or user quit")
             return False
         
+        # Get starting file sequence from user
+        start_file_sequence = get_user_file_sequence(start_index)
+        if start_file_sequence is None:
+            print("❌ No file sequence selected or user quit")
+            return False
+        
         # Perform retrieval
         print("🔍 Starting retrieval process...")
         retrieval_result = maveric.retrieve(
@@ -250,6 +292,7 @@ def main():
             target_dataset=selected_dataset.lower(),
             num_samples=num_samples,
             start_index=start_index,
+            start_file_id=start_file_sequence,
             cache_results=True,
             export_rotation_files=True,
             rotation_export_dir=args.output_dir
