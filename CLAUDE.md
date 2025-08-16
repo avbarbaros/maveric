@@ -164,3 +164,30 @@ Images and embeddings are cached in configurable directories:
 - Image cache: JPEG compressed images for fast loading
 - Embedding cache: Precomputed CLIP embeddings
 - Results cache: Serialized retrieval and quality results
+
+## Important Development Notes
+
+### CLI Entry Point Discrepancy
+The CLI entry point is defined in `setup.py:49` as `maveric=maveric.cli:main`, but the actual CLI implementation is in `maveric/utils/cli.py`. Be aware of this path when working with CLI-related code.
+
+### Testing Environment Setup
+- All tests automatically force CPU device via `conftest.py` device fixture
+- Random seeds are set for reproducibility (numpy=42, torch=42)
+- No pytest configuration files - uses defaults
+- For headless environments (Docker/CI): set `MPLBACKEND=Agg` before running tests
+
+### Development Dependencies Structure
+The project uses layered requirements:
+- `requirements.txt`: Core runtime dependencies only
+- `requirements-dev.txt`: Includes base requirements via `-r requirements.txt` plus dev tools
+
+### Configuration Architecture Details
+Configuration uses dataclasses in `config.py` with three main classes:
+- `MAVERICConfig`: System config with intelligent defaults (auto device detection, directory creation)
+- `TrainingConfig`: Model training parameters
+- `ExperimentConfig`: Experiment management
+
+Key config features:
+- YAML/JSON loading support
+- Auto device detection when set to "auto"
+- Automatic directory creation in `__post_init__`

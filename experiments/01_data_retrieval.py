@@ -48,6 +48,37 @@ def load_config_file(config_path: str) -> Dict:
         return None
 
 
+def get_user_start_index(dataset_size: int) -> int:
+    """Get user selection for starting index with dataset size information."""
+    max_index = dataset_size - 1  # 0-based indexing
+    
+    while True:
+        print(f"\n📍 Starting Index Selection:")
+        print(f"  • Dataset size: {dataset_size:,} samples")
+        print(f"  • Valid index range: 0 to {max_index:,}")
+        print("  • Enter starting index (e.g., '0', '1000', '50000')")
+        print("  • Enter '0' to start from the beginning")
+        print("  • Enter 'q' to quit")
+        
+        user_input = input(f"\nStarting index (0-{max_index:,}): ").strip().lower()
+        
+        if user_input == 'q':
+            print("👋 Exiting...")
+            return None
+        
+        try:
+            start_index = int(user_input)
+            if 0 <= start_index <= max_index:
+                print(f"✅ Starting from index: {start_index:,}")
+                return start_index
+            else:
+                print(f"❌ Starting index must be between 0 and {max_index:,}")
+                continue
+        except ValueError:
+            print("❌ Invalid input. Please enter a valid number or 'q' to quit.")
+            continue
+
+
 def get_user_dataset_selection(datasets: list) -> str:
     """Get user selection for which dataset to process."""
     while True:
@@ -199,13 +230,26 @@ def main():
         print(f"🎯 Target dataset: {selected_dataset}")
         print(f"📊 Source: react-vl/react-retrieval-datasets")
         
+        # Get dataset size to show user valid range
+        print("📏 Getting dataset size...")
+        from maveric.retrieval.dataset_handlers import REACTDatasetHandler
+        dataset_handler = REACTDatasetHandler("react-vl/react-retrieval-datasets")
+        dataset_size = len(dataset_handler)
+        print(f"📊 Dataset contains {dataset_size:,} samples")
+        
+        # Get starting index from user
+        start_index = get_user_start_index(dataset_size)
+        if start_index is None:
+            print("❌ No starting index selected or user quit")
+            return False
+        
         # Perform retrieval
         print("🔍 Starting retrieval process...")
         retrieval_result = maveric.retrieve(
             dataset_name="react-vl/react-retrieval-datasets",
             target_dataset=selected_dataset.lower(),
             num_samples=num_samples,
-            start_index=0,
+            start_index=start_index,
             cache_results=True,
             export_rotation_files=True,
             rotation_export_dir=args.output_dir

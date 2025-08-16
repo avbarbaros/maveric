@@ -78,7 +78,8 @@ class MAVERIC(BaseComponent):
             clip_model=self.config.clip_model,
             device=self.config.device,
             cache_manager=self.cache_manager,
-            n_reference_images=self.config.n_reference_images
+            n_reference_images=self.config.n_reference_images,
+            real_time_stats=self.real_time_stats
         )
         
         # Quality controller (initialized on demand)

@@ -36,7 +36,8 @@ class Retriever(BaseComponent):
                  clip_model: str = "ViT-B/32",
                  device: str = "cuda",
                  cache_manager: Optional[CacheManager] = None,
-                 n_reference_images: int = 10):
+                 n_reference_images: int = 10,
+                 real_time_stats=None):
         """
         Initialize retriever.
         
@@ -45,6 +46,7 @@ class Retriever(BaseComponent):
             device: Computation device
             cache_manager: Cache manager instance
             n_reference_images: Number of reference images per class
+            real_time_stats: Real-time stats object for progress tracking
         """
         super().__init__("Retriever")
         
@@ -52,6 +54,7 @@ class Retriever(BaseComponent):
         self.device = device if torch.cuda.is_available() else "cpu"
         self.cache_manager = cache_manager
         self.n_reference_images = n_reference_images
+        self.real_time_stats = real_time_stats
         
         # Initialize CLIP model
         self._init_clip_model()
@@ -341,6 +344,9 @@ class Retriever(BaseComponent):
         if total_samples == -1:  # Streaming dataset
             total_samples = num_samples or float('inf')
         
+        # Get actual dataset size for index tracking
+        dataset_size = len(dataset_handler) if hasattr(dataset_handler, '__len__') else None
+        
         self.log_info(f"Starting retrieval for {target_dataset}")
         start_time = time.time()
         
@@ -389,9 +395,15 @@ class Retriever(BaseComponent):
             all_samples.append(sample)
             processed_count += 1
             
-            # Log batch progress
-            if processed_count % 10 == 0 or len(current_batch) % 5 == 0:
-                self.log_info(f"Batch progress: {len(current_batch)}/{rotation_size} samples, total processed: {processed_count}")
+            # Update real-time stats with batch information
+            if self.real_time_stats:
+                current_stats = self.real_time_stats.get_current_stats()
+                current_stats['batch_size'] = rotation_size
+                current_stats['current_batch_position'] = len(current_batch)
+                current_stats['current_index'] = start_index + idx + 1  # +1 for 1-based indexing
+                if dataset_size is not None:
+                    current_stats['total_samples'] = dataset_size
+                self.real_time_stats.update_stats(current_stats)
             
             # Update progress
             if progress_callback:
@@ -424,6 +436,12 @@ class Retriever(BaseComponent):
                 
                 current_batch = []
                 file_id += 1
+                
+                # Reset batch position in stats
+                if self.real_time_stats:
+                    current_stats = self.real_time_stats.get_current_stats()
+                    current_stats['current_batch_position'] = 0
+                    self.real_time_stats.update_stats(current_stats)
             
             # Log progress periodically
             if processed_count % 100 == 0:

@@ -48,14 +48,30 @@ class RealTimeStats:
         status_parts = []
         if cache_hits > 0:
             status_parts.append(f"🎯 Cache hits: {cache_hits}")
+        
+        # Show downloads with batch size if available
+        batch_size = self.stats.get('batch_size', None)
+        current_batch_position = self.stats.get('current_batch_position', None)
+        
         if successful > 0:
-            status_parts.append(f"✅ Downloads: {successful}")
+            if batch_size and current_batch_position is not None:
+                status_parts.append(f"✅ Downloads: {current_batch_position} / {batch_size}")
+            else:
+                status_parts.append(f"✅ Downloads: {successful}")
+        
         if failed > 0:
             status_parts.append(f"❌ Failed: {failed}")
             
         if total_attempts > 0:
             success_rate = (successful / total_attempts) * 100
             status_parts.append(f"📊 Success: {success_rate:.1f}%")
+        
+        # Show current index information if available
+        current_index = self.stats.get('current_index', None)
+        total_samples = self.stats.get('total_samples', None)
+        
+        if current_index is not None and total_samples is not None:
+            status_parts.append(f"📍 Index: {current_index} / {total_samples}")
             
         if status_parts:
             status_line = " | ".join(status_parts)
