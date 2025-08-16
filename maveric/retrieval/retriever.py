@@ -363,7 +363,7 @@ class Retriever(BaseComponent):
             # Update current index for every sample (successful or failed)
             if self.real_time_stats:
                 index_stats = {
-                    'current_index': start_index + idx + 1,  # +1 for 1-based indexing
+                    'current_index': idx + 1,  # +1 for 1-based indexing (idx is already absolute position)
                     'batch_size': rotation_size,
                 }
                 if dataset_size is not None:
