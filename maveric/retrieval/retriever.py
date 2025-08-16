@@ -397,13 +397,14 @@ class Retriever(BaseComponent):
             
             # Update real-time stats with batch information
             if self.real_time_stats:
-                current_stats = self.real_time_stats.get_current_stats()
-                current_stats['batch_size'] = rotation_size
-                current_stats['current_batch_position'] = len(current_batch)
-                current_stats['current_index'] = start_index + idx + 1  # +1 for 1-based indexing
+                batch_stats = {
+                    'batch_size': rotation_size,
+                    'current_batch_position': len(current_batch),
+                    'current_index': start_index + idx + 1,  # +1 for 1-based indexing
+                }
                 if dataset_size is not None:
-                    current_stats['total_samples'] = dataset_size
-                self.real_time_stats.update_stats(current_stats)
+                    batch_stats['total_samples'] = dataset_size
+                self.real_time_stats.update_stats(batch_stats)
             
             # Update progress
             if progress_callback:
@@ -439,9 +440,8 @@ class Retriever(BaseComponent):
                 
                 # Reset batch position in stats
                 if self.real_time_stats:
-                    current_stats = self.real_time_stats.get_current_stats()
-                    current_stats['current_batch_position'] = 0
-                    self.real_time_stats.update_stats(current_stats)
+                    reset_stats = {'current_batch_position': 0}
+                    self.real_time_stats.update_stats(reset_stats)
             
             # Log progress periodically
             if processed_count % 100 == 0:
