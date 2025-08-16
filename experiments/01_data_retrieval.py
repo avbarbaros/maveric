@@ -169,7 +169,7 @@ def parse_arguments():
         epilog="""
 Examples:
   python 01_data_retrieval.py --config maveric_config.yaml
-  python 01_data_retrieval.py -c /path/to/config.yaml --output-dir ./results
+  python 01_data_retrieval.py -c /path/to/config.yaml
         """
     )
     
@@ -178,13 +178,6 @@ Examples:
         type=str,
         required=True,
         help='Path to MAVERIC configuration YAML file'
-    )
-    
-    parser.add_argument(
-        '--output-dir', '-o',
-        type=str,
-        default='./results',
-        help='Output directory for results (default: ./results)'
     )
     
     parser.add_argument(
@@ -248,6 +241,10 @@ def main():
     num_samples = config.get('elevater', {}).get('retrieval', {}).get('num_samples', 1000)
     print(f"📈 Samples per retrieval: {num_samples}")
     
+    # Get output directory from config
+    output_dir = config.get('results_dir', './results')
+    print(f"📁 Output directory: {output_dir}")
+    
     try:
         # Setup MAVERIC 
         maveric = setup_maveric(config)
@@ -285,6 +282,11 @@ def main():
             print("❌ No file sequence selected or user quit")
             return False
         
+        # Create dataset-specific output directory
+        dataset_output_dir = Path(output_dir) / selected_dataset.lower()
+        dataset_output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"📁 Dataset output directory: {dataset_output_dir}")
+        
         # Perform retrieval
         print("🔍 Starting retrieval process...")
         retrieval_result = maveric.retrieve(
@@ -295,7 +297,7 @@ def main():
             start_file_id=start_file_sequence,
             cache_results=True,
             export_rotation_files=True,
-            rotation_export_dir=args.output_dir
+            rotation_export_dir=str(dataset_output_dir)
         )
         
         if retrieval_result is None or len(retrieval_result.samples) == 0:
@@ -303,11 +305,10 @@ def main():
             return False
         
         print(f"📊 Total samples retrieved: {len(retrieval_result.samples)}")
-        print(f"✅ Rotation files automatically exported to: {args.output_dir}")
+        print(f"✅ Rotation files automatically exported to: {dataset_output_dir}")
         
         # List the rotation files that were created
-        from pathlib import Path
-        output_dir_path = Path(args.output_dir)
+        output_dir_path = dataset_output_dir
         rotation_files = sorted(output_dir_path.glob(f"{selected_dataset.lower()}_raw_maveric_*.json"))
         if rotation_files:
             print(f"📋 Created {len(rotation_files)} rotation files:")

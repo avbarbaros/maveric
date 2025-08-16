@@ -110,8 +110,14 @@ class Retriever(BaseComponent):
                 self.log_info("Loaded reference embeddings from cache")
                 return self.reference_embeddings, self.text_embeddings
         
-        # Load target dataset
-        dataset = get_dataset(target_dataset)
+        # Load target dataset with proper cache directory
+        if self.cache_manager:
+            # Use cache directory for dataset storage
+            dataset_cache_dir = self.cache_manager.base_dir / 'datasets'
+            dataset = get_dataset(target_dataset, root=str(dataset_cache_dir))
+        else:
+            # Fallback to default location
+            dataset = get_dataset(target_dataset)
         
         # Get reference samples
         self.log_info(f"Creating reference embeddings for {target_dataset}")
