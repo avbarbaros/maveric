@@ -360,6 +360,16 @@ class Retriever(BaseComponent):
             if num_samples and processed_count >= num_samples:
                 break
             
+            # Update current index for every sample (successful or failed)
+            if self.real_time_stats:
+                index_stats = {
+                    'current_index': start_index + idx + 1,  # +1 for 1-based indexing
+                    'batch_size': rotation_size,
+                }
+                if dataset_size is not None:
+                    index_stats['total_samples'] = dataset_size
+                self.real_time_stats.update_stats(index_stats)
+            
             # Process sample
             url = item.get('URL', '')
             text = item.get('TEXT', '')
@@ -395,15 +405,11 @@ class Retriever(BaseComponent):
             all_samples.append(sample)
             processed_count += 1
             
-            # Update real-time stats with batch information
+            # Update batch position after successful processing
             if self.real_time_stats:
                 batch_stats = {
-                    'batch_size': rotation_size,
                     'current_batch_position': len(current_batch),
-                    'current_index': start_index + idx + 1,  # +1 for 1-based indexing
                 }
-                if dataset_size is not None:
-                    batch_stats['total_samples'] = dataset_size
                 self.real_time_stats.update_stats(batch_stats)
             
             # Update progress
