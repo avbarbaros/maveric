@@ -124,8 +124,8 @@ class MAVERIC(BaseComponent):
         """
         self.log_info(f"Starting retrieval from {dataset_name} for {target_dataset}")
         
-        # Check if we have cached results
-        if cache_results:
+        # Check if we have cached results (only use cache if starting from beginning)
+        if cache_results and start_index == 0:
             cached_results = self.cache_manager.load_results(target_dataset)
             if cached_results:
                 self.log_info(f"Loaded {len(cached_results)} cached results")
@@ -134,6 +134,8 @@ class MAVERIC(BaseComponent):
                     source_dataset=dataset_name,
                     target_dataset=target_dataset
                 )
+        elif cache_results and start_index > 0:
+            self.log_info(f"Skipping cache due to non-zero start_index ({start_index})")
         
         # Create dataset handler
         if "react" in dataset_name.lower():

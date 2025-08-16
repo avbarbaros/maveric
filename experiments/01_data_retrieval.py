@@ -295,7 +295,7 @@ def main():
             num_samples=num_samples,
             start_index=start_index,
             start_file_id=start_file_sequence,
-            cache_results=True,
+            cache_results=(start_index == 0),  # Only cache if starting from beginning
             export_rotation_files=True,
             rotation_export_dir=str(dataset_output_dir)
         )
