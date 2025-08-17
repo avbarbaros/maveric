@@ -62,7 +62,7 @@ def parse_arguments():
         epilog="""
 Examples:
   python 02_data_curation.py --input-dir ./results --dataset-name cifar10 --config maveric_config.yaml
-  python 02_data_curation.py -i ./results -d imagenet -c config.yaml
+  python 02_data_curation.py -i ./results -d imagenet -c config.yaml --output-dir ./custom_output
         """
     )
     
@@ -90,8 +90,8 @@ Examples:
     parser.add_argument(
         '--output-dir', '-o',
         type=str,
-        default='./results',
-        help='Output directory for results (default: ./results)'
+        default=None,
+        help='Output directory for results (default: use results_dir from config)'
     )
     
     parser.add_argument(
@@ -185,6 +185,10 @@ def main():
             print("❌ Failed to initialize MAVERIC")
             return False
         
+        # Determine output directory
+        output_dir = args.output_dir if args.output_dir is not None else config.get('results_dir', './results')
+        print(f"📁 Output directory: {output_dir}")
+        
         # Apply quality control using rotation files directly
         print("🔍 Loading rotation files and applying quality control filtering...")
         quality_result = maveric.quality_control(
@@ -222,12 +226,12 @@ def main():
         output_path = quality_result.export_training_dataset_json(
             target_dataset=args.dataset_name,
             dataset_id=args.dataset_id,
-            output_dir=args.output_dir,
+            output_dir=output_dir,
             rotation_size=rotation_size
         )
         
         if total_samples > rotation_size:
-            print(f"✅ Training dataset files saved to: {args.output_dir}")
+            print(f"✅ Training dataset files saved to: {output_dir}")
             print(f"   First file: {output_path}")
         else:
             print(f"✅ Training dataset saved to: {output_path}")
