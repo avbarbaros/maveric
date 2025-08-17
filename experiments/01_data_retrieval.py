@@ -283,8 +283,8 @@ def main():
             print("❌ No file sequence selected or user quit")
             return False
         
-        # Create dataset-specific output directory
-        dataset_output_dir = Path(output_dir) / selected_dataset.lower()
+        # Create dataset-specific output directory with raw subfolder for better organization
+        dataset_output_dir = Path(output_dir) / selected_dataset.lower() / "raw"
         dataset_output_dir.mkdir(parents=True, exist_ok=True)
         print(f"📁 Dataset output directory: {dataset_output_dir}")
         

@@ -61,8 +61,14 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python 02_data_curation.py --input-dir ./results --dataset-name cifar10 --config maveric_config.yaml
-  python 02_data_curation.py -i ./results -d imagenet -c config.yaml --output-dir ./custom_output
+  # Auto-detects raw subfolder: reads from results_dir/cifar10/raw/, outputs to results_dir/cifar10/
+  python 02_data_curation.py --input-dir /content/drive/MyDrive/MAVERIC/maveric_experiments/cifar10 --dataset-name cifar10 --config maveric_config.yaml
+  
+  # Explicitly specify raw folder
+  python 02_data_curation.py --input-dir /content/drive/MyDrive/MAVERIC/maveric_experiments/cifar10/raw --dataset-name cifar10 --config maveric_config.yaml
+  
+  # Override with custom output directory
+  python 02_data_curation.py -i ./custom_input -d imagenet -c config.yaml --output-dir ./custom_output
         """
     )
     
@@ -70,7 +76,7 @@ Examples:
         '--input-dir', '-i',
         type=str,
         required=True,
-        help='Directory containing rotation files from data retrieval'
+        help='Directory containing rotation files from data retrieval (should point to results_dir/datasetName/raw/)'
     )
     
     parser.add_argument(
@@ -91,7 +97,7 @@ Examples:
         '--output-dir', '-o',
         type=str,
         default=None,
-        help='Output directory for results (default: use results_dir from config)'
+        help='Output directory for results (default: results_dir/datasetName from config)'
     )
     
     parser.add_argument(
@@ -154,18 +160,53 @@ def extract_dataset_name_from_filename(filename: str) -> str:
     return "unknown"
 
 
+def validate_and_adjust_input_dir(input_dir: str, dataset_name: str) -> str:
+    """
+    Validate input directory and auto-detect raw subfolder if needed.
+    
+    Args:
+        input_dir: User-provided input directory
+        dataset_name: Dataset name for validation
+        
+    Returns:
+        Validated input directory path
+    """
+    input_path = Path(input_dir)
+    
+    # If the provided path exists and contains rotation files, use it directly
+    if input_path.exists():
+        pattern = f"{dataset_name.lower()}_raw_maveric_*.json"
+        rotation_files = list(input_path.glob(pattern))
+        if rotation_files:
+            return str(input_path)
+        
+        # If no rotation files found, check if there's a 'raw' subfolder
+        raw_subfolder = input_path / "raw"
+        if raw_subfolder.exists():
+            rotation_files = list(raw_subfolder.glob(pattern))
+            if rotation_files:
+                print(f"📁 Auto-detected raw subfolder: {raw_subfolder}")
+                return str(raw_subfolder)
+    
+    # Return original path (will be validated later)
+    return str(input_path)
+
+
 def main():
     """Main data curation function."""
     args = parse_arguments()
     
     print("🚀 Starting MAVERIC Data Curation (Quality Control)...")
-    print(f"📁 Input directory: {args.input_dir}")
     print(f"🎯 Target dataset: {args.dataset_name}")
     print(f"📋 Configuration file: {args.config}")
     
+    # Validate and adjust input directory
+    validated_input_dir = validate_and_adjust_input_dir(args.input_dir, args.dataset_name)
+    print(f"📁 Input directory: {validated_input_dir}")
+    
     # Validate input directory and config file exist
-    if not os.path.exists(args.input_dir):
-        print(f"❌ Input directory not found: {args.input_dir}")
+    if not os.path.exists(validated_input_dir):
+        print(f"❌ Input directory not found: {validated_input_dir}")
         return False
     
     if not os.path.exists(args.config):
@@ -185,14 +226,21 @@ def main():
             print("❌ Failed to initialize MAVERIC")
             return False
         
-        # Determine output directory
-        output_dir = args.output_dir if args.output_dir is not None else config.get('results_dir', './results')
+        # Determine output directory - use dataset-specific subdirectory for better organization
+        if args.output_dir is not None:
+            # User specified custom output directory
+            output_dir = args.output_dir
+        else:
+            # Use results_dir from config and create dataset-specific subdirectory
+            base_results_dir = config.get('results_dir', './results')
+            output_dir = f"{base_results_dir}/{args.dataset_name}"
+        
         print(f"📁 Output directory: {output_dir}")
         
         # Apply quality control using rotation files directly
         print("🔍 Loading rotation files and applying quality control filtering...")
         quality_result = maveric.quality_control(
-            data=(args.dataset_name, args.input_dir),
+            data=(args.dataset_name, validated_input_dir),
             thresholds=config.get('quality_thresholds'),
             weights=config.get('metric_weights'),
             balance_strategy=args.balance_strategy
