@@ -19,7 +19,6 @@ class MAVERICConfig:
     # Model configuration
     clip_model: str = "ViT-B/32"
     device: str = "auto"  # auto, cuda, cpu
-    model_cache_dir: Optional[str] = None
     
     # Cache configuration
     cache_base_dir: str = "./cache"
@@ -78,7 +77,6 @@ class MAVERICConfig:
     viz_style: str = "default"
     viz_dpi: int = 100
     viz_save_figures: bool = False
-    viz_figure_dir: Optional[str] = None
     
     def __post_init__(self):
         """Validate and process configuration after initialization."""
@@ -89,9 +87,6 @@ class MAVERICConfig:
         
         # Create directories if they don't exist
         Path(self.cache_base_dir).mkdir(parents=True, exist_ok=True)
-        
-        if self.viz_save_figures and self.viz_figure_dir:
-            Path(self.viz_figure_dir).mkdir(parents=True, exist_ok=True)
     
     @classmethod
     def from_yaml(cls, path: Union[str, Path]) -> 'MAVERICConfig':

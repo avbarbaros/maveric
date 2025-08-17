@@ -118,8 +118,9 @@ Key configuration options:
 - `clip_model`: CLIP model to use (default: "ViT-B/32")
 - `cache_base_dir`: Directory for caching downloaded images and results
 - `batch_size`: Processing batch size
-- `retrieval_rotation_size`: Samples per file when saving results and training data (default: 1000)
+- `retrieval_rotation_size`: Samples per file when saving results and training data (default: 500)
 - `quality_metrics`: List of quality metrics to compute
+- `seed`: Random seed for reproducible sampling (default: 42)
 
 Configuration can be loaded from YAML/JSON files:
 ```python
