@@ -375,7 +375,7 @@ class QualityResult:
         # Export files based on rotation size
         if rotation_size is None or len(formatted_samples) <= rotation_size:
             # Single file export
-            filename = f"{target_dataset}_training_maveric_dataset{dataset_id}.json"
+            filename = f"{target_dataset}_training_maveric_1.json"
             output_path = Path(output_dir) / filename
             
             with open(output_path, 'w') as f:
@@ -385,18 +385,18 @@ class QualityResult:
         else:
             # Multiple file export with rotation
             output_paths = []
-            file_id = 1
+            sequence_number = 1
             
             for i in range(0, len(formatted_samples), rotation_size):
                 batch = formatted_samples[i:i + rotation_size]
-                filename = f"{target_dataset}_training_maveric_dataset{dataset_id}_part{file_id}.json"
+                filename = f"{target_dataset}_training_maveric_{sequence_number}.json"
                 output_path = Path(output_dir) / filename
                 
                 with open(output_path, 'w') as f:
                     json.dump(batch, f, indent=2)
                 
                 output_paths.append(str(output_path))
-                file_id += 1
+                sequence_number += 1
             
             print(f"📁 Exported {len(output_paths)} training dataset files")
             
