@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional, Any
 import json
+import random
 from pathlib import Path
 from PIL import Image
 
@@ -168,13 +169,19 @@ class ELEVATERDataset(BaseDataset):
         self._class_names = [f"class_{i}" for i in range(num_classes)]
         return self._class_names
     
-    def get_reference_samples(self, n_per_class: int) -> Dict[str, List[Image.Image]]:
+    def get_reference_samples(self, n_per_class: int, seed: int = 42) -> Dict[str, List[Image.Image]]:
         """
         Get reference samples for each class.
         
         For ELEVATER datasets, this requires the dataset to be properly set up
         with image files organized by class.
+        
+        Args:
+            n_per_class: Number of reference samples per class
+            seed: Random seed for reproducible sampling
         """
+        # Set random seed for reproducible sampling
+        random.seed(seed)
         reference_samples = {}
         
         # Check if dataset directory exists

@@ -35,7 +35,7 @@ class CIFARBaseDataset(BaseDataset):
         """Load the actual dataset - to be implemented by subclasses."""
         raise NotImplementedError
     
-    def get_reference_samples(self, n_per_class: int) -> Dict[str, List[Image.Image]]:
+    def get_reference_samples(self, n_per_class: int, seed: int = 42) -> Dict[str, List[Image.Image]]:
         """
         Get reference samples for each class.
         
@@ -44,12 +44,16 @@ class CIFARBaseDataset(BaseDataset):
         
         Args:
             n_per_class: Number of reference samples per class
+            seed: Random seed for reproducible sampling
             
         Returns:
             Dictionary mapping class names to lists of PIL images
         """
         if self._dataset is None:
             raise DatasetError("Dataset not loaded")
+        
+        # Set random seed for reproducible sampling
+        random.seed(seed)
         
         reference_samples = {}
         
@@ -63,7 +67,7 @@ class CIFARBaseDataset(BaseDataset):
         
         # Sample from each class
         for class_name, indices in class_indices.items():
-            # Randomly sample indices
+            # Randomly sample indices with fixed seed for reproducibility
             sampled_indices = random.sample(
                 indices, 
                 min(n_per_class, len(indices))

@@ -71,6 +71,9 @@ class MAVERICConfig:
     # Progress display configuration
     enable_real_time_stats: bool = True
     
+    # Reproducibility configuration
+    seed: int = 42  # Random seed for reproducible sampling
+    
     # Visualization configuration
     viz_style: str = "default"
     viz_dpi: int = 100

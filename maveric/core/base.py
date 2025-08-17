@@ -86,12 +86,13 @@ class BaseDataset(BaseComponent):
         return len(self.class_names)
     
     @abstractmethod
-    def get_reference_samples(self, n_per_class: int) -> Dict[str, List[Image.Image]]:
+    def get_reference_samples(self, n_per_class: int, seed: int = 42) -> Dict[str, List[Image.Image]]:
         """
         Get reference samples for each class - used for CLIP embedding generation.
         
         Args:
             n_per_class: Number of reference samples per class
+            seed: Random seed for reproducible sampling
             
         Returns:
             Dictionary mapping class names to lists of PIL images

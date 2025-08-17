@@ -49,6 +49,8 @@ class CacheManager(BaseComponent):
         self.image_cache_dir = self.base_dir / 'image_cache'
         self.result_cache_dir = self.base_dir / 'results'
         self.embedding_cache_dir = self.base_dir / 'embeddings'
+        self.reference_images_dir = self.base_dir / 'reference_images'
+        self.reference_texts_dir = self.base_dir / 'reference_texts'
         
         self._create_directories()
         
@@ -68,7 +70,9 @@ class CacheManager(BaseComponent):
             self.base_dir,
             self.image_cache_dir,
             self.result_cache_dir,
-            self.embedding_cache_dir
+            self.embedding_cache_dir,
+            self.reference_images_dir,
+            self.reference_texts_dir
         ]
         
         for directory in directories:
@@ -298,6 +302,97 @@ class CacheManager(BaseComponent):
         self.log_info(f"Loaded {len(all_results)} total results from {len(result_files)} files")
         return all_results
     
+    def save_reference_images(self,
+                             reference_samples: Dict[str, List],
+                             name: str) -> str:
+        """
+        Save reference images to cache for verification purposes.
+        
+        Args:
+            reference_samples: Dictionary mapping class names to lists of PIL images
+            name: Name for the reference images directory
+            
+        Returns:
+            Path to saved directory
+        """
+        # Create reference images directory
+        ref_images_dir = self.base_dir / 'reference_images' / name
+        ref_images_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            for class_name, images in reference_samples.items():
+                # Create class subdirectory
+                class_dir = ref_images_dir / class_name
+                class_dir.mkdir(exist_ok=True)
+                
+                # Save each image
+                for idx, image in enumerate(images):
+                    filename = f"ref_{idx:03d}.{self.cache_format}"
+                    filepath = class_dir / filename
+                    
+                    # Save image
+                    if self.cache_format == 'jpg':
+                        # Convert RGBA to RGB for JPEG
+                        if image.mode == 'RGBA':
+                            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+                            rgb_image.paste(image, mask=image.split()[3])
+                            image = rgb_image
+                        image.save(filepath, 'JPEG', quality=self.cache_quality)
+                    else:
+                        image.save(filepath, self.cache_format.upper())
+            
+            self.log_info(f"Saved reference images to {ref_images_dir}")
+            return str(ref_images_dir)
+            
+        except Exception as e:
+            raise CacheError(f"Failed to save reference images: {e}")
+    
+    def save_reference_texts(self,
+                           text_templates: List[str],
+                           class_names: List[str],
+                           name: str) -> str:
+        """
+        Save reference texts/captions to cache for verification purposes.
+        
+        Args:
+            text_templates: List of text templates used
+            class_names: List of class names
+            name: Name for the reference texts file
+            
+        Returns:
+            Path to saved file
+        """
+        import json
+        
+        # Create reference texts directory
+        ref_texts_dir = self.base_dir / 'reference_texts'
+        ref_texts_dir.mkdir(parents=True, exist_ok=True)
+        
+        filepath = ref_texts_dir / f"{name}_texts.json"
+        
+        try:
+            # Create comprehensive text data
+            text_data = {
+                'templates': text_templates,
+                'class_names': class_names,
+                'generated_prompts': {}
+            }
+            
+            # Generate all prompts for each class
+            for class_name in class_names:
+                prompts = [template.format(class_name) for template in text_templates]
+                text_data['generated_prompts'][class_name] = prompts
+            
+            # Save to JSON
+            with open(filepath, 'w') as f:
+                json.dump(text_data, f, indent=2)
+            
+            self.log_info(f"Saved reference texts to {filepath}")
+            return str(filepath)
+            
+        except Exception as e:
+            raise CacheError(f"Failed to save reference texts: {e}")
+
     def save_embeddings(self, 
                        embeddings: Dict[str, Any],
                        name: str) -> str:
@@ -362,6 +457,46 @@ class CacheManager(BaseComponent):
             self.log_warning(f"Failed to load embeddings: {e}")
             return None
     
+    def load_reference_texts(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Load reference texts from cache.
+        
+        Args:
+            name: Name of the reference texts file
+            
+        Returns:
+            Dictionary containing text data if found, None otherwise
+        """
+        import json
+        
+        filepath = self.reference_texts_dir / f"{name}_texts.json"
+        
+        if not filepath.exists():
+            return None
+        
+        try:
+            with open(filepath, 'r') as f:
+                text_data = json.load(f)
+            
+            self.log_info(f"Loaded reference texts from {filepath.name}")
+            return text_data
+            
+        except Exception as e:
+            self.log_warning(f"Failed to load reference texts: {e}")
+            return None
+    
+    def get_reference_images_path(self, dataset_name: str) -> str:
+        """
+        Get the path to reference images for a dataset.
+        
+        Args:
+            dataset_name: Name of the dataset
+            
+        Returns:
+            Path to reference images directory
+        """
+        return str(self.reference_images_dir / dataset_name)
+    
     def get_cache_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics.
@@ -373,6 +508,8 @@ class CacheManager(BaseComponent):
         image_size = sum(f.stat().st_size for f in self.image_cache_dir.glob('*'))
         result_size = sum(f.stat().st_size for f in self.result_cache_dir.glob('*'))
         embedding_size = sum(f.stat().st_size for f in self.embedding_cache_dir.glob('*'))
+        ref_images_size = sum(f.stat().st_size for f in self.reference_images_dir.rglob('*') if f.is_file())
+        ref_texts_size = sum(f.stat().st_size for f in self.reference_texts_dir.glob('*'))
         
         return {
             **self.stats,
@@ -380,12 +517,16 @@ class CacheManager(BaseComponent):
                 'images_mb': image_size / (1024 * 1024),
                 'results_mb': result_size / (1024 * 1024),
                 'embeddings_mb': embedding_size / (1024 * 1024),
-                'total_mb': (image_size + result_size + embedding_size) / (1024 * 1024)
+                'reference_images_mb': ref_images_size / (1024 * 1024),
+                'reference_texts_mb': ref_texts_size / (1024 * 1024),
+                'total_mb': (image_size + result_size + embedding_size + ref_images_size + ref_texts_size) / (1024 * 1024)
             },
             'cache_counts': {
                 'images': len(list(self.image_cache_dir.glob('*'))),
                 'results': len(list(self.result_cache_dir.glob('*'))),
-                'embeddings': len(list(self.embedding_cache_dir.glob('*')))
+                'embeddings': len(list(self.embedding_cache_dir.glob('*'))),
+                'reference_images': len(list(self.reference_images_dir.glob('*'))),
+                'reference_texts': len(list(self.reference_texts_dir.glob('*')))
             }
         }
     
@@ -410,3 +551,14 @@ class CacheManager(BaseComponent):
             for f in self.embedding_cache_dir.glob('*'):
                 f.unlink()
             self.log_info("Cleared embeddings cache")
+        
+        if cache_type in ['reference_images', 'all']:
+            for f in self.reference_images_dir.rglob('*'):
+                if f.is_file():
+                    f.unlink()
+            self.log_info("Cleared reference images cache")
+        
+        if cache_type in ['reference_texts', 'all']:
+            for f in self.reference_texts_dir.glob('*'):
+                f.unlink()
+            self.log_info("Cleared reference texts cache")

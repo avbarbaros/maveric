@@ -202,7 +202,8 @@ def setup_maveric(config: Dict) -> MAVERIC:
             batch_size=config.get('batch_size', 32),
             device=config.get('device', 'auto'),
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
-            retrieval_rotation_size=config.get('retrieval_rotation_size', 1000)
+            retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
+            seed=config.get('processing', {}).get('seed', 42)
         )
         
         # Initialize MAVERIC (real-time stats are enabled by default)
@@ -306,6 +307,11 @@ def main():
         
         print(f"📊 Total samples retrieved: {len(retrieval_result.samples)}")
         print(f"✅ Rotation files automatically exported to: {dataset_output_dir}")
+        
+        # Show reference data locations
+        cache_base_dir = config.get('cache_base_dir', './cache')
+        print(f"📸 Reference images saved to: {cache_base_dir}/reference_images/{selected_dataset.lower()}/")
+        print(f"📝 Reference texts saved to: {cache_base_dir}/reference_texts/{selected_dataset.lower()}_texts.json")
         
         # List the rotation files that were created
         output_dir_path = dataset_output_dir

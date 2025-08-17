@@ -160,10 +160,30 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ## Cache Management
 
-Images and embeddings are cached in configurable directories:
+Images, embeddings, and reference data are cached in configurable directories:
 - Image cache: JPEG compressed images for fast loading
 - Embedding cache: Precomputed CLIP embeddings
 - Results cache: Serialized retrieval and quality results
+- Reference images cache: Reference images used for embedding generation (organized by dataset/class)
+- Reference texts cache: Text templates and generated prompts for verification
+
+### Reference Data Storage Structure
+```
+maveric_cache/
+├── reference_images/
+│   └── {dataset_name}/
+│       └── {class_name}/
+│           ├── ref_000.jpg
+│           ├── ref_001.jpg
+│           └── ...
+└── reference_texts/
+    └── {dataset_name}_texts.json
+```
+
+Reference texts files contain:
+- `templates`: Original text templates used
+- `class_names`: List of all class names in the dataset  
+- `generated_prompts`: Dictionary mapping each class to its generated prompts
 
 ## Important Development Notes
 

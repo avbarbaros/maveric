@@ -37,7 +37,8 @@ class Retriever(BaseComponent):
                  device: str = "cuda",
                  cache_manager: Optional[CacheManager] = None,
                  n_reference_images: int = 10,
-                 real_time_stats=None):
+                 real_time_stats=None,
+                 seed: int = 42):
         """
         Initialize retriever.
         
@@ -47,6 +48,7 @@ class Retriever(BaseComponent):
             cache_manager: Cache manager instance
             n_reference_images: Number of reference images per class
             real_time_stats: Real-time stats object for progress tracking
+            seed: Random seed for reproducible sampling
         """
         super().__init__("Retriever")
         
@@ -55,6 +57,7 @@ class Retriever(BaseComponent):
         self.cache_manager = cache_manager
         self.n_reference_images = n_reference_images
         self.real_time_stats = real_time_stats
+        self.seed = seed
         
         # Initialize CLIP model
         self._init_clip_model()
@@ -108,15 +111,22 @@ class Retriever(BaseComponent):
                 ref_cache = cached.get('reference', {})
                 text_cache = cached.get('text', {})
                 
-                # Validate cached data
-                if isinstance(ref_cache, dict) and isinstance(text_cache, dict) and len(ref_cache) > 0:
-                    self.reference_embeddings = ref_cache
-                    self.text_embeddings = text_cache
-                    self.log_info("Loaded reference embeddings from cache")
-                    return self.reference_embeddings, self.text_embeddings
-                else:
-                    self.log_warning(f"Invalid cached embeddings for {target_dataset}, regenerating...")
-                    # Continue to regenerate embeddings
+                # More lenient validation for reproducibility
+                if ref_cache and text_cache:
+                    try:
+                        # Try to use cached data
+                        self.reference_embeddings = ref_cache if isinstance(ref_cache, dict) else {}
+                        self.text_embeddings = text_cache if isinstance(text_cache, dict) else {}
+                        
+                        # Only reject if completely empty
+                        if len(self.reference_embeddings) > 0 and len(self.text_embeddings) > 0:
+                            self.log_info("Loaded reference embeddings from cache")
+                            return self.reference_embeddings, self.text_embeddings
+                    except Exception as e:
+                        self.log_warning(f"Error loading cached embeddings: {e}")
+                
+                self.log_info(f"Cache invalid or empty for {target_dataset}, regenerating...")
+                # Continue to regenerate embeddings
         
         # Load target dataset with proper cache directory
         if self.cache_manager:
@@ -127,9 +137,12 @@ class Retriever(BaseComponent):
             # Fallback to default location
             dataset = get_dataset(target_dataset)
         
-        # Get reference samples
+        # Get reference samples with seed for reproducibility
         self.log_info(f"Creating reference embeddings for {target_dataset}")
-        reference_samples = dataset.get_reference_samples(self.n_reference_images)
+        reference_samples = dataset.get_reference_samples(self.n_reference_images, seed=self.seed)
+        
+        # Get text templates for later use
+        text_templates = dataset.get_text_templates()
         
         # Create image embeddings
         self.reference_embeddings = {}
@@ -148,10 +161,9 @@ class Retriever(BaseComponent):
         
         # Create text embeddings
         self.text_embeddings = {}
-        templates = dataset.get_text_templates()
         
         for class_name in tqdm(dataset.class_names, desc="Encoding text templates"):
-            prompts = [template.format(class_name) for template in templates]
+            prompts = [template.format(class_name) for template in text_templates]
             
             with torch.no_grad():
                 tokens = clip.tokenize(prompts).to(self.device)
@@ -161,11 +173,23 @@ class Retriever(BaseComponent):
         
         # Save to cache
         if save_cache and self.cache_manager:
+            # Save embeddings
             embeddings_data = {
                 'reference': self.reference_embeddings,
                 'text': self.text_embeddings
             }
             self.cache_manager.save_embeddings(embeddings_data, f"{target_dataset}_reference")
+            
+            # Save reference images for verification
+            self.cache_manager.save_reference_images(reference_samples, target_dataset)
+            self.log_info(f"Saved reference images for {target_dataset}")
+            
+            # Save reference texts for verification
+            self.cache_manager.save_reference_texts(text_templates, dataset.class_names, target_dataset)
+            self.log_info(f"Saved reference texts for {target_dataset}")
+            
+            print(f"📸 Reference images saved: {sum(len(images) for images in reference_samples.values())} images across {len(reference_samples)} classes")
+            print(f"📝 Reference texts saved: {len(text_templates)} templates for {len(dataset.class_names)} classes")
         
         return self.reference_embeddings, self.text_embeddings
     
