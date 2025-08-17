@@ -105,10 +105,18 @@ class Retriever(BaseComponent):
             cache_name = f"{target_dataset}_reference"
             cached = self.cache_manager.load_embeddings(cache_name)
             if cached:
-                self.reference_embeddings = cached.get('reference', {})
-                self.text_embeddings = cached.get('text', {})
-                self.log_info("Loaded reference embeddings from cache")
-                return self.reference_embeddings, self.text_embeddings
+                ref_cache = cached.get('reference', {})
+                text_cache = cached.get('text', {})
+                
+                # Validate cached data
+                if isinstance(ref_cache, dict) and isinstance(text_cache, dict) and len(ref_cache) > 0:
+                    self.reference_embeddings = ref_cache
+                    self.text_embeddings = text_cache
+                    self.log_info("Loaded reference embeddings from cache")
+                    return self.reference_embeddings, self.text_embeddings
+                else:
+                    self.log_warning(f"Invalid cached embeddings for {target_dataset}, regenerating...")
+                    # Continue to regenerate embeddings
         
         # Load target dataset with proper cache directory
         if self.cache_manager:
@@ -338,7 +346,16 @@ class Retriever(BaseComponent):
         # Prepare reference embeddings
         self.log_info(f"Preparing reference embeddings for {target_dataset}...")
         ref_embeddings, text_embeddings = self.prepare_reference_embeddings(target_dataset)
-        self.log_info(f"Reference embeddings prepared: {len(ref_embeddings)} classes, {sum(len(v) for v in ref_embeddings.values())} total embeddings")
+        
+        # Validate embeddings
+        if not isinstance(ref_embeddings, dict) or not isinstance(text_embeddings, dict):
+            raise ValueError(f"Invalid embeddings returned for {target_dataset}: ref_embeddings={type(ref_embeddings)}, text_embeddings={type(text_embeddings)}")
+        
+        if len(ref_embeddings) == 0:
+            raise ValueError(f"No reference embeddings found for {target_dataset}")
+        
+        total_embeddings = sum(len(v) if hasattr(v, '__len__') else 0 for v in ref_embeddings.values())
+        self.log_info(f"Reference embeddings prepared: {len(ref_embeddings)} classes, {total_embeddings} total embeddings")
         print(f"📊 Reference embeddings ready: {len(ref_embeddings)} classes")
         
         # Initialize storage
