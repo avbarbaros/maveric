@@ -432,15 +432,7 @@ class Retriever(BaseComponent):
             if len(current_batch) >= rotation_size:
                 print(f"🔄 Rotation size ({rotation_size}) reached! Exporting batch #{file_id}...")
                 
-                if self.cache_manager:
-                    self.cache_manager.save_results(
-                        current_batch,
-                        target_dataset,
-                        file_id,
-                        prefix="raw_maveric"
-                    )
-                
-                # Export rotation file if requested
+                # Export rotation file to user-specified directory only
                 if export_rotation_files and rotation_export_dir:
                     self._export_rotation_file(
                         current_batch,
@@ -462,15 +454,6 @@ class Retriever(BaseComponent):
                 elapsed = time.time() - start_time
                 rate = processed_count / elapsed
                 self.log_info(f"Processed {processed_count} samples ({rate:.1f} samples/sec)")
-        
-        # Save remaining batch
-        if current_batch and self.cache_manager:
-            self.cache_manager.save_results(
-                current_batch,
-                target_dataset,
-                file_id,
-                prefix="raw_maveric"
-            )
         
         # Export remaining batch if requested
         if current_batch and export_rotation_files and rotation_export_dir:
