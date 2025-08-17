@@ -13,7 +13,7 @@ MAVERIC is a multi-modal dataset curation system for vision-language models. The
 - **`maveric/customization/`**: Model fine-tuning with filtered data
 - **`maveric/interactive/`**: Jupyter widgets for threshold selection and quality dashboards
 - **`maveric/visualization/`**: Data distribution plots and sample galleries
-- **`maveric/datasets/`**: Dataset handlers for CIFAR, Elevater, and other datasets
+- **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 11 torchvision + 9 file-based)
 - **`maveric/models/`**: CLIP model wrappers and factory patterns
 
 ## Development Commands
@@ -184,6 +184,24 @@ Reference texts files contain:
 - `templates`: Original text templates used
 - `class_names`: List of all class names in the dataset  
 - `generated_prompts`: Dictionary mapping each class to its generated prompts
+
+## Dataset Support
+
+MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified handler:
+
+### Torchvision-based Datasets (11):
+- CIFAR-10, CIFAR-100
+- Caltech101, Country211, EuroSAT
+- Food101, GTSRB
+- Oxford Flowers102, Oxford Pets
+
+### File-based Datasets (9):
+- DTD, FER2013, FGVCAircraft
+- Hateful Memes, KITTI Distance, MNIST
+- PatchCamelyon, RenderedSST2, RESISC45
+- Stanford Cars, VOC2007
+
+Torchvision datasets benefit from automatic downloading, standardized interfaces, and optimized loading.
 
 ## Important Development Notes
 

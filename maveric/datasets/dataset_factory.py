@@ -77,14 +77,28 @@ def get_dataset(dataset_name: str, **kwargs) -> BaseDataset:
 # Auto-register built-in datasets
 def _register_builtin_datasets():
     """Register built-in dataset handlers."""
-    from .cifar_datasets import CIFAR10Dataset, CIFAR100Dataset
+    from .elevater_datasets import ELEVATERDataset
     
-    DatasetFactory.register('cifar10', CIFAR10Dataset)
-    DatasetFactory.register('cifar100', CIFAR100Dataset)
+    # Register all ELEVATER datasets (official 20 datasets)
+    elevater_datasets = [
+        'caltech101', 'cifar10', 'cifar100', 'country211', 'dtd', 'eurosat',
+        'fer2013', 'fgvc_aircraft', 'food101', 'gtsrb', 'hateful_memes',
+        'kitti_distance', 'mnist', 'oxford_flowers102', 'oxford_pets',
+        'patchcamelyon', 'rendered_sst2', 'resisc45', 'stanford_cars', 'voc2007'
+    ]
+    
+    for dataset_name in elevater_datasets:
+        # Create a factory function for each dataset
+        def create_elevater_dataset(name=dataset_name):
+            def factory(**kwargs):
+                return ELEVATERDataset(name, **kwargs)
+            return factory
+        
+        DatasetFactory.register(dataset_name, create_elevater_dataset())
     
     # Register common aliases
-    DatasetFactory.register('cifar-10', CIFAR10Dataset)
-    DatasetFactory.register('cifar-100', CIFAR100Dataset)
+    DatasetFactory.register('cifar-10', create_elevater_dataset('cifar10'))
+    DatasetFactory.register('cifar-100', create_elevater_dataset('cifar100'))
 
 
 # Register datasets on import
