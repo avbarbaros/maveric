@@ -1,37 +1,30 @@
 #!/usr/bin/env python3
 """
-MAVERIC Data Curation GUI - Interactive Threshold Selection
+MAVERIC Data Curation GUI - Interactive Jupyter Notebook Interface
 
-Interactive script for analyzing raw retrieval data, determining optimal quality control thresholds,
-and saving configuration for data curation. Uses MAVERIC built-in functions throughout.
+Interactive Jupyter notebook interface for analyzing raw retrieval data and determining 
+optimal quality control thresholds using ipywidgets. Designed for Google Colab environment.
 
 Features:
-- Uses MAVERIC's RetrievalResult.from_rotation_files() to load data
-- Uses MAVERIC's quality_control() function for filtering analysis
-- Uses MAVERIC's built-in visualization functions from maveric.visualization
-- Shows sample images with quality scores and distribution plots
-- Tests multiple threshold strategies (conservative, balanced, aggressive)
-- Interactive threshold and weight selection with live testing
-- Saves chosen parameters to maveric_config.yaml automatically
-- Creates configuration backup before saving
+- Interactive sliders for threshold and weight adjustment
+- Real-time visualization updates
+- Sample image gallery with quality metrics
+- Live filtering results
+- Configuration saving to YAML file
 
-Workflow:
-1. Analyzes raw retrieval data and shows visualizations
-2. Tests different threshold strategies and shows results
-3. Offers interactive threshold and weight selection
-4. Tests user selections in real-time
-5. Saves final configuration to YAML file
-6. Provides next steps for running 02_data_curation.py
-
-Usage:
+Usage in Jupyter/Colab:
     python 02_data_curation_gui.py -d <dataset_name> -c <config_file>
     
 Examples:
     python 02_data_curation_gui.py -d cifar10 -c maveric_config.yaml
-    python 02_data_curation_gui.py -d imagenet -c experiments/my_config.yaml
+    python 02_data_curation_gui.py -d cifar100 -c experiments/my_config.yaml
 
-After saving configuration, run:
-    python 02_data_curation.py -d <dataset_name> -c <config_file>
+The script creates an interactive interface with:
+1. Threshold sliders for quality metrics
+2. Weight sliders for metric importance
+3. Real-time filtering and visualization
+4. Sample image display
+5. Configuration save functionality
 """
 
 import os
@@ -43,7 +36,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import warnings
+import requests
+from io import BytesIO
+from PIL import Image
 warnings.filterwarnings('ignore')
+
+# Jupyter widgets
+import ipywidgets as widgets
+from IPython.display import display, clear_output
 
 # Add MAVERIC to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -53,25 +53,15 @@ from maveric import MAVERIC
 from maveric.config import MAVERICConfig
 from maveric.core.interfaces import RetrievalResult
 
-# Import MAVERIC visualization components
-from maveric.visualization import (
-    MetricsVisualizer,
-    SampleVisualizer,
-    plot_class_distribution,
-    plot_correlation_matrix,
-    plot_quality_comparison
-)
-
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description="MAVERIC Data Curation Analysis with Built-in Visualization",
+        description="MAVERIC Interactive Data Curation GUI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python 02_data_curation_gui.py -d cifar10 -c maveric_config.yaml
-  python 02_data_curation_gui.py -d imagenet -c experiments/my_config.yaml
-  python 02_data_curation_gui.py -d food101 -c /path/to/config.yaml
+  python 02_data_curation_gui.py -d cifar100 -c experiments/my_config.yaml
         """
     )
     
@@ -79,7 +69,7 @@ Examples:
         '-d', '--dataset',
         type=str,
         required=True,
-        help='Target dataset name (e.g., cifar10, imagenet, food101)'
+        help='Target dataset name (e.g., cifar10, cifar100, food101)'
     )
     
     parser.add_argument(
@@ -91,14 +81,12 @@ Examples:
     
     return parser.parse_args()
 
-class MAVERICDataCurationAnalyzer:
-    """
-    Analyzer for MAVERIC data curation using built-in MAVERIC functions and visualizations
-    """
+class MAVERICInteractiveGUI:
+    """Interactive GUI for MAVERIC data curation using ipywidgets"""
     
     def __init__(self, target_dataset: str, config_file: str):
         """
-        Initialize the analyzer with MAVERIC components
+        Initialize the interactive GUI
         
         Args:
             target_dataset: Target dataset name (e.g., 'cifar10')
@@ -110,22 +98,45 @@ class MAVERICDataCurationAnalyzer:
         self.maveric = None
         self.retrieval_result = None
         self.raw_data_dir = None
-        self.strategy_results = {}
+        self.data_df = None
+        self.filtered_data = None
         
-        # Initialize MAVERIC visualization components
-        self.metrics_visualizer = MetricsVisualizer(style='default', figsize=(12, 6))
-        self.sample_visualizer = SampleVisualizer(figsize_per_image=(4, 5))
+        # Default thresholds and weights
+        self.thresholds = {
+            'weighted_class_score': 0.350,
+            'consistency': 0.750,
+            'resolution_score': 1.000,
+            'sharpness_score': 0.900,
+            'color_diversity': 0.800
+        }
         
-        print(f"🎯 Target dataset: {self.target_dataset.upper()}")
-        print(f"📋 Configuration file: {self.config_file}")
+        self.weights = {
+            'weighted_class_score': 1.0,
+            'consistency': 1.0,
+            'resolution_score': 1.0,
+            'sharpness_score': 1.0,
+            'color_diversity': 1.0
+        }
         
-        # Load configuration and initialize MAVERIC
+        # Widgets storage
+        self.threshold_widgets = {}
+        self.weight_widgets = {}
+        self.output_widget = widgets.Output()
+        self.filtered_count_widget = widgets.HTML()
+        
+        print(f"🎯 Initializing MAVERIC GUI for {self.target_dataset.upper()}")
+        print(f"📋 Configuration: {self.config_file}")
+        
+        # Initialize system
         self.load_configuration()
         self.initialize_maveric()
-        self.load_retrieval_data()
+        self.load_data()
         
-        if self.retrieval_result is not None:
-            self.analyze_data()
+        if self.data_df is not None:
+            self.calculate_best_class()
+            self.create_gui()
+        else:
+            print("❌ Failed to load data. Please check the raw data directory.")
     
     def load_configuration(self):
         """Load MAVERIC configuration from YAML file"""
@@ -137,19 +148,25 @@ class MAVERICDataCurationAnalyzer:
             results_dir = self.config.get('results_dir', './results')
             self.raw_data_dir = f"{results_dir}/{self.target_dataset}/raw"
             
-            print(f"✅ Configuration loaded successfully")
+            print(f"✅ Configuration loaded")
             print(f"📁 Raw data directory: {self.raw_data_dir}")
+            
+            # Update thresholds and weights from config
+            config_thresholds = self.config.get('quality_thresholds', {})
+            config_weights = self.config.get('metric_weights', {})
+            
+            self.thresholds.update(config_thresholds)
+            self.weights.update(config_weights)
             
         except Exception as e:
             print(f"❌ Error loading configuration: {e}")
-            print("Using default configuration...")
             self.config = {}
             self.raw_data_dir = f"./results/{self.target_dataset}/raw"
     
     def initialize_maveric(self):
         """Initialize MAVERIC system with configuration"""
         try:
-            print("🔧 Initializing MAVERIC system...")
+            print("🔧 Initializing MAVERIC...")
             
             # Create MAVERICConfig from loaded config
             maveric_config = MAVERICConfig(
@@ -161,35 +178,29 @@ class MAVERICDataCurationAnalyzer:
                 default_thresholds=self.config.get('quality_thresholds', {}),
                 balance_min_samples=self.config.get('elevater', {}).get('quality_control', {}).get('min_samples_per_class', 15),
                 retrieval_rotation_size=self.config.get('retrieval_rotation_size', 1000),
-                enable_real_time_stats=self.config.get('enable_real_time_stats', True),
+                enable_real_time_stats=False,  # Disable for GUI
                 metric_weights=self.config.get('metric_weights', {}),
                 num_workers=self.config.get('performance', {}).get('num_workers', 4),
-                log_level=self.config.get('logging', {}).get('level', 'INFO'),
-                viz_save_figures=False  # No file output for GUI version
+                log_level='WARNING',  # Reduce logging noise
+                viz_save_figures=False
             )
             
             # Initialize MAVERIC
             self.maveric = MAVERIC(maveric_config)
-            print("✅ MAVERIC initialized successfully")
+            print("✅ MAVERIC initialized")
             
         except Exception as e:
             print(f"❌ Error initializing MAVERIC: {e}")
             self.maveric = None
     
-    def load_retrieval_data(self):
+    def load_data(self):
         """Load retrieval data using MAVERIC's built-in function"""
         if not os.path.exists(self.raw_data_dir):
             print(f"❌ Raw data directory not found: {self.raw_data_dir}")
-            print(f"\\n🔧 Expected directory structure:")
-            print(f"  {self.raw_data_dir}/")
-            print(f"    ├── {self.target_dataset}_raw_maveric_1.json")
-            print(f"    ├── {self.target_dataset}_raw_maveric_2.json")
-            print(f"    └── ...")
-            print(f"\\n💡 Make sure to run 01_data_retrieval.py first!")
             return
         
         try:
-            print("🔍 Loading retrieval data using MAVERIC...")
+            print("🔍 Loading retrieval data...")
             
             # Use MAVERIC's built-in function to load rotation files
             self.retrieval_result = RetrievalResult.from_rotation_files(
@@ -198,492 +209,375 @@ class MAVERICDataCurationAnalyzer:
                 source_dataset="react-vl/react-retrieval-datasets"
             )
             
-            print(f"✅ Loaded {self.retrieval_result.total_samples:,} samples")
-            print(f"📊 Source dataset: {self.retrieval_result.source_dataset}")
-            print(f"🎯 Target dataset: {self.retrieval_result.target_dataset}")
+            # Convert to DataFrame
+            self.data_df = self.retrieval_result.to_dataframe()
             
-            # Show class distribution
-            if self.retrieval_result.class_distribution:
-                print(f"📋 Classes detected: {len(self.retrieval_result.class_distribution)}")
-                
+            print(f"✅ Loaded {len(self.data_df):,} samples")
+            
         except Exception as e:
             print(f"❌ Error loading retrieval data: {e}")
             self.retrieval_result = None
     
-    def analyze_data(self):
-        """Perform comprehensive data analysis using MAVERIC functions"""
-        if self.retrieval_result is None or self.maveric is None:
+    def calculate_best_class(self):
+        """Calculate best class and weighted scores for each sample"""
+        if self.data_df is None:
             return
         
-        print("\\n" + "="*80)
-        print("📈 DATA ANALYSIS REPORT")
-        print("="*80)
+        print("🧮 Calculating best class scores...")
         
-        # Basic statistics from RetrievalResult
-        print(f"\\n📊 Dataset Overview:")
-        print(f"  • Total samples: {self.retrieval_result.total_samples:,}")
-        print(f"  • Available metrics: {len(self.retrieval_result.available_metrics)}")
+        # Get available class columns
+        class_columns = [col for col in self.data_df.columns if col.startswith('Class_') and '_hybrid_score' in col]
         
-        # Class distribution
-        if self.retrieval_result.class_distribution:
-            class_dist = pd.Series(self.retrieval_result.class_distribution)
-            print(f"  • Unique classes: {len(class_dist)}")
-            print(f"  • Samples per class (avg): {class_dist.mean():.1f}")
-            print(f"  • Class balance (std): {class_dist.std():.1f}")
+        if not class_columns:
+            print("⚠️ No class hybrid scores found")
+            return
         
-        # Score statistics
-        if self.retrieval_result.score_statistics:
-            print(f"\\n📋 Quality Metrics Analysis:")
+        # Calculate best class for each sample
+        best_classes = []
+        weighted_scores = []
+        consistency_scores = []
+        
+        for idx, row in self.data_df.iterrows():
+            class_scores = {}
             
-            for metric, stats in self.retrieval_result.score_statistics.items():
-                print(f"\\n  {metric.replace('_', ' ').title()}:")
-                print(f"    Mean: {stats['mean']:.3f} ± {stats['std']:.3f}")
-                print(f"    Range: [{stats['min']:.3f}, {stats['max']:.3f}]")
-                print(f"    Median: {stats['median']:.3f}")
+            # Find best class based on hybrid scores
+            for col in class_columns:
+                if not pd.isna(row[col]):
+                    class_name = col.replace('Class_', '').replace('_hybrid_score', '')
+                    class_scores[class_name] = row[col]
+            
+            if class_scores:
+                best_class = max(class_scores.items(), key=lambda x: x[1])
+                best_classes.append(best_class[0])
+                weighted_scores.append(best_class[1])
+                
+                # Get consistency for best class
+                consistency_col = f"Class_{best_class[0]}_consistency"
+                consistency_scores.append(row.get(consistency_col, 0.8))
+            else:
+                best_classes.append('unknown')
+                weighted_scores.append(0.0)
+                consistency_scores.append(0.0)
         
-        # Test different threshold strategies
-        self.test_threshold_strategies()
+        # Add columns to dataframe
+        self.data_df['label'] = best_classes
+        self.data_df['weighted_class_score'] = weighted_scores
+        self.data_df['consistency'] = consistency_scores
         
-        # Create visualizations
-        self.create_visualizations()
+        # Initialize filtered data
+        self.filtered_data = self.data_df.copy()
+        
+        print(f"✅ Calculated best class for all samples")
+        print(f"📊 Found {len(set(best_classes))} unique classes")
     
-    def test_threshold_strategies(self):
-        """Test different threshold strategies using MAVERIC's quality_control"""
-        print(f"\\n🎯 THRESHOLD STRATEGY ANALYSIS:")
-        print("-" * 50)
+    def apply_thresholds(self):
+        """Apply current thresholds to filter the data"""
+        if self.data_df is None:
+            return 0
         
-        # Get current thresholds from config
-        current_thresholds = self.config.get('quality_thresholds', {})
+        # Start with all data
+        self.filtered_data = self.data_df.copy()
         
-        # Define threshold strategies based on score statistics
-        threshold_sets = {
-            'conservative': {},
-            'balanced': {},
-            'aggressive': {},
-            'current': current_thresholds
-        }
+        # Apply each threshold
+        for metric, threshold in self.thresholds.items():
+            if metric in self.filtered_data.columns:
+                self.filtered_data = self.filtered_data[
+                    self.filtered_data[metric] >= threshold
+                ]
         
-        # Build threshold sets from statistics
-        for metric, stats in self.retrieval_result.score_statistics.items():
-            if metric in ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score', 'color_score']:
-                threshold_sets['conservative'][metric] = max(0, stats['mean'] - 0.5 * stats['std'])
-                threshold_sets['balanced'][metric] = stats['median']
-                threshold_sets['aggressive'][metric] = stats['mean']
-        
-        # Test each strategy using MAVERIC's quality control
-        for strategy_name, thresholds in threshold_sets.items():
-            if not thresholds:
-                continue
-                
-            try:
-                print(f"\\n🧪 Testing {strategy_name} strategy...")
-                
-                # Use MAVERIC's quality control function
-                quality_result = self.maveric.quality_control(
-                    data=(self.target_dataset, self.raw_data_dir),
-                    thresholds=thresholds,
-                    weights=self.config.get('metric_weights', {}),
-                    balance_strategy='none'
-                )
-                
-                if quality_result:
-                    retention_rate = quality_result.retention_rate * 100
-                    self.strategy_results[strategy_name] = {
-                        'result': quality_result,
-                        'retention_rate': retention_rate,
-                        'thresholds': thresholds
-                    }
-                    
-                    print(f"  ✅ {strategy_name.title()}: {quality_result.filtered_count:,} samples ({retention_rate:.1f}% retention)")
-                else:
-                    print(f"  ❌ {strategy_name} strategy failed")
-                    
-            except Exception as e:
-                print(f"  ❌ Error testing {strategy_name}: {e}")
-        
-        # Recommend best strategy
-        self.recommend_strategy()
+        return len(self.filtered_data)
     
-    def recommend_strategy(self):
-        """Recommend the best threshold strategy"""
-        if not self.strategy_results:
-            return
+    def create_gui(self):
+        """Create the interactive GUI using ipywidgets"""
+        print("🎨 Creating interactive GUI...")
         
-        print(f"\\n🎛️  STRATEGY RECOMMENDATIONS:")
-        print("-" * 40)
+        # Create threshold sliders
+        self.create_threshold_widgets()
         
-        # Sort by retention rate
-        sorted_strategies = sorted(
-            self.strategy_results.items(),
-            key=lambda x: x[1]['retention_rate'],
-            reverse=True
+        # Create weight sliders
+        self.create_weight_widgets()
+        
+        # Create buttons
+        apply_button = widgets.Button(
+            description='Apply Settings',
+            button_style='primary',
+            icon='check'
         )
         
-        for strategy_name, result in sorted_strategies:
-            retention = result['retention_rate']
-            count = result['result'].filtered_count
-            
-            if retention > 80:
-                quality_level = "High Retention"
-            elif retention > 50:
-                quality_level = "Balanced"
-            elif retention > 20:
-                quality_level = "High Quality"
+        visualize_button = widgets.Button(
+            description='Show Sample Images',
+            button_style='info',
+            icon='image'
+        )
+        
+        save_button = widgets.Button(
+            description='Save Configuration',
+            button_style='success',
+            icon='save'
+        )
+        
+        # Connect button callbacks
+        apply_button.on_click(self.on_apply_clicked)
+        visualize_button.on_click(self.on_visualize_clicked)
+        save_button.on_click(self.on_save_clicked)
+        
+        # Create tabs
+        tab = widgets.Tab()
+        tab.children = [
+            widgets.VBox(list(self.threshold_widgets.values())),
+            widgets.VBox(list(self.weight_widgets.values()))
+        ]
+        tab.set_title(0, 'Quality Thresholds')
+        tab.set_title(1, 'Metric Weights')
+        
+        # Create layout
+        button_box = widgets.HBox([apply_button, visualize_button, save_button])
+        
+        # Initial filter count
+        count = self.apply_thresholds()
+        self.filtered_count_widget.value = f"<h4>Filtered Data: {count:,} samples ({count/len(self.data_df)*100:.1f}%)</h4>"
+        
+        # Main layout
+        main_layout = widgets.VBox([
+            widgets.HTML("<h2>🎛️ MAVERIC Interactive Data Curation</h2>"),
+            widgets.HTML(f"<p><b>Dataset:</b> {self.target_dataset.upper()} | <b>Total Samples:</b> {len(self.data_df):,}</p>"),
+            tab,
+            self.filtered_count_widget,
+            button_box,
+            self.output_widget
+        ])
+        
+        # Display the GUI
+        display(main_layout)
+        
+        # Show initial visualizations
+        with self.output_widget:
+            self.visualize_metrics_distribution()
+    
+    def create_threshold_widgets(self):
+        """Create threshold slider widgets"""
+        for metric, default_value in self.thresholds.items():
+            # Determine max value based on metric
+            if metric in self.data_df.columns:
+                max_val = float(self.data_df[metric].max())
+                min_val = float(self.data_df[metric].min())
+                step = 0.001
+                
+                # Adjust step for resolution score
+                if metric == 'resolution_score':
+                    step = 0.01
             else:
-                quality_level = "Very Selective"
+                max_val = 1.0
+                min_val = 0.0
+                step = 0.001
             
-            print(f"  • {strategy_name.title()}: {count:,} samples ({retention:.1f}%) - {quality_level}")
-        
-        # Recommend balanced approach
-        if 'balanced' in self.strategy_results:
-            balanced = self.strategy_results['balanced']
-            print(f"\\n🌟 RECOMMENDED: Balanced strategy")
-            print(f"   → {balanced['result'].filtered_count:,} samples ({balanced['retention_rate']:.1f}% retention)")
-            print(f"   → Good balance between quality and quantity")
-    
-    def create_visualizations(self):
-        """Create comprehensive visualizations using MAVERIC built-in functions"""
-        print(f"\\n🎨 Creating visualizations using MAVERIC visualization functions...")
-        
-        # Get data as DataFrame for visualization
-        df = self.retrieval_result.to_dataframe()
-        
-        # 1. Metric distributions using MAVERIC's MetricsVisualizer
-        self.plot_metric_distributions_maveric(df)
-        
-        # 2. Class distribution using MAVERIC's plot_class_distribution
-        self.plot_class_distribution_maveric(df)
-        
-        # 3. Correlation matrix using MAVERIC's plot_correlation_matrix
-        self.plot_correlation_matrix_maveric(df)
-        
-        # 4. Sample images using MAVERIC's SampleVisualizer
-        self.show_sample_images_maveric(df)
-        
-        # 5. Strategy comparison using MAVERIC's plot_quality_comparison
-        self.plot_strategy_comparison_maveric()
-    
-    def plot_metric_distributions_maveric(self, df):
-        """Plot metric distributions using MAVERIC's MetricsVisualizer"""
-        print("📊 Plotting metric distributions...")
-        
-        # Get available metrics
-        metrics = [col for col in df.columns if any(metric in col for metric in 
-                  ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score', 'color_score'])]
-        
-        if not metrics:
-            print("⚠️  No quality metrics found for distribution plots")
-            return
-        
-        # Get current thresholds
-        current_thresholds = self.config.get('quality_thresholds', {})
-        
-        try:
-            # Use MAVERIC's MetricsVisualizer for multiple metrics
-            self.metrics_visualizer.plot_multi_metric_distributions(
-                data=df,
-                metrics=metrics,
-                thresholds=current_thresholds,
-                ncols=2,
-                figsize_per_plot=(6, 4)
+            # Create slider
+            self.threshold_widgets[metric] = widgets.FloatSlider(
+                value=default_value,
+                min=min_val,
+                max=max_val,
+                step=step,
+                description=f'{metric.replace("_", " ").title()}:',
+                disabled=False,
+                continuous_update=False,
+                orientation='horizontal',
+                readout=True,
+                readout_format='.3f',
+                layout=widgets.Layout(width='500px'),
+                style={'description_width': 'initial'}
             )
-            plt.show()
-        except Exception as e:
-            print(f"❌ Error plotting metric distributions: {e}")
     
-    def plot_class_distribution_maveric(self, df):
-        """Plot class distribution using MAVERIC's plot_class_distribution"""
-        print("📊 Plotting class distribution...")
-        
-        if 'label' not in df.columns:
-            print("⚠️  No 'label' column found for class distribution")
-            return
-        
-        try:
-            # Use MAVERIC's built-in plot_class_distribution
-            plot_class_distribution(
-                data=df,
-                column='label',
-                top_n=20,
-                figsize=(14, 6)
-            )
-            plt.show()
-        except Exception as e:
-            print(f"❌ Error plotting class distribution: {e}")
-    
-    def plot_correlation_matrix_maveric(self, df):
-        """Plot correlation matrix using MAVERIC's plot_correlation_matrix"""
-        print("📊 Plotting correlation matrix...")
-        
-        # Get quality metrics
-        metrics = [col for col in df.columns if 'score' in col or 'consistency' in col]
-        
-        if len(metrics) < 2:
-            print("⚠️  Need at least 2 metrics for correlation matrix")
-            return
-        
-        try:
-            # Use MAVERIC's built-in plot_correlation_matrix
-            plot_correlation_matrix(
-                data=df,
-                metrics=metrics,
-                figsize=(10, 8)
-            )
-            plt.show()
-        except Exception as e:
-            print(f"❌ Error plotting correlation matrix: {e}")
-    
-    def show_sample_images_maveric(self, df):
-        """Show sample images using MAVERIC's SampleVisualizer"""
-        print("🖼️  Showing sample images...")
-        
-        if 'url' not in df.columns:
-            print("⚠️  No 'url' column found for sample images")
-            return
-        
-        try:
-            # Show diverse samples
-            self.sample_visualizer.visualize_samples(
-                data=df,
-                n_samples=6,
-                sample_type='diverse',
-                seed=42
-            )
-            plt.show()
+    def create_weight_widgets(self):
+        """Create weight slider widgets"""
+        for metric in self.thresholds.keys():
+            default_weight = self.weights.get(metric, 1.0)
             
-            # Show best samples if we have quality scores
-            if 'weighted_class_score' in df.columns:
-                self.sample_visualizer.visualize_samples(
-                    data=df,
-                    n_samples=5,
-                    sample_type='best',
-                    seed=42
-                )
-                plt.show()
-                
-        except Exception as e:
-            print(f"❌ Error showing sample images: {e}")
+            self.weight_widgets[metric] = widgets.FloatSlider(
+                value=default_weight,
+                min=0.1,
+                max=3.0,
+                step=0.1,
+                description=f'{metric.replace("_", " ").title()}:',
+                disabled=False,
+                continuous_update=False,
+                orientation='horizontal',
+                readout=True,
+                readout_format='.1f',
+                layout=widgets.Layout(width='500px'),
+                style={'description_width': 'initial'}
+            )
     
-    def plot_strategy_comparison_maveric(self):
-        """Plot strategy comparison using MAVERIC's plot_quality_comparison"""
-        if not self.strategy_results:
+    def on_apply_clicked(self, button):
+        """Handle apply button click"""
+        # Update thresholds and weights from widgets
+        for metric, widget in self.threshold_widgets.items():
+            self.thresholds[metric] = widget.value
+        
+        for metric, widget in self.weight_widgets.items():
+            self.weights[metric] = widget.value
+        
+        # Apply thresholds
+        count = self.apply_thresholds()
+        self.filtered_count_widget.value = f"<h4>Filtered Data: {count:,} samples ({count/len(self.data_df)*100:.1f}%)</h4>"
+        
+        # Update visualizations
+        with self.output_widget:
+            clear_output()
+            print(f"✅ Applied settings: {count:,} samples retained")
+            self.visualize_metrics_distribution()
+    
+    def on_visualize_clicked(self, button):
+        """Handle visualize button click"""
+        with self.output_widget:
+            clear_output()
+            self.visualize_sample_images()
+    
+    def on_save_clicked(self, button):
+        """Handle save button click"""
+        with self.output_widget:
+            clear_output()
+            success = self.save_configuration()
+            if success:
+                print("✅ Configuration saved successfully!")
+                print(f"📁 Updated: {self.config_file}")
+                print(f"💾 Backup: {self.config_file}.backup")
+                print(f"\n🚀 Next Steps:")
+                print(f"Run: python 02_data_curation.py -d {self.target_dataset} -c {self.config_file}")
+            else:
+                print("❌ Failed to save configuration")
+    
+    def visualize_metrics_distribution(self):
+        """Visualize distribution of quality metrics"""
+        if self.filtered_data is None:
+            print("No data to visualize")
             return
         
-        print("📊 Plotting strategy comparison...")
+        metrics = list(self.thresholds.keys())
+        valid_metrics = [m for m in metrics if m in self.filtered_data.columns]
         
-        try:
-            # Prepare statistics for comparison
-            original_stats = {
-                'total_samples': self.retrieval_result.total_samples,
-                'metric_statistics': self.retrieval_result.score_statistics
-            }
+        if not valid_metrics:
+            print("No valid metrics found")
+            return
+        
+        # Create subplots
+        n_metrics = len(valid_metrics)
+        fig, axes = plt.subplots(n_metrics, 1, figsize=(12, 4*n_metrics))
+        
+        if n_metrics == 1:
+            axes = [axes]
+        
+        for i, metric in enumerate(valid_metrics):
+            ax = axes[i]
             
-            # Use balanced strategy for comparison
-            if 'balanced' in self.strategy_results:
-                balanced_result = self.strategy_results['balanced']['result']
-                filtered_stats = {
-                    'filtered_samples': balanced_result.filtered_count,
-                    'retention_rate': balanced_result.retention_rate,
-                    'metric_statistics': {}  # Would need to calculate from filtered data
-                }
-                
-                # Use MAVERIC's built-in plot_quality_comparison
-                plot_quality_comparison(
-                    original_stats=original_stats,
-                    filtered_stats=filtered_stats,
-                    figsize=(14, 8)
-                )
-                plt.show()
-                
-        except Exception as e:
-            print(f"❌ Error plotting strategy comparison: {e}")
+            # Get data
+            original_data = self.data_df[metric].dropna()
+            filtered_data = self.filtered_data[metric].dropna()
+            
+            if len(original_data) == 0:
+                continue
+            
+            # Plot histograms
+            ax.hist(original_data, bins=50, alpha=0.5, label='Original', color='blue', density=True)
+            if len(filtered_data) > 0:
+                ax.hist(filtered_data, bins=30, alpha=0.7, label='Filtered', color='green', density=True)
+            
+            # Add threshold line
+            threshold = self.thresholds[metric]
+            ax.axvline(threshold, color='red', linestyle='--', linewidth=2, label=f'Threshold: {threshold:.3f}')
+            
+            # Add statistics
+            mean_val = original_data.mean()
+            ax.axvline(mean_val, color='orange', linestyle='-', alpha=0.7, label=f'Mean: {mean_val:.3f}')
+            
+            # Formatting
+            ax.set_xlabel(metric.replace('_', ' ').title())
+            ax.set_ylabel('Density')
+            ax.set_title(f'Distribution of {metric.replace("_", " ").title()}')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Show class distribution
+        if 'label' in self.filtered_data.columns:
+            plt.figure(figsize=(12, 6))
+            class_counts = self.filtered_data['label'].value_counts().head(20)
+            
+            plt.bar(range(len(class_counts)), class_counts.values)
+            plt.xticks(range(len(class_counts)), class_counts.index, rotation=45, ha='right')
+            plt.xlabel('Class')
+            plt.ylabel('Count')
+            plt.title('Class Distribution in Filtered Data')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
     
-    def print_summary(self):
-        """Print final summary and recommendations"""
-        if not self.strategy_results:
+    def visualize_sample_images(self, n_samples=6):
+        """Visualize sample images from filtered data"""
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("No filtered data available for visualization")
             return
         
-        print("\\n" + "="*80)
-        print("🎯 SUMMARY & RECOMMENDATIONS")
-        print("="*80)
+        # Select samples
+        if len(self.filtered_data) <= n_samples:
+            samples = self.filtered_data
+        else:
+            samples = self.filtered_data.sample(n=n_samples, random_state=42)
         
-        print(f"\\n📊 Dataset: {self.target_dataset.upper()}")
-        print(f"  • Total samples analyzed: {self.retrieval_result.total_samples:,}")
-        print(f"  • Classes detected: {len(self.retrieval_result.class_distribution)}")
+        # Create figure
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        axes = axes.flatten()
         
-        # Show strategy results
-        print(f"\\n🎛️  Strategy Results:")
-        for strategy_name, result in sorted(self.strategy_results.items(), 
-                                          key=lambda x: x[1]['retention_rate'], reverse=True):
-            retention = result['retention_rate']
-            count = result['result'].filtered_count
-            print(f"  • {strategy_name.title()}: {count:,} samples ({retention:.1f}% retention)")
-        
-        print(f"\\n⚙️  Next Steps:")
-        print(f"  1. Choose your preferred strategy based on quality vs quantity needs")
-        print(f"  2. Update maveric_config.yaml with the chosen thresholds")
-        print(f"  3. Run 02_data_curation.py to apply filtering and generate training dataset")
-        
-        # Show recommended thresholds for balanced strategy
-        if 'balanced' in self.strategy_results:
-            print(f"\\n📋 Recommended Thresholds (Balanced Strategy):")
-            thresholds = self.strategy_results['balanced']['thresholds']
-            for metric, value in thresholds.items():
-                print(f"  {metric}: {value:.3f}")
-        
-        print(f"\\n" + "="*80)
-    
-    def interactive_threshold_selection(self):
-        """Interactive threshold and weight selection with save functionality"""
-        if not self.strategy_results:
-            print("❌ No strategy results available for interactive selection")
-            return
-        
-        print(f"\\n" + "="*80)
-        print("🎛️  INTERACTIVE THRESHOLD & WEIGHT SELECTION")
-        print("="*80)
-        
-        # Show available strategies first
-        print(f"\\n📊 Available Strategies:")
-        for i, (strategy_name, result) in enumerate(self.strategy_results.items(), 1):
-            retention = result['retention_rate']
-            count = result['result'].filtered_count
-            print(f"  {i}. {strategy_name.title()}: {count:,} samples ({retention:.1f}% retention)")
-        
-        # Let user choose starting strategy
-        while True:
+        for i, (idx, row) in enumerate(samples.iterrows()):
+            if i >= len(axes):
+                break
+                
+            ax = axes[i]
+            
             try:
-                choice = input(f"\\n🔧 Choose starting strategy (1-{len(self.strategy_results)}) or 'custom' for manual: ").strip().lower()
-                
-                if choice == 'custom':
-                    selected_thresholds = {}
-                    selected_weights = self.config.get('metric_weights', {})
-                    break
+                # Load image
+                if 'url' in row and pd.notna(row['url']):
+                    response = requests.get(row['url'], timeout=10)
+                    image = Image.open(BytesIO(response.content)).convert('RGB')
+                    ax.imshow(image)
+                    
+                    # Create metrics text
+                    metrics_text = []
+                    metrics_text.append(f"ID: {row.get('id', i)}")
+                    metrics_text.append(f"Class: {row.get('label', 'unknown')}")
+                    
+                    for metric in ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score']:
+                        if metric in row:
+                            metrics_text.append(f"{metric.replace('_', ' ').title()}: {row[metric]:.3f}")
+                    
+                    ax.set_title('\n'.join(metrics_text), fontsize=9)
                 else:
-                    strategy_idx = int(choice) - 1
-                    strategy_names = list(self.strategy_results.keys())
-                    if 0 <= strategy_idx < len(strategy_names):
-                        strategy_name = strategy_names[strategy_idx]
-                        selected_thresholds = self.strategy_results[strategy_name]['thresholds'].copy()
-                        selected_weights = self.config.get('metric_weights', {})
-                        print(f"✅ Starting with {strategy_name} strategy")
-                        break
-                    else:
-                        print(f"❌ Please enter a number between 1 and {len(self.strategy_results)}")
-            except ValueError:
-                print("❌ Please enter a valid number or 'custom'")
-        
-        # Interactive threshold adjustment
-        print(f"\\n🎯 THRESHOLD ADJUSTMENT")
-        print("-" * 40)
-        
-        available_metrics = list(self.retrieval_result.score_statistics.keys())
-        for metric in available_metrics:
-            if metric in ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score', 'color_score']:
-                stats = self.retrieval_result.score_statistics[metric]
-                current_value = selected_thresholds.get(metric, stats['median'])
-                
-                print(f"\\n📈 {metric.replace('_', ' ').title()}:")
-                print(f"  Range: [{stats['min']:.3f}, {stats['max']:.3f}]")
-                print(f"  Mean: {stats['mean']:.3f}, Median: {stats['median']:.3f}")
-                print(f"  Current: {current_value:.3f}")
-                
-                while True:
-                    try:
-                        new_value = input(f"  Enter new threshold (or press Enter to keep {current_value:.3f}): ").strip()
-                        if new_value == "":
-                            break
-                        new_value = float(new_value)
-                        if stats['min'] <= new_value <= stats['max']:
-                            selected_thresholds[metric] = new_value
-                            print(f"  ✅ Updated {metric} threshold to {new_value:.3f}")
-                            break
-                        else:
-                            print(f"  ❌ Value must be between {stats['min']:.3f} and {stats['max']:.3f}")
-                    except ValueError:
-                        print("  ❌ Please enter a valid number")
-        
-        # Interactive weight adjustment
-        print(f"\\n⚖️  METRIC WEIGHT ADJUSTMENT")
-        print("-" * 40)
-        print("Weights determine relative importance of each metric (default: equal weight)")
-        
-        for metric in available_metrics:
-            if metric in selected_thresholds:
-                current_weight = selected_weights.get(metric, 1.0)
-                print(f"\\n📊 {metric.replace('_', ' ').title()}:")
-                print(f"  Current weight: {current_weight:.2f}")
-                
-                while True:
-                    try:
-                        new_weight = input(f"  Enter new weight (0.1-5.0, or press Enter to keep {current_weight:.2f}): ").strip()
-                        if new_weight == "":
-                            break
-                        new_weight = float(new_weight)
-                        if 0.1 <= new_weight <= 5.0:
-                            selected_weights[metric] = new_weight
-                            print(f"  ✅ Updated {metric} weight to {new_weight:.2f}")
-                            break
-                        else:
-                            print("  ❌ Weight must be between 0.1 and 5.0")
-                    except ValueError:
-                        print("  ❌ Please enter a valid number")
-        
-        # Show final selection
-        print(f"\\n📋 FINAL SELECTION SUMMARY")
-        print("-" * 40)
-        print("Thresholds:")
-        for metric, value in selected_thresholds.items():
-            print(f"  {metric}: {value:.3f}")
-        
-        print("\\nWeights:")
-        for metric, value in selected_weights.items():
-            if metric in selected_thresholds:
-                print(f"  {metric}: {value:.2f}")
-        
-        # Test the selection
-        print(f"\\n🧪 Testing your selection...")
-        try:
-            test_result = self.maveric.quality_control(
-                data=(self.target_dataset, self.raw_data_dir),
-                thresholds=selected_thresholds,
-                weights=selected_weights,
-                balance_strategy='none'
-            )
+                    ax.text(0.5, 0.5, "No image URL", ha='center', va='center')
+                    
+            except Exception as e:
+                ax.text(0.5, 0.5, f"Error loading image:\n{str(e)[:30]}...", 
+                       ha='center', va='center', transform=ax.transAxes)
             
-            if test_result:
-                retention_rate = test_result.retention_rate * 100
-                print(f"✅ Test successful: {test_result.filtered_count:,} samples ({retention_rate:.1f}% retention)")
-            else:
-                print("❌ Test failed - please adjust thresholds")
-                return
-                
-        except Exception as e:
-            print(f"❌ Test error: {e}")
-            return
+            ax.axis('off')
         
-        # Save option
-        while True:
-            save_choice = input(f"\\n💾 Save these settings to configuration file? (y/n): ").strip().lower()
-            if save_choice in ['y', 'yes']:
-                self.save_configuration(selected_thresholds, selected_weights)
-                break
-            elif save_choice in ['n', 'no']:
-                print("Settings not saved. You can run this script again to make changes.")
-                break
-            else:
-                print("Please enter 'y' for yes or 'n' for no")
+        # Hide unused subplots
+        for i in range(len(samples), len(axes)):
+            axes[i].axis('off')
+        
+        plt.tight_layout()
+        plt.show()
     
-    def save_configuration(self, thresholds: dict, weights: dict):
-        """Save thresholds and weights to configuration file"""
+    def save_configuration(self):
+        """Save current thresholds and weights to configuration file"""
         try:
             # Read current configuration
             with open(self.config_file, 'r') as f:
                 config_data = yaml.safe_load(f)
             
             # Update thresholds and weights
-            config_data['quality_thresholds'] = thresholds
-            config_data['metric_weights'] = weights
+            config_data['quality_thresholds'] = self.thresholds
+            config_data['metric_weights'] = self.weights
             
             # Create backup
             backup_file = f"{self.config_file}.backup"
@@ -694,69 +588,44 @@ class MAVERICDataCurationAnalyzer:
             with open(self.config_file, 'w') as f:
                 yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
             
-            print(f"\\n✅ Configuration saved successfully!")
-            print(f"📁 Updated file: {self.config_file}")
-            print(f"💾 Backup created: {backup_file}")
-            print(f"\\n🚀 Next Steps:")
-            print(f"1. Run: python 02_data_curation.py -d {self.target_dataset} -c {self.config_file}")
-            print(f"2. This will apply your chosen thresholds and create the filtered dataset")
+            return True
             
         except Exception as e:
-            print(f"❌ Error saving configuration: {e}")
-            print("Please check file permissions and try again")
+            print(f"Error saving configuration: {e}")
+            return False
 
 def main():
     """Main function"""
-    print("🚀 MAVERIC Data Curation Analysis")
-    print("Using MAVERIC Built-in Functions")
-    print("="*50)
+    print("🚀 MAVERIC Interactive Data Curation GUI")
+    print("=" * 50)
     
-    # Parse command line arguments
+    # Parse arguments
     args = parse_arguments()
     
-    # Validate config file exists
+    # Validate config file
     if not os.path.exists(args.config):
         print(f"❌ Configuration file not found: {args.config}")
-        print("\\n🔧 Please provide a valid path to your MAVERIC configuration file")
         return
     
-    # Initialize analyzer
-    analyzer = MAVERICDataCurationAnalyzer(
-        target_dataset=args.dataset,
-        config_file=args.config
-    )
-    
-    # Print final summary and offer interactive selection
-    if analyzer.retrieval_result is not None:
-        analyzer.print_summary()
+    # Create GUI
+    try:
+        gui = MAVERICInteractiveGUI(
+            target_dataset=args.dataset,
+            config_file=args.config
+        )
+        print("✅ Interactive GUI created successfully!")
+        print("Use the sliders above to adjust thresholds and weights.")
         
-        # Ask user if they want to interactively select thresholds
-        while True:
-            interactive_choice = input(f"\\n🎛️  Would you like to interactively select thresholds and weights? (y/n): ").strip().lower()
-            if interactive_choice in ['y', 'yes']:
-                analyzer.interactive_threshold_selection()
-                break
-            elif interactive_choice in ['n', 'no']:
-                print("You can run this script again anytime to adjust thresholds and weights.")
-                break
-            else:
-                print("Please enter 'y' for yes or 'n' for no")
-    else:
-        print("\\n❌ Analysis failed - no data could be loaded")
-        print("\\n🔧 Troubleshooting:")
-        print("1. Ensure raw data files exist in the expected directory")
-        print("2. Check that 01_data_retrieval.py was run successfully")
-        print("3. Verify the configuration file path and content")
-        print("4. Make sure the dataset name matches the directory structure")
+    except Exception as e:
+        print(f"❌ Error creating GUI: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    # Set matplotlib backend for better Colab compatibility
+    # Set matplotlib backend for Jupyter
     try:
-        if 'google.colab' in sys.modules:
-            plt.switch_backend('Agg')
-        else:
-            # For Jupyter and local environments
-            plt.ion()  # Interactive mode
+        import matplotlib
+        matplotlib.use('inline')
     except:
         pass
     
