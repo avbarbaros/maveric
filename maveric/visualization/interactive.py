@@ -1,105 +1,44 @@
-#!/usr/bin/env python3
-"""
-MAVERIC Data Curation GUI - Interactive Jupyter Notebook Interface
-
-Interactive Jupyter notebook interface for analyzing raw retrieval data and determining 
-optimal quality control thresholds using ipywidgets. Designed for Google Colab environment.
-
-Features:
-- Interactive sliders for threshold and weight adjustment
-- Real-time visualization updates
-- Sample image gallery with quality metrics
-- Live filtering results
-- Configuration saving to YAML file
-
-Usage in Jupyter/Colab:
-
-Method 1 (Recommended for interactive widgets):
-    import sys
-    sys.path.append('/path/to/experiments/')
-    from data_curation_gui import create_maveric_gui
-    gui = create_maveric_gui('cifar10', 'maveric_config.yaml')
-
-Method 2 (Command line in cell):
-    !python 02_data_curation_gui.py -d cifar10 -c maveric_config.yaml
-    
-Examples:
-    gui = create_maveric_gui('cifar10', 'maveric_config.yaml')
-    gui = create_maveric_gui('cifar100', 'experiments/my_config.yaml')
-
-The script creates an interactive interface with:
-1. Threshold sliders for quality metrics
-2. Weight sliders for metric importance
-3. Real-time filtering and visualization
-4. Sample image display
-5. Configuration save functionality
-"""
+"""Interactive GUI components for MAVERIC data curation."""
 
 import os
-import sys
 import yaml
-import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
-import warnings
 import requests
 from io import BytesIO
 from PIL import Image
+import warnings
 warnings.filterwarnings('ignore')
 
 # Jupyter widgets
-import ipywidgets as widgets
-from IPython.display import display, clear_output
+try:
+    import ipywidgets as widgets
+    from IPython.display import display, clear_output
+    WIDGETS_AVAILABLE = True
+except ImportError:
+    WIDGETS_AVAILABLE = False
+    print("⚠️ ipywidgets not available. Install with: pip install ipywidgets")
 
-# Add MAVERIC to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from ..core.interfaces import RetrievalResult
+from .. import MAVERIC
+from ..config import MAVERICConfig
 
-# Import MAVERIC components
-from maveric import MAVERIC
-from maveric.config import MAVERICConfig
-from maveric.core.interfaces import RetrievalResult
 
-def parse_arguments():
-    """Parse command line arguments"""
-    parser = argparse.ArgumentParser(
-        description="MAVERIC Interactive Data Curation GUI",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python 02_data_curation_gui.py -d cifar10 -c maveric_config.yaml
-  python 02_data_curation_gui.py -d cifar100 -c experiments/my_config.yaml
-        """
-    )
-    
-    parser.add_argument(
-        '-d', '--dataset',
-        type=str,
-        required=True,
-        help='Target dataset name (e.g., cifar10, cifar100, food101)'
-    )
-    
-    parser.add_argument(
-        '-c', '--config',
-        type=str,
-        required=True,
-        help='Path to MAVERIC configuration YAML file'
-    )
-    
-    return parser.parse_args()
-
-class MAVERICInteractiveGUI:
+class InteractiveDataCuration:
     """Interactive GUI for MAVERIC data curation using ipywidgets"""
     
     def __init__(self, target_dataset: str, config_file: str):
         """
-        Initialize the interactive GUI
+        Initialize the interactive data curation GUI
         
         Args:
             target_dataset: Target dataset name (e.g., 'cifar10')
             config_file: Path to MAVERIC configuration file
         """
+        if not WIDGETS_AVAILABLE:
+            raise ImportError("ipywidgets is required for interactive GUI. Install with: pip install ipywidgets")
+        
         self.target_dataset = target_dataset.lower()
         self.config_file = config_file
         self.config = None
@@ -132,21 +71,30 @@ class MAVERICInteractiveGUI:
         self.output_widget = widgets.Output()
         self.filtered_count_widget = widgets.HTML()
         
-        print(f"🎯 Initializing MAVERIC GUI for {self.target_dataset.upper()}")
-        print(f"📋 Configuration: {self.config_file}")
+        # Set matplotlib backend
+        try:
+            import matplotlib
+            matplotlib.use('inline')
+        except:
+            pass
+        
+        print(f"🎯 Initializing MAVERIC Interactive GUI")
+        print(f"📊 Dataset: {self.target_dataset.upper()}")
+        print(f"⚙️ Config: {self.config_file}")
+        print("-" * 50)
         
         # Initialize system
-        self.load_configuration()
-        self.initialize_maveric()
-        self.load_data()
+        self._load_configuration()
+        self._initialize_maveric()
+        self._load_data()
         
         if self.data_df is not None:
-            self.calculate_best_class()
-            self.create_gui()
+            self._calculate_best_class()
+            self._create_gui()
         else:
             print("❌ Failed to load data. Please check the raw data directory.")
     
-    def load_configuration(self):
+    def _load_configuration(self):
         """Load MAVERIC configuration from YAML file"""
         try:
             with open(self.config_file, 'r') as f:
@@ -157,7 +105,7 @@ class MAVERICInteractiveGUI:
             self.raw_data_dir = f"{results_dir}/{self.target_dataset}/raw"
             
             print(f"✅ Configuration loaded")
-            print(f"📁 Raw data directory: {self.raw_data_dir}")
+            print(f"📁 Raw data: {self.raw_data_dir}")
             
             # Update thresholds and weights from config
             config_thresholds = self.config.get('quality_thresholds', {})
@@ -171,12 +119,11 @@ class MAVERICInteractiveGUI:
             self.config = {}
             self.raw_data_dir = f"./results/{self.target_dataset}/raw"
     
-    def initialize_maveric(self):
-        """Initialize MAVERIC system with configuration"""
+    def _initialize_maveric(self):
+        """Initialize MAVERIC system"""
         try:
             print("🔧 Initializing MAVERIC...")
             
-            # Create MAVERICConfig from loaded config
             maveric_config = MAVERICConfig(
                 cache_base_dir=self.config.get('cache_base_dir', './cache'),
                 clip_model=self.config.get('clip_model', 'ViT-B/32'),
@@ -186,14 +133,13 @@ class MAVERICInteractiveGUI:
                 default_thresholds=self.config.get('quality_thresholds', {}),
                 balance_min_samples=self.config.get('elevater', {}).get('quality_control', {}).get('min_samples_per_class', 15),
                 retrieval_rotation_size=self.config.get('retrieval_rotation_size', 1000),
-                enable_real_time_stats=False,  # Disable for GUI
+                enable_real_time_stats=False,
                 metric_weights=self.config.get('metric_weights', {}),
                 num_workers=self.config.get('performance', {}).get('num_workers', 4),
-                log_level='WARNING',  # Reduce logging noise
+                log_level='WARNING',
                 viz_save_figures=False
             )
             
-            # Initialize MAVERIC
             self.maveric = MAVERIC(maveric_config)
             print("✅ MAVERIC initialized")
             
@@ -201,8 +147,8 @@ class MAVERICInteractiveGUI:
             print(f"❌ Error initializing MAVERIC: {e}")
             self.maveric = None
     
-    def load_data(self):
-        """Load retrieval data using MAVERIC's built-in function"""
+    def _load_data(self):
+        """Load retrieval data"""
         if not os.path.exists(self.raw_data_dir):
             print(f"❌ Raw data directory not found: {self.raw_data_dir}")
             return
@@ -210,30 +156,27 @@ class MAVERICInteractiveGUI:
         try:
             print("🔍 Loading retrieval data...")
             
-            # Use MAVERIC's built-in function to load rotation files
             self.retrieval_result = RetrievalResult.from_rotation_files(
                 dataset_name=self.target_dataset,
                 input_dir=self.raw_data_dir,
                 source_dataset="react-vl/react-retrieval-datasets"
             )
             
-            # Convert to DataFrame
             self.data_df = self.retrieval_result.to_dataframe()
-            
             print(f"✅ Loaded {len(self.data_df):,} samples")
             
         except Exception as e:
-            print(f"❌ Error loading retrieval data: {e}")
+            print(f"❌ Error loading data: {e}")
             self.retrieval_result = None
     
-    def calculate_best_class(self):
-        """Calculate best class and weighted scores for each sample"""
+    def _calculate_best_class(self):
+        """Calculate best class and scores for each sample"""
         if self.data_df is None:
             return
         
         print("🧮 Calculating best class scores...")
         
-        # Get available class columns
+        # Get class columns
         class_columns = [col for col in self.data_df.columns if col.startswith('Class_') and '_hybrid_score' in col]
         
         if not class_columns:
@@ -275,10 +218,10 @@ class MAVERICInteractiveGUI:
         # Initialize filtered data
         self.filtered_data = self.data_df.copy()
         
-        print(f"✅ Calculated best class for all samples")
+        print(f"✅ Calculated scores for all samples")
         print(f"📊 Found {len(set(best_classes))} unique classes")
     
-    def apply_thresholds(self):
+    def _apply_thresholds(self):
         """Apply current thresholds to filter the data"""
         if self.data_df is None:
             return 0
@@ -295,39 +238,40 @@ class MAVERICInteractiveGUI:
         
         return len(self.filtered_data)
     
-    def create_gui(self):
-        """Create the interactive GUI using ipywidgets"""
+    def _create_gui(self):
+        """Create the interactive GUI"""
         print("🎨 Creating interactive GUI...")
         
-        # Create threshold sliders
-        self.create_threshold_widgets()
-        
-        # Create weight sliders
-        self.create_weight_widgets()
+        # Create widgets
+        self._create_threshold_widgets()
+        self._create_weight_widgets()
         
         # Create buttons
         apply_button = widgets.Button(
             description='Apply Settings',
             button_style='primary',
-            icon='check'
+            icon='check',
+            layout=widgets.Layout(width='150px')
         )
         
         visualize_button = widgets.Button(
-            description='Show Sample Images',
+            description='Show Samples',
             button_style='info',
-            icon='image'
+            icon='image',
+            layout=widgets.Layout(width='150px')
         )
         
         save_button = widgets.Button(
-            description='Save Configuration',
+            description='Save Config',
             button_style='success',
-            icon='save'
+            icon='save',
+            layout=widgets.Layout(width='150px')
         )
         
-        # Connect button callbacks
-        apply_button.on_click(self.on_apply_clicked)
-        visualize_button.on_click(self.on_visualize_clicked)
-        save_button.on_click(self.on_save_clicked)
+        # Connect callbacks
+        apply_button.on_click(self._on_apply_clicked)
+        visualize_button.on_click(self._on_visualize_clicked)
+        save_button.on_click(self._on_save_clicked)
         
         # Create tabs
         tab = widgets.Tab()
@@ -338,50 +282,64 @@ class MAVERICInteractiveGUI:
         tab.set_title(0, 'Quality Thresholds')
         tab.set_title(1, 'Metric Weights')
         
-        # Create layout
-        button_box = widgets.HBox([apply_button, visualize_button, save_button])
-        
         # Initial filter count
-        count = self.apply_thresholds()
-        self.filtered_count_widget.value = f"<h4>Filtered Data: {count:,} samples ({count/len(self.data_df)*100:.1f}%)</h4>"
+        count = self._apply_thresholds()
+        self.filtered_count_widget.value = f"<h4>📊 Filtered: {count:,} samples ({count/len(self.data_df)*100:.1f}%)</h4>"
         
         # Main layout
+        header = widgets.HTML(f"""
+        <div style="background-color: #f0f8ff; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
+            <h2 style="margin: 0; color: #2c3e50;">🎛️ MAVERIC Interactive Data Curation</h2>
+            <p style="margin: 5px 0 0 0; color: #7f8c8d;">
+                <b>Dataset:</b> {self.target_dataset.upper()} | 
+                <b>Total Samples:</b> {len(self.data_df):,} |
+                <b>Classes:</b> {len(set(self.data_df['label']))}
+            </p>
+        </div>
+        """)
+        
+        button_box = widgets.HBox([apply_button, visualize_button, save_button], 
+                                 layout=widgets.Layout(justify_content='center', margin='10px'))
+        
         main_layout = widgets.VBox([
-            widgets.HTML("<h2>🎛️ MAVERIC Interactive Data Curation</h2>"),
-            widgets.HTML(f"<p><b>Dataset:</b> {self.target_dataset.upper()} | <b>Total Samples:</b> {len(self.data_df):,}</p>"),
+            header,
             tab,
             self.filtered_count_widget,
             button_box,
             self.output_widget
         ])
         
-        # Display the GUI
+        # Display GUI
         display(main_layout)
         
         # Show initial visualizations
         with self.output_widget:
-            self.visualize_metrics_distribution()
+            self._visualize_distributions()
     
-    def create_threshold_widgets(self):
+    def _create_threshold_widgets(self):
         """Create threshold slider widgets"""
+        # Only create sliders for metrics that exist in the data
+        metrics_in_data = {}
         for metric, default_value in self.thresholds.items():
-            # Determine max value based on metric
             if metric in self.data_df.columns:
-                max_val = float(self.data_df[metric].max())
-                min_val = float(self.data_df[metric].min())
-                step = 0.001
-                
-                # Adjust step for resolution score
-                if metric == 'resolution_score':
-                    step = 0.01
-            else:
-                max_val = 1.0
-                min_val = 0.0
-                step = 0.001
+                metrics_in_data[metric] = default_value
+        
+        # Update thresholds to only include available metrics
+        self.thresholds = metrics_in_data
+        
+        for metric, default_value in self.thresholds.items():
+            # Get data range
+            max_val = float(self.data_df[metric].max())
+            min_val = float(self.data_df[metric].min())
+            
+            # Adjust step
+            step = 0.001
+            if metric == 'resolution_score':
+                step = 0.01
             
             # Create slider
             self.threshold_widgets[metric] = widgets.FloatSlider(
-                value=default_value,
+                value=max(min_val, min(default_value, max_val)),  # Ensure value is in range
                 min=min_val,
                 max=max_val,
                 step=step,
@@ -391,11 +349,11 @@ class MAVERICInteractiveGUI:
                 orientation='horizontal',
                 readout=True,
                 readout_format='.3f',
-                layout=widgets.Layout(width='500px'),
-                style={'description_width': 'initial'}
+                layout=widgets.Layout(width='600px'),
+                style={'description_width': '200px'}
             )
     
-    def create_weight_widgets(self):
+    def _create_weight_widgets(self):
         """Create weight slider widgets"""
         for metric in self.thresholds.keys():
             default_weight = self.weights.get(metric, 1.0)
@@ -411,11 +369,11 @@ class MAVERICInteractiveGUI:
                 orientation='horizontal',
                 readout=True,
                 readout_format='.1f',
-                layout=widgets.Layout(width='500px'),
-                style={'description_width': 'initial'}
+                layout=widgets.Layout(width='600px'),
+                style={'description_width': '200px'}
             )
     
-    def on_apply_clicked(self, button):
+    def _on_apply_clicked(self, button):
         """Handle apply button click"""
         # Update thresholds and weights from widgets
         for metric, widget in self.threshold_widgets.items():
@@ -425,56 +383,55 @@ class MAVERICInteractiveGUI:
             self.weights[metric] = widget.value
         
         # Apply thresholds
-        count = self.apply_thresholds()
-        self.filtered_count_widget.value = f"<h4>Filtered Data: {count:,} samples ({count/len(self.data_df)*100:.1f}%)</h4>"
+        count = self._apply_thresholds()
+        retention = count / len(self.data_df) * 100
+        self.filtered_count_widget.value = f"<h4>📊 Filtered: {count:,} samples ({retention:.1f}%)</h4>"
         
         # Update visualizations
         with self.output_widget:
             clear_output()
-            print(f"✅ Applied settings: {count:,} samples retained")
-            self.visualize_metrics_distribution()
+            print(f"✅ Applied settings: {count:,} samples retained ({retention:.1f}%)")
+            self._visualize_distributions()
     
-    def on_visualize_clicked(self, button):
+    def _on_visualize_clicked(self, button):
         """Handle visualize button click"""
         with self.output_widget:
             clear_output()
-            self.visualize_sample_images()
+            self._visualize_sample_images()
     
-    def on_save_clicked(self, button):
+    def _on_save_clicked(self, button):
         """Handle save button click"""
         with self.output_widget:
             clear_output()
-            success = self.save_configuration()
+            success = self._save_configuration()
             if success:
                 print("✅ Configuration saved successfully!")
                 print(f"📁 Updated: {self.config_file}")
                 print(f"💾 Backup: {self.config_file}.backup")
                 print(f"\n🚀 Next Steps:")
-                print(f"Run: python 02_data_curation.py -d {self.target_dataset} -c {self.config_file}")
+                print(f"Run data curation: python 02_data_curation.py -d {self.target_dataset} -c {self.config_file}")
             else:
                 print("❌ Failed to save configuration")
     
-    def visualize_metrics_distribution(self):
-        """Visualize distribution of quality metrics"""
+    def _visualize_distributions(self):
+        """Visualize metric distributions"""
         if self.filtered_data is None:
             print("No data to visualize")
             return
         
         metrics = list(self.thresholds.keys())
-        valid_metrics = [m for m in metrics if m in self.filtered_data.columns]
-        
-        if not valid_metrics:
-            print("No valid metrics found")
+        if not metrics:
+            print("No metrics to visualize")
             return
         
         # Create subplots
-        n_metrics = len(valid_metrics)
+        n_metrics = len(metrics)
         fig, axes = plt.subplots(n_metrics, 1, figsize=(12, 4*n_metrics))
         
         if n_metrics == 1:
             axes = [axes]
         
-        for i, metric in enumerate(valid_metrics):
+        for i, metric in enumerate(metrics):
             ax = axes[i]
             
             # Get data
@@ -485,9 +442,9 @@ class MAVERICInteractiveGUI:
                 continue
             
             # Plot histograms
-            ax.hist(original_data, bins=50, alpha=0.5, label='Original', color='blue', density=True)
+            ax.hist(original_data, bins=50, alpha=0.5, label='Original', color='lightblue', density=True)
             if len(filtered_data) > 0:
-                ax.hist(filtered_data, bins=30, alpha=0.7, label='Filtered', color='green', density=True)
+                ax.hist(filtered_data, bins=30, alpha=0.8, label='Filtered', color='green', density=True)
             
             # Add threshold line
             threshold = self.thresholds[metric]
@@ -495,36 +452,44 @@ class MAVERICInteractiveGUI:
             
             # Add statistics
             mean_val = original_data.mean()
+            median_val = original_data.median()
             ax.axvline(mean_val, color='orange', linestyle='-', alpha=0.7, label=f'Mean: {mean_val:.3f}')
+            ax.axvline(median_val, color='purple', linestyle=':', alpha=0.7, label=f'Median: {median_val:.3f}')
             
             # Formatting
-            ax.set_xlabel(metric.replace('_', ' ').title())
-            ax.set_ylabel('Density')
-            ax.set_title(f'Distribution of {metric.replace("_", " ").title()}')
+            ax.set_xlabel(metric.replace('_', ' ').title(), fontsize=12)
+            ax.set_ylabel('Density', fontsize=12)
+            ax.set_title(f'Distribution of {metric.replace("_", " ").title()}', fontsize=14, fontweight='bold')
             ax.legend()
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
         plt.show()
         
-        # Show class distribution
-        if 'label' in self.filtered_data.columns:
+        # Class distribution
+        if 'label' in self.filtered_data.columns and len(self.filtered_data) > 0:
             plt.figure(figsize=(12, 6))
             class_counts = self.filtered_data['label'].value_counts().head(20)
             
-            plt.bar(range(len(class_counts)), class_counts.values)
+            bars = plt.bar(range(len(class_counts)), class_counts.values, color='steelblue', alpha=0.7)
             plt.xticks(range(len(class_counts)), class_counts.index, rotation=45, ha='right')
-            plt.xlabel('Class')
-            plt.ylabel('Count')
-            plt.title('Class Distribution in Filtered Data')
-            plt.grid(True, alpha=0.3)
+            plt.xlabel('Class', fontsize=12)
+            plt.ylabel('Count', fontsize=12)
+            plt.title('Class Distribution in Filtered Data', fontsize=14, fontweight='bold')
+            plt.grid(True, alpha=0.3, axis='y')
+            
+            # Add value labels on bars
+            for bar, count in zip(bars, class_counts.values):
+                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        f'{count}', ha='center', va='bottom', fontsize=9)
+            
             plt.tight_layout()
             plt.show()
     
-    def visualize_sample_images(self, n_samples=6):
+    def _visualize_sample_images(self, n_samples=6):
         """Visualize sample images from filtered data"""
         if self.filtered_data is None or len(self.filtered_data) == 0:
-            print("No filtered data available for visualization")
+            print("No filtered data available")
             return
         
         # Select samples
@@ -576,8 +541,8 @@ class MAVERICInteractiveGUI:
         plt.tight_layout()
         plt.show()
     
-    def save_configuration(self):
-        """Save current thresholds and weights to configuration file"""
+    def _save_configuration(self):
+        """Save current settings to configuration file"""
         try:
             # Read current configuration
             with open(self.config_file, 'r') as f:
@@ -602,107 +567,16 @@ class MAVERICInteractiveGUI:
             print(f"Error saving configuration: {e}")
             return False
 
-def main():
-    """Main function"""
-    print("🚀 MAVERIC Interactive Data Curation GUI")
-    print("=" * 50)
-    
-    # Parse arguments
-    args = parse_arguments()
-    
-    # Validate config file
-    if not os.path.exists(args.config):
-        print(f"❌ Configuration file not found: {args.config}")
-        return
-    
-    # Create GUI
-    try:
-        gui = MAVERICInteractiveGUI(
-            target_dataset=args.dataset,
-            config_file=args.config
-        )
-        print("✅ Interactive GUI created successfully!")
-        print("Use the sliders above to adjust thresholds and weights.")
-        
-    except Exception as e:
-        print(f"❌ Error creating GUI: {e}")
-        import traceback
-        traceback.print_exc()
 
-# Function to create GUI directly (for Jupyter import)
-def create_maveric_gui(dataset_name, config_file):
+def create_interactive_gui(dataset_name, config_file):
     """
-    Create MAVERIC GUI directly for Jupyter notebook environments
+    Create MAVERIC interactive data curation GUI
     
     Args:
         dataset_name: Target dataset name (e.g., 'cifar10')
         config_file: Path to MAVERIC configuration file
     
     Returns:
-        MAVERICInteractiveGUI instance
+        InteractiveDataCuration instance
     """
-    try:
-        import matplotlib
-        matplotlib.use('inline')
-    except:
-        pass
-    
-    return MAVERICInteractiveGUI(
-        target_dataset=dataset_name,
-        config_file=config_file
-    )
-
-# Google Colab Integration - Easy execution in notebook cells
-def run_in_colab(dataset_name='cifar10', config_file='maveric_config.yaml'):
-    """
-    Easy way to run MAVERIC GUI in Google Colab notebook cells
-    
-    Usage in Colab cell:
-        exec(open('02_data_curation_gui.py').read())
-        run_in_colab('cifar10', 'maveric_config.yaml')
-    
-    Or set variables and run:
-        DATASET = 'cifar100'  
-        CONFIG = 'my_config.yaml'
-        exec(open('02_data_curation_gui.py').read())
-        run_in_colab(DATASET, CONFIG)
-    """
-    print(f"🚀 Starting MAVERIC Interactive GUI")
-    print(f"📊 Dataset: {dataset_name}")
-    print(f"⚙️ Config: {config_file}")
-    print("-" * 50)
-    
-    try:
-        # Create the interactive GUI
-        gui = create_maveric_gui(dataset_name, config_file)
-        
-        print("✅ GUI loaded successfully!")
-        print("📱 Interactive widgets should be visible above")
-        print("🎛️ Use the sliders to adjust thresholds and weights")
-        print("🔘 Click 'Apply Settings' to update visualizations")
-        print("🖼️ Click 'Show Sample Images' to view filtered samples") 
-        print("💾 Click 'Save Configuration' to save your settings")
-        
-        return gui
-        
-    except Exception as e:
-        print(f"❌ Error creating GUI: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-if __name__ == "__main__":
-    # Set matplotlib backend for Jupyter
-    try:
-        import matplotlib
-        matplotlib.use('inline')
-    except:
-        pass
-    
-    main()
-
-# Auto-run for Colab if variables are set
-if 'DATASET' in globals() and 'CONFIG' in globals():
-    run_in_colab(DATASET, CONFIG)
-elif 'DATASET_NAME' in globals() and 'CONFIG_FILE' in globals():
-    run_in_colab(DATASET_NAME, CONFIG_FILE)
+    return InteractiveDataCuration(dataset_name, config_file)
