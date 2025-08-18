@@ -13,10 +13,34 @@ from .plots import (
 try:
     from .interactive import InteractiveDataCuration, create_interactive_gui
     INTERACTIVE_AVAILABLE = True
-except ImportError:
+    
+    def check_interactive_requirements():
+        """Check if interactive GUI requirements are met"""
+        try:
+            import ipywidgets
+            from IPython.display import display
+            return True
+        except ImportError as e:
+            print(f"❌ Missing requirement for interactive GUI: {e}")
+            print("📦 Please install: pip install ipywidgets")
+            print("🔧 For Colab: !pip install ipywidgets")
+            return False
+    
+except ImportError as e:
     INTERACTIVE_AVAILABLE = False
     InteractiveDataCuration = None
-    create_interactive_gui = None
+    
+    def create_interactive_gui(dataset_name, config_file):
+        """Fallback function when interactive GUI is not available"""
+        print(f"❌ Interactive GUI not available: {e}")
+        print("📦 Please install required packages:")
+        print("   !pip install ipywidgets")
+        print("   !jupyter nbextension enable --py widgetsnbextension")
+        print("   # Then restart kernel")
+        return None
+    
+    def check_interactive_requirements():
+        return False
 
 __all__ = [
     "MetricsVisualizer",
@@ -27,5 +51,6 @@ __all__ = [
     "create_summary_report",
     "InteractiveDataCuration",
     "create_interactive_gui",
+    "check_interactive_requirements",
     "INTERACTIVE_AVAILABLE"
 ]

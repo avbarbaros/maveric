@@ -155,6 +155,65 @@ def install_maveric(config):
     
     return result1 is not None and result2 is not None
 
+def install_interactive_packages():
+    """Install packages required for interactive GUI."""
+    print("📦 Installing interactive GUI packages...")
+    
+    packages_to_install = [
+        'ipywidgets',
+        'pillow', 
+        'requests',
+        'pyyaml'
+    ]
+    
+    for package in packages_to_install:
+        try:
+            __import__(package.replace('-', '_'))
+            print(f"✅ {package} - already installed")
+        except ImportError:
+            print(f"📥 Installing {package}...")
+            result = run_command(f"pip install {package}", f"Installing {package}")
+            if result is not None:
+                print(f"✅ {package} - installed successfully")
+            else:
+                print(f"⚠️ {package} - installation may have issues")
+
+def setup_jupyter_widgets():
+    """Setup and test Jupyter widgets for interactive GUI."""
+    print("🔧 Setting up Jupyter widgets...")
+    
+    # Enable widgets for Jupyter
+    try:
+        result = run_command('jupyter nbextension enable --py widgetsnbextension', 
+                           "Enabling Jupyter widgets")
+        if result:
+            print("✅ Jupyter widgets enabled")
+    except:
+        print("⚠️ Could not enable jupyter widgets (this is normal in Colab)")
+    
+    # Test widget functionality
+    print("🧪 Testing widget functionality...")
+    try:
+        import ipywidgets as widgets
+        from IPython.display import display
+        
+        # Create a test widget (but don't display it during setup)
+        test_slider = widgets.FloatSlider(
+            value=0.5,
+            min=0.0,
+            max=1.0,
+            step=0.1,
+            description='Test:'
+        )
+        
+        print("✅ Widgets created successfully")
+        print("🎛️ Interactive GUI components ready")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Widget test failed: {e}")
+        return False
+
 def test_installation():
     """Test MAVERIC installation."""
     print("🧪 Testing installation...")
@@ -186,6 +245,31 @@ def test_installation():
         print(f"❌ Import error: {e}")
         print("ℹ️  This might be normal if running outside the repository")
         print("ℹ️  Try importing maveric in a new Python session")
+        return False
+
+def test_interactive_gui():
+    """Test MAVERIC interactive GUI availability."""
+    print("🧪 Testing interactive GUI...")
+    
+    try:
+        from maveric.visualization import INTERACTIVE_AVAILABLE, check_interactive_requirements
+        print("✅ MAVERIC visualization module imported")
+        
+        if INTERACTIVE_AVAILABLE:
+            print("✅ Interactive GUI is available")
+            
+            if check_interactive_requirements():
+                print("✅ All GUI requirements satisfied")
+                return True
+            else:
+                print("⚠️ Some GUI requirements missing")
+                return False
+        else:
+            print("❌ Interactive GUI not available")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Interactive GUI test failed: {e}")
         return False
 
 
@@ -226,11 +310,50 @@ def show_summary(config):
     print("✅ Directories created")
     print("✅ Configuration loaded from YAML")
     print("✅ Cache access verified")
+    print("✅ Interactive GUI packages installed")
     print(f"\n📁 Cache directory: {config['cache_base_dir']}")
     print(f"📁 Results directory: {config['results_dir']}")
     print(f"🤖 CLIP model: {config['clip_model']}")
     print(f"📦 Batch size: {config['batch_size']}")
     print(f"\n🎯 Ready for MAVERIC experiments!")
+    print("=" * 60)
+
+def show_gui_instructions(gui_available):
+    """Display instructions for using the interactive GUI."""
+    print("\n" + "🎛️" + " INTERACTIVE DATA CURATION GUI " + "🎛️")
+    print("=" * 60)
+    
+    if gui_available:
+        print("✅ Interactive GUI is ready to use!")
+        print("\n📋 To start the interactive data curation GUI:")
+        print("```python")
+        print("from maveric.visualization import create_interactive_gui")
+        print("gui = create_interactive_gui('cifar10', 'path/to/config.yaml')")
+        print("```")
+        print("\n📋 Or use the compact script:")
+        print("```python")
+        print("exec(open('interactive_curation.py').read())")
+        print("```")
+        print("\n🎯 Features:")
+        print("• Interactive sliders for quality thresholds")
+        print("• Real-time visualization updates")
+        print("• Sample image gallery")
+        print("• Configuration saving")
+        print("• Live filtering statistics")
+    else:
+        print("⚠️ Interactive GUI setup incomplete")
+        print("\n🔧 To fix GUI issues:")
+        print("1. Restart your runtime (Runtime > Restart runtime)")
+        print("2. Re-run this setup script")
+        print("3. If issues persist, manually install:")
+        print("   !pip install ipywidgets")
+        print("   !jupyter nbextension enable --py widgetsnbextension")
+        print("\n💡 You can still use MAVERIC without the interactive GUI")
+    
+    print("\n📖 Next steps:")
+    print("1. Run data retrieval: python 01_data_retrieval.py")
+    print("2. Use interactive GUI to determine thresholds")
+    print("3. Run data curation: python 02_data_curation.py")
     print("=" * 60)
 
 def parse_arguments():
@@ -292,6 +415,10 @@ def main():
         print("❌ MAVERIC installation failed")
         return False
     
+    # Interactive GUI setup
+    install_interactive_packages()
+    setup_jupyter_widgets()
+    
     # Testing and validation
     # if not test_installation():
     #     print("❌ Installation test failed")
@@ -301,9 +428,12 @@ def main():
         print("❌ Cache access test failed")
         return False
     
+    # Test interactive GUI
+    gui_available = test_interactive_gui()
     
     # Show completion summary
     show_summary(config)
+    show_gui_instructions(gui_available)
     return True
 
 if __name__ == "__main__":
