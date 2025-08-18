@@ -30,10 +30,35 @@ if 'DATASET' not in globals():
 if 'CONFIG' not in globals():
     CONFIG = 'maveric_config.yaml'  # Change to your config file path
 
-# Add MAVERIC to path if needed
-maveric_path = Path(__file__).parent.parent
+# Add MAVERIC to path - handle both file execution and notebook contexts
+try:
+    # When running as a file
+    maveric_path = Path(__file__).parent.parent
+except NameError:
+    # When running in notebook (no __file__ variable)
+    # Try common MAVERIC locations
+    possible_paths = [
+        '/content/drive/MyDrive/MAVERIC/repo/maveric',  # Common Google Colab path
+        './maveric',  # Current directory
+        '../maveric',  # Parent directory
+        '../../maveric',  # Grandparent directory
+    ]
+    
+    maveric_path = None
+    for path in possible_paths:
+        if Path(path).exists() and (Path(path) / '__init__.py').exists():
+            maveric_path = Path(path)
+            break
+    
+    if maveric_path is None:
+        print("❌ Could not find MAVERIC directory!")
+        print("📁 Please ensure MAVERIC is accessible from the current location")
+        print("💡 You may need to run: sys.path.append('/path/to/maveric')")
+        raise ImportError("MAVERIC not found in expected locations")
+
 if str(maveric_path) not in sys.path:
     sys.path.insert(0, str(maveric_path))
+    print(f"📁 Added MAVERIC path: {maveric_path}")
 
 try:
     # Import MAVERIC interactive GUI
