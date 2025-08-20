@@ -80,13 +80,13 @@ class MAVERICInteractiveQualityControl:
             'txt2img': 0.20
         }
         
-        # Default quality thresholds
+        # Default quality thresholds (ordered by application sequence)
         self.thresholds = {
-            'weighted_class_score': 0.400,
-            'consistency': 0.780,
             'resolution_score': 1.000,
             'sharpness_score': 0.850,
-            'color_score': 0.750
+            'color_score': 0.750,
+            'weighted_class_score': 0.400,
+            'consistency': 0.780
         }
         
         # Auto-detect data path if not provided
@@ -280,16 +280,34 @@ class MAVERICInteractiveQualityControl:
             print(f"❌ Unknown metric: {metric}")
             print(f"Available: {list(self.thresholds.keys())}")
     
-    def set_class_weight(self, metric, value):
+    def set_class_weight(self, metric, value, recalculate=True):
         """Set a weight for a class metric"""
         if metric in self.class_weights:
             self.class_weights[metric] = value
             print(f"⚖️ Set {metric} weight to {value:.2f}")
-            # Recalculate best class scores
-            self._calculate_best_class()
+            # Only recalculate if explicitly requested (default: True for backward compatibility)
+            if recalculate:
+                self._calculate_best_class()
         else:
             print(f"❌ Unknown metric: {metric}")
             print(f"Available: {list(self.class_weights.keys())}")
+    
+    def set_class_weights(self, weights_dict):
+        """Set multiple class weights at once and recalculate scores only once"""
+        updated_weights = []
+        for metric, value in weights_dict.items():
+            if metric in self.class_weights:
+                self.class_weights[metric] = value
+                updated_weights.append(f"{metric}: {value:.2f}")
+            else:
+                print(f"❌ Unknown metric: {metric}")
+        
+        if updated_weights:
+            print(f"⚖️ Updated weights: {', '.join(updated_weights)}")
+            # Recalculate best class scores only once
+            self._calculate_best_class()
+        else:
+            print("❌ No valid weights were updated")
     
     def apply_thresholds(self):
         """Apply current thresholds to filter the data"""
@@ -299,18 +317,118 @@ class MAVERICInteractiveQualityControl:
         
         # Start with all data
         self.filtered_data = self.data.copy()
+        initial_count = len(self.filtered_data)
         
-        # Apply each threshold
+        print(f"\n🎯 Applying Quality Thresholds:")
+        print("=" * 60)
+        print(f"{'Metric':<20} {'Threshold':<12} {'Before':<10} {'After':<10} {'Removed':<10}")
+        print("-" * 60)
+        
+        # Apply each threshold and show impact
         for metric, threshold in self.thresholds.items():
             if metric in self.filtered_data.columns:
+                before_count = len(self.filtered_data)
                 self.filtered_data = self.filtered_data[
                     self.filtered_data[metric] >= threshold
                 ]
+                after_count = len(self.filtered_data)
+                removed_count = before_count - after_count
+                
+                print(f"{metric:<20} {threshold:<12.3f} {before_count:<10,} {after_count:<10,} {removed_count:<10,}")
+            else:
+                print(f"{metric:<20} {'N/A':<12} {'N/A':<10} {'N/A':<10} {'N/A':<10}")
         
-        count = len(self.filtered_data)
-        retention = count / len(self.data) * 100
-        print(f"📊 Filtered: {count:,} samples ({retention:.1f}% retention)")
-        return count
+        print("=" * 60)
+        
+        final_count = len(self.filtered_data)
+        total_removed = initial_count - final_count
+        retention = (final_count / initial_count) * 100 if initial_count > 0 else 0
+        
+        print(f"📊 SUMMARY:")
+        print(f"  • Initial dataset: {initial_count:,} samples")
+        print(f"  • Final dataset: {final_count:,} samples")
+        print(f"  • Total removed: {total_removed:,} samples")
+        print(f"  • Retention rate: {retention:.1f}%")
+        
+        # Show class distribution
+        self._show_class_distribution()
+        
+        return final_count
+    
+    def _show_class_distribution(self):
+        """Display class distribution of filtered data"""
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("📋 No filtered data available for class distribution")
+            return
+        
+        if 'label' not in self.filtered_data.columns:
+            print("📋 No class labels available for distribution")
+            return
+        
+        # Calculate class distribution
+        class_counts = self.filtered_data['label'].value_counts().sort_index()
+        total_samples = len(self.filtered_data)
+        
+        print(f"\n📋 Class Distribution ({total_samples:,} samples):")
+        print("=" * 50)
+        
+        for class_name, count in class_counts.items():
+            percentage = (count / total_samples) * 100
+            print(f"  • {class_name:<15}: {count:>6,} samples ({percentage:>5.1f}%)")
+        
+        # Show summary statistics
+        min_count = class_counts.min()
+        max_count = class_counts.max()
+        mean_count = class_counts.mean()
+        
+        print("-" * 50)
+        print(f"  📊 Balance Summary:")
+        print(f"    Min: {min_count:,} | Max: {max_count:,} | Mean: {mean_count:.1f}")
+        
+        if max_count > 0:
+            balance_ratio = min_count / max_count
+            print(f"    Balance ratio: {balance_ratio:.3f} (1.0 = perfect balance)")
+        
+        print("=" * 50)
+    
+    def show_class_comparison(self):
+        """Show comparison between original and filtered class distributions"""
+        if self.data is None:
+            print("❌ No data loaded")
+            return
+        
+        if 'label' not in self.data.columns:
+            print("📋 No class labels available")
+            return
+        
+        # Original distribution
+        original_counts = self.data['label'].value_counts().sort_index()
+        
+        # Filtered distribution
+        if self.filtered_data is not None and len(self.filtered_data) > 0:
+            filtered_counts = self.filtered_data['label'].value_counts().sort_index()
+        else:
+            filtered_counts = pd.Series(dtype=int)
+        
+        print(f"\n📊 Class Distribution Comparison:")
+        print("=" * 70)
+        print(f"{'Class':<15} {'Original':<12} {'Filtered':<12} {'Retention':<12}")
+        print("-" * 70)
+        
+        for class_name in original_counts.index:
+            original_count = original_counts.get(class_name, 0)
+            filtered_count = filtered_counts.get(class_name, 0)
+            retention = (filtered_count / original_count * 100) if original_count > 0 else 0
+            
+            print(f"{class_name:<15} {original_count:>8,} {filtered_count:>8,} {retention:>8.1f}%")
+        
+        print("=" * 70)
+        total_original = len(self.data)
+        total_filtered = len(self.filtered_data) if self.filtered_data is not None else 0
+        overall_retention = (total_filtered / total_original * 100) if total_original > 0 else 0
+        
+        print(f"{'TOTAL':<15} {total_original:>8,} {total_filtered:>8,} {overall_retention:>8.1f}%")
+        print("=" * 70)
     
     def visualize_distributions(self, metrics=None):
         """Visualize metric distributions with thresholds"""
@@ -319,7 +437,7 @@ class MAVERICInteractiveQualityControl:
             return
         
         if metrics is None:
-            metrics = ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score', 'color_score']
+            metrics = ['resolution_score', 'sharpness_score', 'color_score', 'weighted_class_score', 'consistency']
         
         # Filter valid metrics
         metrics = [m for m in metrics if m in self.data.columns]
@@ -345,22 +463,31 @@ class MAVERICInteractiveQualityControl:
             # Statistics
             mean_val = data.mean()
             std_val = data.std()
+            median_val = data.median()
             threshold = self.thresholds.get(metric, 0)
             
             # Histogram
             ax.hist(data, bins=50, alpha=0.7, color='skyblue', edgecolor='black')
             
-            # Statistical lines
-            ax.axvline(threshold, color='red', linestyle='--', linewidth=2, label=f'Threshold: {threshold:.3f}')
-            ax.axvline(mean_val, color='green', linestyle='-', linewidth=2, label=f'Mean: {mean_val:.3f}')
-            ax.axvline(mean_val - std_val, color='blue', linestyle=':', linewidth=1, label=f'Mean±Std')
-            ax.axvline(mean_val + std_val, color='blue', linestyle=':', linewidth=1)
+            # Statistical lines with comprehensive legend
+            ax.axvline(threshold, color='red', linestyle='--', linewidth=2, 
+                      label=f'Threshold: {threshold:.3f}')
+            ax.axvline(mean_val, color='green', linestyle='-', linewidth=2, 
+                      label=f'Mean: {mean_val:.3f}')
+            ax.axvline(mean_val - std_val, color='blue', linestyle=':', linewidth=1, 
+                      label=f'Mean-Std: {mean_val - std_val:.3f}')
+            ax.axvline(mean_val + std_val, color='orange', linestyle=':', linewidth=1, 
+                      label=f'Mean+Std: {mean_val + std_val:.3f}')
+            ax.axvline(median_val, color='purple', linestyle='-.', linewidth=2, 
+                      label=f'Median: {median_val:.3f}')
             
             # Formatting
             ax.set_title(f'Distribution of {metric.replace("_", " ").title()}', fontweight='bold')
             ax.set_xlabel('Value')
             ax.set_ylabel('Count')
-            ax.legend()
+            
+            # Enhanced legend with better positioning
+            ax.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0), fontsize=9, framealpha=0.9)
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
@@ -427,42 +554,106 @@ class MAVERICInteractiveQualityControl:
         plt.tight_layout()
         plt.show()
     
-    def save_filtered_data(self, output_file=None):
-        """Save filtered data to JSON file"""
+    def save_filtered_data(self, output_file=None, rotation_size=None):
+        """Save filtered data in the same format as 02_data_curation.py script"""
         if self.filtered_data is None:
             print("❌ No filtered data available")
             return None
         
+        # Determine output directory (same logic as 02_data_curation.py)
         if output_file is None:
             # Save to parent directory of raw data (remove /raw from path)
             if self.data_path.endswith('/raw'):
                 base_dir = os.path.dirname(self.data_path)
             else:
                 base_dir = self.data_path
-            output_file = os.path.join(base_dir, f"{self.dataset_name}_filtered_dataset.json")
+            
+            # Ensure output directory exists
+            os.makedirs(base_dir, exist_ok=True)
+        
+        # Get rotation size from config file or use default
+        if rotation_size is None:
+            if self.config_file and os.path.exists(self.config_file):
+                try:
+                    import yaml
+                    with open(self.config_file, 'r') as f:
+                        config = yaml.safe_load(f)
+                    rotation_size = config.get('retrieval_rotation_size', 1000)
+                except:
+                    rotation_size = 1000
+            else:
+                rotation_size = 1000
         
         try:
-            # Create simplified output format
-            simplified_data = []
+            # Format samples according to 02_data_curation.py specification
+            formatted_samples = []
             
             for i, (_, row) in enumerate(self.filtered_data.iterrows()):
-                item = {
-                    'id': int(row.get('id', i)),
-                    'url': row.get('url', ''),
-                    'label': row.get('label', ''),
-                    'text': row.get('text', ''),
-                    'weighted_class_score': float(row.get('weighted_class_score', 0)),
-                    'consistency': float(row.get('consistency', 0))
+                formatted_sample = {
+                    'id': int(row.get('id', row.get('sample_id', i + 1))),
+                    'url': str(row.get('url', '')),
+                    'label': str(row.get('label', row.get('class', ''))),
+                    'text': str(row.get('text', '')),
+                    'weighted_class_score': float(row.get('weighted_class_score', 
+                                                row.get('hybrid_score', 0.0))),
+                    'consistency': float(row.get('consistency', 0.0))
                 }
-                simplified_data.append(item)
+                formatted_samples.append(formatted_sample)
             
-            # Save to JSON
-            os.makedirs(os.path.dirname(output_file), exist_ok=True)
-            with open(output_file, 'w') as f:
-                json.dump(simplified_data, f, indent=2)
+            # Export files based on rotation size (same logic as 02_data_curation.py)
+            total_samples = len(formatted_samples)
             
-            print(f"💾 Saved {len(simplified_data)} filtered items to {output_file}")
-            return output_file
+            if output_file is not None:
+                # User specified exact output file
+                output_path = output_file
+                with open(output_path, 'w') as f:
+                    json.dump(formatted_samples, f, indent=2)
+                print(f"💾 Saved {total_samples} filtered items to {output_path}")
+                return output_path
+            
+            elif total_samples <= rotation_size:
+                # Single file export
+                filename = f"{self.dataset_name}_training_maveric_1.json"
+                if self.data_path.endswith('/raw'):
+                    base_dir = os.path.dirname(self.data_path)
+                else:
+                    base_dir = self.data_path
+                output_path = os.path.join(base_dir, filename)
+                
+                with open(output_path, 'w') as f:
+                    json.dump(formatted_samples, f, indent=2)
+                    
+                print(f"💾 Saved {total_samples} filtered items to {output_path}")
+                return output_path
+            else:
+                # Multiple file export with rotation (same as 02_data_curation.py)
+                if self.data_path.endswith('/raw'):
+                    base_dir = os.path.dirname(self.data_path)
+                else:
+                    base_dir = self.data_path
+                    
+                output_paths = []
+                sequence_number = 1
+                num_files = (total_samples + rotation_size - 1) // rotation_size  # Ceiling division
+                
+                print(f"💾 Exporting training dataset JSON ({total_samples} samples → {num_files} files, {rotation_size} samples per file)...")
+                
+                for i in range(0, total_samples, rotation_size):
+                    batch = formatted_samples[i:i + rotation_size]
+                    filename = f"{self.dataset_name}_training_maveric_{sequence_number}.json"
+                    output_path = os.path.join(base_dir, filename)
+                    
+                    with open(output_path, 'w') as f:
+                        json.dump(batch, f, indent=2)
+                    
+                    output_paths.append(output_path)
+                    sequence_number += 1
+                
+                print(f"📁 Exported {len(output_paths)} training dataset files to: {base_dir}")
+                print(f"   First file: {os.path.basename(output_paths[0])}")
+                
+                # Return the first file path for backward compatibility
+                return output_paths[0]
         
         except Exception as e:
             print(f"❌ Error saving data: {e}")
@@ -497,27 +688,43 @@ class MAVERICInteractiveQualityControl:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
             
-            # Update quality thresholds
-            if 'quality_metrics' not in config:
-                config['quality_metrics'] = {}
+            # Update quality thresholds (save to quality_thresholds section)
+            if 'quality_thresholds' not in config:
+                config['quality_thresholds'] = {}
             
-            config['quality_metrics']['thresholds'] = self.thresholds.copy()
+            # Update the thresholds that match our GUI settings
+            for metric, threshold in self.thresholds.items():
+                if metric == 'weighted_class_score':
+                    # Skip this as it's calculated, not a direct quality threshold
+                    continue
+                elif metric == 'consistency':
+                    config['quality_thresholds']['consistency'] = threshold
+                elif metric == 'resolution_score':
+                    config['quality_thresholds']['resolution_score'] = threshold
+                elif metric == 'sharpness_score':
+                    config['quality_thresholds']['sharpness_score'] = threshold
+                elif metric == 'color_score':
+                    config['quality_thresholds']['color_diversity'] = threshold
             
-            # Update class weights  
-            if 'class_scoring' not in config:
-                config['class_scoring'] = {}
+            # Update class weights (save to metric_weights section)
+            if 'metric_weights' not in config:
+                config['metric_weights'] = {}
             
-            config['class_scoring']['weights'] = self.class_weights.copy()
+            # Update metric weights that match our GUI settings
+            for metric, weight in self.class_weights.items():
+                config['metric_weights'][metric] = weight
             
             # Save updated configuration
             with open(config_file, 'w') as f:
                 yaml.dump(config, f, default_flow_style=False, indent=2)
             
             print(f"💾 Configuration saved to: {config_file}")
-            print("📊 Saved thresholds:")
+            print("📊 Saved quality thresholds to 'quality_thresholds' section:")
             for metric, threshold in self.thresholds.items():
-                print(f"   • {metric}: {threshold:.3f}")
-            print("⚖️ Saved class weights:")
+                if metric != 'weighted_class_score':  # Skip calculated metric
+                    config_key = 'color_diversity' if metric == 'color_score' else metric
+                    print(f"   • {config_key}: {threshold:.3f}")
+            print("⚖️ Saved class weights to 'metric_weights' section:")
             for metric, weight in self.class_weights.items():
                 print(f"   • {metric}: {weight:.2f}")
             
@@ -545,7 +752,7 @@ class MAVERICInteractiveQualityControl:
                     value=max(min_value, min(default_value, max_value)),
                     min=min_value,
                     max=max_value,
-                    step=0.001 if metric != 'resolution_score' else 0.01,
+                    step=0.01 if metric == 'resolution_score' else 0.001,
                     description=f'{metric.replace("_", " ").title()}:',
                     continuous_update=False,
                     readout_format='.3f',
@@ -580,6 +787,7 @@ class MAVERICInteractiveQualityControl:
         # Create buttons
         apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
         visualize_button = widgets.Button(description='Show Samples', button_style='info', icon='image')
+        compare_button = widgets.Button(description='Class Comparison', button_style='secondary', icon='bar-chart')
         save_data_button = widgets.Button(description='Save Data', button_style='success', icon='save')
         save_config_button = widgets.Button(description='Save Config', button_style='warning', icon='cog')
         
@@ -596,9 +804,9 @@ class MAVERICInteractiveQualityControl:
                 for metric, widget in threshold_widgets.items():
                     self.set_threshold(metric, widget.value)
                 
-                # Update weights
-                for metric, widget in weight_widgets.items():
-                    self.set_class_weight(metric, widget.value)
+                # Update weights (batch update to recalculate scores only once)
+                weight_updates = {metric: widget.value for metric, widget in weight_widgets.items()}
+                self.set_class_weights(weight_updates)
                 
                 # Apply filters
                 count = self.apply_thresholds()
@@ -611,6 +819,11 @@ class MAVERICInteractiveQualityControl:
             with output:
                 clear_output()
                 self.visualize_sample_images()
+        
+        def on_compare_clicked(b):
+            with output:
+                clear_output()
+                self.show_class_comparison()
         
         def on_save_data_clicked(b):
             with output:
@@ -637,11 +850,12 @@ class MAVERICInteractiveQualityControl:
         # Connect callbacks
         apply_button.on_click(on_apply_clicked)
         visualize_button.on_click(on_visualize_clicked)
+        compare_button.on_click(on_compare_clicked)
         save_data_button.on_click(on_save_data_clicked)
         save_config_button.on_click(on_save_config_clicked)
         
         # Layout
-        button_box = widgets.HBox([apply_button, visualize_button, save_data_button, save_config_button])
+        button_box = widgets.HBox([apply_button, visualize_button, compare_button, save_data_button, save_config_button])
         
         # Display GUI
         display(widgets.VBox([
