@@ -11,7 +11,11 @@ from .plots import (
 
 # Interactive GUI (requires ipywidgets)
 try:
-    from .interactive import InteractiveDataCuration, create_interactive_gui
+    from .interactive import (
+        MAVERICInteractiveQualityControl,
+        create_quality_control,
+        start_interactive_gui
+    )
     INTERACTIVE_AVAILABLE = True
     
     def check_interactive_requirements():
@@ -26,11 +30,16 @@ try:
             print("🔧 For Colab: !pip install ipywidgets")
             return False
     
+    # Legacy compatibility
+    def create_interactive_gui(dataset_name, config_file=None):
+        """Legacy function - use start_interactive_gui instead"""
+        return start_interactive_gui(dataset_name, config_file)
+    
 except ImportError as e:
     INTERACTIVE_AVAILABLE = False
-    InteractiveDataCuration = None
+    MAVERICInteractiveQualityControl = None
     
-    def create_interactive_gui(dataset_name, config_file):
+    def create_quality_control(*args, **kwargs):
         """Fallback function when interactive GUI is not available"""
         print(f"❌ Interactive GUI not available: {e}")
         print("📦 Please install required packages:")
@@ -38,6 +47,14 @@ except ImportError as e:
         print("   !jupyter nbextension enable --py widgetsnbextension")
         print("   # Then restart kernel")
         return None
+    
+    def start_interactive_gui(*args, **kwargs):
+        """Fallback function when interactive GUI is not available"""
+        return create_quality_control(*args, **kwargs)
+    
+    def create_interactive_gui(*args, **kwargs):
+        """Fallback function when interactive GUI is not available"""
+        return create_quality_control(*args, **kwargs)
     
     def check_interactive_requirements():
         return False
@@ -49,7 +66,9 @@ __all__ = [
     "plot_correlation_matrix",
     "plot_quality_comparison",
     "create_summary_report",
-    "InteractiveDataCuration",
+    "MAVERICInteractiveQualityControl",
+    "create_quality_control",
+    "start_interactive_gui",
     "create_interactive_gui",
     "check_interactive_requirements",
     "INTERACTIVE_AVAILABLE"

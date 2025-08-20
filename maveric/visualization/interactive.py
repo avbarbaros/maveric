@@ -1,6 +1,8 @@
 """Interactive GUI components for MAVERIC data curation."""
 
 import os
+import json
+import glob
 import yaml
 import pandas as pd
 import numpy as np
@@ -20,56 +22,76 @@ except ImportError:
     WIDGETS_AVAILABLE = False
     print("⚠️ ipywidgets not available. Install with: pip install ipywidgets")
 
-from ..core.interfaces import RetrievalResult
-from .. import MAVERIC
-from ..config import MAVERICConfig
 
-
-class InteractiveDataCuration:
-    """Interactive GUI for MAVERIC data curation using ipywidgets"""
+class MAVERICInteractiveQualityControl:
+    """Interactive Quality Control system for MAVERIC data curation"""
     
-    def __init__(self, target_dataset: str, config_file: str):
+    def __init__(self, dataset_name='cifar10', data_path=None, config_file=None):
         """
-        Initialize the interactive data curation GUI
+        Initialize the MAVERIC Interactive Quality Control system
         
         Args:
-            target_dataset: Target dataset name (e.g., 'cifar10')
-            config_file: Path to MAVERIC configuration file
+            dataset_name: Target dataset name ('cifar10', 'cifar100', etc.)
+            data_path: Directory containing MAVERIC JSON files (auto-detected if None)
+            config_file: MAVERIC configuration file (optional)
         """
         if not WIDGETS_AVAILABLE:
             raise ImportError("ipywidgets is required for interactive GUI. Install with: pip install ipywidgets")
         
-        self.target_dataset = target_dataset.lower()
+        self.dataset_name = dataset_name.lower()
+        self.data_path = data_path
         self.config_file = config_file
-        self.config = None
-        self.maveric = None
-        self.retrieval_result = None
-        self.raw_data_dir = None
-        self.data_df = None
+        self.data = None
         self.filtered_data = None
         
-        # Default thresholds and weights
+        # Class names for different datasets
+        self.cifar10_class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
+                                   'dog', 'frog', 'horse', 'ship', 'truck']
+        
+        self.cifar100_class_names = ['apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle',
+                                    'bicycle', 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel',
+                                    'can', 'castle', 'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock',
+                                    'cloud', 'cockroach', 'couch', 'crab', 'crocodile', 'cup', 'dinosaur',
+                                    'dolphin', 'elephant', 'flatfish', 'forest', 'fox', 'girl', 'hamster',
+                                    'house', 'kangaroo', 'keyboard', 'lamp', 'lawn_mower', 'leopard', 'lion',
+                                    'lizard', 'lobster', 'man', 'maple_tree', 'motorcycle', 'mountain', 'mouse',
+                                    'mushroom', 'oak_tree', 'orange', 'orchid', 'otter', 'palm_tree', 'pear',
+                                    'pickup_truck', 'pine_tree', 'plain', 'plate', 'poppy', 'porcupine',
+                                    'possum', 'rabbit', 'raccoon', 'ray', 'road', 'rocket', 'rose',
+                                    'sea', 'seal', 'shark', 'shrew', 'skunk', 'skyscraper', 'snail', 'snake',
+                                    'spider', 'squirrel', 'streetcar', 'sunflower', 'sweet_pepper', 'table',
+                                    'tank', 'telephone', 'television', 'tiger', 'tractor', 'train', 'trout',
+                                    'tulip', 'turtle', 'wardrobe', 'whale', 'willow_tree', 'wolf', 'woman', 'worm']
+        
+        # Set class names based on dataset
+        if self.dataset_name == "cifar10":
+            self.class_names = self.cifar10_class_names
+        elif self.dataset_name == "cifar100":
+            self.class_names = self.cifar100_class_names
+        else:
+            # For other datasets, will auto-detect from data
+            self.class_names = []
+        
+        # Weights for calculating best class score
+        self.class_weights = {
+            'img2img': 0.40,
+            'txt2txt': 0.20,
+            'img2txt': 0.20,
+            'txt2img': 0.20
+        }
+        
+        # Default quality thresholds
         self.thresholds = {
-            'weighted_class_score': 0.350,
-            'consistency': 0.750,
+            'weighted_class_score': 0.400,
+            'consistency': 0.780,
             'resolution_score': 1.000,
-            'sharpness_score': 0.900,
-            'color_diversity': 0.800
+            'sharpness_score': 0.850,
+            'color_score': 0.750
         }
         
-        self.weights = {
-            'weighted_class_score': 1.0,
-            'consistency': 1.0,
-            'resolution_score': 1.0,
-            'sharpness_score': 1.0,
-            'color_diversity': 1.0
-        }
-        
-        # Widgets storage
-        self.threshold_widgets = {}
-        self.weight_widgets = {}
-        self.output_widget = widgets.Output()
-        self.filtered_count_widget = widgets.HTML()
+        # Auto-detect data path if not provided
+        if self.data_path is None:
+            self.data_path = self._detect_data_path()
         
         # Set matplotlib backend
         try:
@@ -78,131 +100,131 @@ class InteractiveDataCuration:
         except:
             pass
         
-        print(f"🎯 Initializing MAVERIC Interactive GUI")
-        print(f"📊 Dataset: {self.target_dataset.upper()}")
-        print(f"⚙️ Config: {self.config_file}")
+        print(f"🎯 MAVERIC Interactive Quality Control")
+        print(f"📊 Dataset: {self.dataset_name.upper()}")
+        print(f"📁 Data path: {self.data_path}")
         print("-" * 50)
         
-        # Initialize system
-        self._load_configuration()
-        self._initialize_maveric()
+        # Load and initialize data
         self._load_data()
         
-        if self.data_df is not None:
+        if self.data is not None:
             self._calculate_best_class()
-            self._create_gui()
+            print(f"✅ Loaded {len(self.data):,} samples")
+            print(f"📋 Classes: {len(set(self.data['label']))}")
         else:
-            print("❌ Failed to load data. Please check the raw data directory.")
+            print("❌ Failed to load data. Please check the data path.")
     
-    def _load_configuration(self):
-        """Load MAVERIC configuration from YAML file"""
-        try:
-            with open(self.config_file, 'r') as f:
-                self.config = yaml.safe_load(f)
-            
-            # Determine raw data directory
-            results_dir = self.config.get('results_dir', './results')
-            self.raw_data_dir = f"{results_dir}/{self.target_dataset}/raw"
-            
-            print(f"✅ Configuration loaded")
-            print(f"📁 Raw data: {self.raw_data_dir}")
-            
-            # Update thresholds and weights from config
-            config_thresholds = self.config.get('quality_thresholds', {})
-            config_weights = self.config.get('metric_weights', {})
-            
-            self.thresholds.update(config_thresholds)
-            self.weights.update(config_weights)
-            
-        except Exception as e:
-            print(f"❌ Error loading configuration: {e}")
-            self.config = {}
-            self.raw_data_dir = f"./results/{self.target_dataset}/raw"
-    
-    def _initialize_maveric(self):
-        """Initialize MAVERIC system"""
-        try:
-            print("🔧 Initializing MAVERIC...")
-            
-            maveric_config = MAVERICConfig(
-                cache_base_dir=self.config.get('cache_base_dir', './cache'),
-                clip_model=self.config.get('clip_model', 'ViT-B/32'),
-                batch_size=self.config.get('batch_size', 32),
-                device=self.config.get('device', 'auto'),
-                enable_image_cache=self.config.get('caching', {}).get('enable_image_cache', True),
-                default_thresholds=self.config.get('quality_thresholds', {}),
-                balance_min_samples=self.config.get('elevater', {}).get('quality_control', {}).get('min_samples_per_class', 15),
-                retrieval_rotation_size=self.config.get('retrieval_rotation_size', 1000),
-                enable_real_time_stats=False,
-                metric_weights=self.config.get('metric_weights', {}),
-                num_workers=self.config.get('performance', {}).get('num_workers', 4),
-                log_level='WARNING',
-                viz_save_figures=False
-            )
-            
-            self.maveric = MAVERIC(maveric_config)
-            print("✅ MAVERIC initialized")
-            
-        except Exception as e:
-            print(f"❌ Error initializing MAVERIC: {e}")
-            self.maveric = None
+    def _detect_data_path(self):
+        """Auto-detect data path based on common locations"""
+        possible_paths = [
+            f'/content/drive/MyDrive/MAVERIC_Cache',
+            f'/content/drive/MyDrive/MAVERIC/maveric_experiments/{self.dataset_name}/raw',
+            f'./results/{self.dataset_name}/raw',
+            f'/content/{self.dataset_name}_cache',
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                # Check if it contains JSON files for this dataset
+                pattern = os.path.join(path, f"{self.dataset_name}*maveric*.json")
+                if glob.glob(pattern):
+                    return path
+        
+        # Default fallback
+        return '/content/drive/MyDrive/MAVERIC_Cache'
     
     def _load_data(self):
-        """Load retrieval data"""
-        if not os.path.exists(self.raw_data_dir):
-            print(f"❌ Raw data directory not found: {self.raw_data_dir}")
+        """Load all MAVERIC JSON files from the data directory"""
+        print(f"🔍 Loading data from {self.data_path}")
+        
+        # Find JSON files matching the pattern
+        patterns = [
+            f"{self.dataset_name}*raw*maveric*.json",
+            f"{self.dataset_name}*maveric*.json",
+            f"*{self.dataset_name}*.json"
+        ]
+        
+        json_files = []
+        for pattern in patterns:
+            file_pattern = os.path.join(self.data_path, pattern)
+            files = glob.glob(file_pattern)
+            if files:
+                json_files = files
+                break
+        
+        if not json_files:
+            print(f"❌ No files found in {self.data_path}")
+            print(f"💡 Expected patterns: {patterns}")
             return
         
-        try:
-            print("🔍 Loading retrieval data...")
-            
-            self.retrieval_result = RetrievalResult.from_rotation_files(
-                dataset_name=self.target_dataset,
-                input_dir=self.raw_data_dir,
-                source_dataset="react-vl/react-retrieval-datasets"
-            )
-            
-            self.data_df = self.retrieval_result.to_dataframe()
-            print(f"✅ Loaded {len(self.data_df):,} samples")
-            
-        except Exception as e:
-            print(f"❌ Error loading data: {e}")
-            self.retrieval_result = None
+        print(f"📁 Found {len(json_files)} dataset files")
+        
+        # Load and combine all data
+        all_data = []
+        for file_path in json_files:
+            try:
+                with open(file_path, 'r') as f:
+                    file_data = json.load(f)
+                    if isinstance(file_data, list):
+                        all_data.extend(file_data)
+                    else:
+                        all_data.append(file_data)
+                print(f"✅ Loaded {os.path.basename(file_path)}")
+            except Exception as e:
+                print(f"❌ Error loading {file_path}: {e}")
+        
+        if all_data:
+            self.data = pd.DataFrame(all_data)
+            self.filtered_data = self.data.copy()
+        else:
+            print("❌ No data loaded")
     
     def _calculate_best_class(self):
-        """Calculate best class and scores for each sample"""
-        if self.data_df is None:
+        """Calculate the best class for each item using weighted scores"""
+        if self.data is None:
             return
         
         print("🧮 Calculating best class scores...")
         
-        # Get class columns
-        class_columns = [col for col in self.data_df.columns if col.startswith('Class_') and '_hybrid_score' in col]
+        # Auto-detect class names if not predefined
+        if not self.class_names:
+            class_columns = [col for col in self.data.columns if col.startswith('Class_')]
+            self.class_names = list(set([col.split('_')[1] for col in class_columns]))
+            print(f"📋 Auto-detected classes: {len(self.class_names)}")
         
-        if not class_columns:
-            print("⚠️ No class hybrid scores found")
-            return
-        
-        # Calculate best class for each sample
         best_classes = []
         weighted_scores = []
         consistency_scores = []
         
-        for idx, row in self.data_df.iterrows():
+        for _, row in self.data.iterrows():
             class_scores = {}
             
-            # Find best class based on hybrid scores
-            for col in class_columns:
-                if not pd.isna(row[col]):
-                    class_name = col.replace('Class_', '').replace('_hybrid_score', '')
-                    class_scores[class_name] = row[col]
+            for class_name in self.class_names:
+                weighted_score = 0.0
+                valid_weights_sum = 0.0
+                
+                # Calculate weighted score across sub-metrics
+                for metric, weight in self.class_weights.items():
+                    col_name = f"Class_{class_name}_{metric}"
+                    
+                    if col_name in row and not pd.isna(row[col_name]):
+                        weighted_score += row[col_name] * weight
+                        valid_weights_sum += weight
+                
+                # Normalize score
+                if valid_weights_sum > 0:
+                    weighted_score /= valid_weights_sum
+                
+                class_scores[class_name] = weighted_score
             
+            # Find best class
             if class_scores:
                 best_class = max(class_scores.items(), key=lambda x: x[1])
                 best_classes.append(best_class[0])
                 weighted_scores.append(best_class[1])
                 
-                # Get consistency for best class
+                # Get consistency score
                 consistency_col = f"Class_{best_class[0]}_consistency"
                 consistency_scores.append(row.get(consistency_col, 0.8))
             else:
@@ -210,24 +232,41 @@ class InteractiveDataCuration:
                 weighted_scores.append(0.0)
                 consistency_scores.append(0.0)
         
-        # Add columns to dataframe
-        self.data_df['label'] = best_classes
-        self.data_df['weighted_class_score'] = weighted_scores
-        self.data_df['consistency'] = consistency_scores
+        # Add calculated columns
+        self.data['label'] = best_classes
+        self.data['weighted_class_score'] = weighted_scores
+        self.data['consistency'] = consistency_scores
         
-        # Initialize filtered data
-        self.filtered_data = self.data_df.copy()
-        
-        print(f"✅ Calculated scores for all samples")
-        print(f"📊 Found {len(set(best_classes))} unique classes")
+        print(f"✅ Calculated best class scores")
     
-    def _apply_thresholds(self):
+    def set_threshold(self, metric, value):
+        """Set a threshold for a quality metric"""
+        if metric in self.thresholds:
+            self.thresholds[metric] = value
+            print(f"🎛️ Set {metric} threshold to {value:.3f}")
+        else:
+            print(f"❌ Unknown metric: {metric}")
+            print(f"Available: {list(self.thresholds.keys())}")
+    
+    def set_class_weight(self, metric, value):
+        """Set a weight for a class metric"""
+        if metric in self.class_weights:
+            self.class_weights[metric] = value
+            print(f"⚖️ Set {metric} weight to {value:.2f}")
+            # Recalculate best class scores
+            self._calculate_best_class()
+        else:
+            print(f"❌ Unknown metric: {metric}")
+            print(f"Available: {list(self.class_weights.keys())}")
+    
+    def apply_thresholds(self):
         """Apply current thresholds to filter the data"""
-        if self.data_df is None:
+        if self.data is None:
+            print("❌ No data loaded")
             return 0
         
         # Start with all data
-        self.filtered_data = self.data_df.copy()
+        self.filtered_data = self.data.copy()
         
         # Apply each threshold
         for metric, threshold in self.thresholds.items():
@@ -236,192 +275,25 @@ class InteractiveDataCuration:
                     self.filtered_data[metric] >= threshold
                 ]
         
-        return len(self.filtered_data)
+        count = len(self.filtered_data)
+        retention = count / len(self.data) * 100
+        print(f"📊 Filtered: {count:,} samples ({retention:.1f}% retention)")
+        return count
     
-    def _create_gui(self):
-        """Create the interactive GUI"""
-        print("🎨 Creating interactive GUI...")
-        
-        # Create widgets
-        self._create_threshold_widgets()
-        self._create_weight_widgets()
-        
-        # Create buttons
-        apply_button = widgets.Button(
-            description='Apply Settings',
-            button_style='primary',
-            icon='check',
-            layout=widgets.Layout(width='150px')
-        )
-        
-        visualize_button = widgets.Button(
-            description='Show Samples',
-            button_style='info',
-            icon='image',
-            layout=widgets.Layout(width='150px')
-        )
-        
-        save_button = widgets.Button(
-            description='Save Config',
-            button_style='success',
-            icon='save',
-            layout=widgets.Layout(width='150px')
-        )
-        
-        # Connect callbacks
-        apply_button.on_click(self._on_apply_clicked)
-        visualize_button.on_click(self._on_visualize_clicked)
-        save_button.on_click(self._on_save_clicked)
-        
-        # Create tabs
-        tab = widgets.Tab()
-        tab.children = [
-            widgets.VBox(list(self.threshold_widgets.values())),
-            widgets.VBox(list(self.weight_widgets.values()))
-        ]
-        tab.set_title(0, 'Quality Thresholds')
-        tab.set_title(1, 'Metric Weights')
-        
-        # Initial filter count
-        count = self._apply_thresholds()
-        self.filtered_count_widget.value = f"<h4>📊 Filtered: {count:,} samples ({count/len(self.data_df)*100:.1f}%)</h4>"
-        
-        # Main layout
-        header = widgets.HTML(f"""
-        <div style="background-color: #f0f8ff; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
-            <h2 style="margin: 0; color: #2c3e50;">🎛️ MAVERIC Interactive Data Curation</h2>
-            <p style="margin: 5px 0 0 0; color: #7f8c8d;">
-                <b>Dataset:</b> {self.target_dataset.upper()} | 
-                <b>Total Samples:</b> {len(self.data_df):,} |
-                <b>Classes:</b> {len(set(self.data_df['label']))}
-            </p>
-        </div>
-        """)
-        
-        button_box = widgets.HBox([apply_button, visualize_button, save_button], 
-                                 layout=widgets.Layout(justify_content='center', margin='10px'))
-        
-        main_layout = widgets.VBox([
-            header,
-            tab,
-            self.filtered_count_widget,
-            button_box,
-            self.output_widget
-        ])
-        
-        # Display GUI
-        display(main_layout)
-        
-        # Show initial visualizations
-        with self.output_widget:
-            self._visualize_distributions()
-    
-    def _create_threshold_widgets(self):
-        """Create threshold slider widgets"""
-        # Only create sliders for metrics that exist in the data
-        metrics_in_data = {}
-        for metric, default_value in self.thresholds.items():
-            if metric in self.data_df.columns:
-                metrics_in_data[metric] = default_value
-        
-        # Update thresholds to only include available metrics
-        self.thresholds = metrics_in_data
-        
-        for metric, default_value in self.thresholds.items():
-            # Get data range
-            max_val = float(self.data_df[metric].max())
-            min_val = float(self.data_df[metric].min())
-            
-            # Adjust step
-            step = 0.001
-            if metric == 'resolution_score':
-                step = 0.01
-            
-            # Create slider
-            self.threshold_widgets[metric] = widgets.FloatSlider(
-                value=max(min_val, min(default_value, max_val)),  # Ensure value is in range
-                min=min_val,
-                max=max_val,
-                step=step,
-                description=f'{metric.replace("_", " ").title()}:',
-                disabled=False,
-                continuous_update=False,
-                orientation='horizontal',
-                readout=True,
-                readout_format='.3f',
-                layout=widgets.Layout(width='600px'),
-                style={'description_width': '200px'}
-            )
-    
-    def _create_weight_widgets(self):
-        """Create weight slider widgets"""
-        for metric in self.thresholds.keys():
-            default_weight = self.weights.get(metric, 1.0)
-            
-            self.weight_widgets[metric] = widgets.FloatSlider(
-                value=default_weight,
-                min=0.1,
-                max=3.0,
-                step=0.1,
-                description=f'{metric.replace("_", " ").title()}:',
-                disabled=False,
-                continuous_update=False,
-                orientation='horizontal',
-                readout=True,
-                readout_format='.1f',
-                layout=widgets.Layout(width='600px'),
-                style={'description_width': '200px'}
-            )
-    
-    def _on_apply_clicked(self, button):
-        """Handle apply button click"""
-        # Update thresholds and weights from widgets
-        for metric, widget in self.threshold_widgets.items():
-            self.thresholds[metric] = widget.value
-        
-        for metric, widget in self.weight_widgets.items():
-            self.weights[metric] = widget.value
-        
-        # Apply thresholds
-        count = self._apply_thresholds()
-        retention = count / len(self.data_df) * 100
-        self.filtered_count_widget.value = f"<h4>📊 Filtered: {count:,} samples ({retention:.1f}%)</h4>"
-        
-        # Update visualizations
-        with self.output_widget:
-            clear_output()
-            print(f"✅ Applied settings: {count:,} samples retained ({retention:.1f}%)")
-            self._visualize_distributions()
-    
-    def _on_visualize_clicked(self, button):
-        """Handle visualize button click"""
-        with self.output_widget:
-            clear_output()
-            self._visualize_sample_images()
-    
-    def _on_save_clicked(self, button):
-        """Handle save button click"""
-        with self.output_widget:
-            clear_output()
-            success = self._save_configuration()
-            if success:
-                print("✅ Configuration saved successfully!")
-                print(f"📁 Updated: {self.config_file}")
-                print(f"💾 Backup: {self.config_file}.backup")
-                print(f"\n🚀 Next Steps:")
-                print(f"Run data curation: python 02_data_curation.py -d {self.target_dataset} -c {self.config_file}")
-            else:
-                print("❌ Failed to save configuration")
-    
-    def _visualize_distributions(self):
-        """Visualize metric distributions"""
-        if self.filtered_data is None:
-            print("No data to visualize")
+    def visualize_distributions(self, metrics=None):
+        """Visualize metric distributions with thresholds"""
+        if self.data is None:
+            print("❌ No data loaded")
             return
         
-        metrics = list(self.thresholds.keys())
+        if metrics is None:
+            metrics = ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score', 'color_score']
+        
+        # Filter valid metrics
+        metrics = [m for m in metrics if m in self.data.columns]
+        
         if not metrics:
-            print("No metrics to visualize")
+            print("❌ No valid metrics found")
             return
         
         # Create subplots
@@ -433,101 +305,83 @@ class InteractiveDataCuration:
         
         for i, metric in enumerate(metrics):
             ax = axes[i]
+            data = self.data[metric].dropna()
             
-            # Get data
-            original_data = self.data_df[metric].dropna()
-            filtered_data = self.filtered_data[metric].dropna()
-            
-            if len(original_data) == 0:
+            if len(data) == 0:
                 continue
             
-            # Plot histograms
-            ax.hist(original_data, bins=50, alpha=0.5, label='Original', color='lightblue', density=True)
-            if len(filtered_data) > 0:
-                ax.hist(filtered_data, bins=30, alpha=0.8, label='Filtered', color='green', density=True)
+            # Statistics
+            mean_val = data.mean()
+            std_val = data.std()
+            threshold = self.thresholds.get(metric, 0)
             
-            # Add threshold line
-            threshold = self.thresholds[metric]
+            # Histogram
+            ax.hist(data, bins=50, alpha=0.7, color='skyblue', edgecolor='black')
+            
+            # Statistical lines
             ax.axvline(threshold, color='red', linestyle='--', linewidth=2, label=f'Threshold: {threshold:.3f}')
-            
-            # Add statistics
-            mean_val = original_data.mean()
-            median_val = original_data.median()
-            ax.axvline(mean_val, color='orange', linestyle='-', alpha=0.7, label=f'Mean: {mean_val:.3f}')
-            ax.axvline(median_val, color='purple', linestyle=':', alpha=0.7, label=f'Median: {median_val:.3f}')
+            ax.axvline(mean_val, color='green', linestyle='-', linewidth=2, label=f'Mean: {mean_val:.3f}')
+            ax.axvline(mean_val - std_val, color='blue', linestyle=':', linewidth=1, label=f'Mean±Std')
+            ax.axvline(mean_val + std_val, color='blue', linestyle=':', linewidth=1)
             
             # Formatting
-            ax.set_xlabel(metric.replace('_', ' ').title(), fontsize=12)
-            ax.set_ylabel('Density', fontsize=12)
-            ax.set_title(f'Distribution of {metric.replace("_", " ").title()}', fontsize=14, fontweight='bold')
+            ax.set_title(f'Distribution of {metric.replace("_", " ").title()}', fontweight='bold')
+            ax.set_xlabel('Value')
+            ax.set_ylabel('Count')
             ax.legend()
             ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
         plt.show()
-        
-        # Class distribution
-        if 'label' in self.filtered_data.columns and len(self.filtered_data) > 0:
-            plt.figure(figsize=(12, 6))
-            class_counts = self.filtered_data['label'].value_counts().head(20)
-            
-            bars = plt.bar(range(len(class_counts)), class_counts.values, color='steelblue', alpha=0.7)
-            plt.xticks(range(len(class_counts)), class_counts.index, rotation=45, ha='right')
-            plt.xlabel('Class', fontsize=12)
-            plt.ylabel('Count', fontsize=12)
-            plt.title('Class Distribution in Filtered Data', fontsize=14, fontweight='bold')
-            plt.grid(True, alpha=0.3, axis='y')
-            
-            # Add value labels on bars
-            for bar, count in zip(bars, class_counts.values):
-                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                        f'{count}', ha='center', va='bottom', fontsize=9)
-            
-            plt.tight_layout()
-            plt.show()
     
-    def _visualize_sample_images(self, n_samples=6):
+    def visualize_sample_images(self, n_samples=6, random_seed=42):
         """Visualize sample images from filtered data"""
         if self.filtered_data is None or len(self.filtered_data) == 0:
-            print("No filtered data available")
+            print("❌ No filtered data available")
             return
+        
+        # Set random seed
+        if random_seed is not None:
+            np.random.seed(random_seed)
         
         # Select samples
         if len(self.filtered_data) <= n_samples:
             samples = self.filtered_data
         else:
-            samples = self.filtered_data.sample(n=n_samples, random_state=42)
+            sample_indices = np.random.choice(len(self.filtered_data), n_samples, replace=False)
+            samples = self.filtered_data.iloc[sample_indices]
         
         # Create figure
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
         axes = axes.flatten()
         
-        for i, (idx, row) in enumerate(samples.iterrows()):
+        for i, (_, row) in enumerate(samples.iterrows()):
             if i >= len(axes):
                 break
-                
+            
             ax = axes[i]
             
             try:
                 # Load image
-                if 'url' in row and pd.notna(row['url']):
-                    response = requests.get(row['url'], timeout=10)
+                url = row.get('url', '')
+                if url:
+                    response = requests.get(url, timeout=5)
                     image = Image.open(BytesIO(response.content)).convert('RGB')
                     ax.imshow(image)
                     
-                    # Create metrics text
-                    metrics_text = []
-                    metrics_text.append(f"ID: {row.get('id', i)}")
-                    metrics_text.append(f"Class: {row.get('label', 'unknown')}")
+                    # Display metrics
+                    label = row.get('label', 'unknown')
+                    metrics_text = f"ID: {row.get('id', i)}\n"
+                    metrics_text += f"Label: {label}\n"
+                    metrics_text += f"Score: {row.get('weighted_class_score', 0):.3f}\n"
+                    metrics_text += f"Consistency: {row.get('consistency', 0):.3f}\n"
+                    metrics_text += f"Resolution: {row.get('resolution_score', 0):.2f}\n"
+                    metrics_text += f"Sharpness: {row.get('sharpness_score', 0):.3f}"
                     
-                    for metric in ['weighted_class_score', 'consistency', 'resolution_score', 'sharpness_score']:
-                        if metric in row:
-                            metrics_text.append(f"{metric.replace('_', ' ').title()}: {row[metric]:.3f}")
-                    
-                    ax.set_title('\n'.join(metrics_text), fontsize=9)
+                    ax.set_title(metrics_text, fontsize=9)
                 else:
                     ax.text(0.5, 0.5, "No image URL", ha='center', va='center')
-                    
+            
             except Exception as e:
                 ax.text(0.5, 0.5, f"Error loading image:\n{str(e)[:30]}...", 
                        ha='center', va='center', transform=ax.transAxes)
@@ -541,42 +395,274 @@ class InteractiveDataCuration:
         plt.tight_layout()
         plt.show()
     
-    def _save_configuration(self):
-        """Save current settings to configuration file"""
+    def save_filtered_data(self, output_file=None):
+        """Save filtered data to JSON file"""
+        if self.filtered_data is None:
+            print("❌ No filtered data available")
+            return None
+        
+        if output_file is None:
+            output_file = os.path.join(self.data_path, f"{self.dataset_name}_filtered_dataset.json")
+        
         try:
-            # Read current configuration
-            with open(self.config_file, 'r') as f:
-                config_data = yaml.safe_load(f)
+            # Create simplified output format
+            simplified_data = []
             
-            # Update thresholds and weights
-            config_data['quality_thresholds'] = self.thresholds
-            config_data['metric_weights'] = self.weights
+            for i, (_, row) in enumerate(self.filtered_data.iterrows()):
+                item = {
+                    'id': int(row.get('id', i)),
+                    'url': row.get('url', ''),
+                    'label': row.get('label', ''),
+                    'text': row.get('text', ''),
+                    'weighted_class_score': float(row.get('weighted_class_score', 0)),
+                    'consistency': float(row.get('consistency', 0))
+                }
+                simplified_data.append(item)
             
-            # Create backup
-            backup_file = f"{self.config_file}.backup"
-            with open(backup_file, 'w') as f:
-                yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
+            # Save to JSON
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            with open(output_file, 'w') as f:
+                json.dump(simplified_data, f, indent=2)
+            
+            print(f"💾 Saved {len(simplified_data)} filtered items to {output_file}")
+            return output_file
+        
+        except Exception as e:
+            print(f"❌ Error saving data: {e}")
+            return None
+    
+    def save_configuration(self, config_file=None):
+        """Save current thresholds and weights to MAVERIC configuration file"""
+        if config_file is None:
+            config_file = self.config_file
+        
+        if config_file is None:
+            # Try to find config file in common locations
+            possible_configs = [
+                'maveric_config.yaml',
+                '/content/drive/MyDrive/MAVERIC/maveric_experiments/maveric_config.yaml',
+                './experiments/maveric_config.yaml',
+                '../maveric_config.yaml'
+            ]
+            
+            for config_path in possible_configs:
+                if os.path.exists(config_path):
+                    config_file = config_path
+                    break
+        
+        if config_file is None or not os.path.exists(config_file):
+            print("❌ Configuration file not found. Please provide config file path.")
+            return False
+        
+        try:
+            # Load existing configuration
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # Update quality thresholds
+            if 'quality_metrics' not in config:
+                config['quality_metrics'] = {}
+            
+            config['quality_metrics']['thresholds'] = self.thresholds.copy()
+            
+            # Update class weights  
+            if 'class_scoring' not in config:
+                config['class_scoring'] = {}
+            
+            config['class_scoring']['weights'] = self.class_weights.copy()
             
             # Save updated configuration
-            with open(self.config_file, 'w') as f:
-                yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+            with open(config_file, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, indent=2)
+            
+            print(f"💾 Configuration saved to: {config_file}")
+            print("📊 Saved thresholds:")
+            for metric, threshold in self.thresholds.items():
+                print(f"   • {metric}: {threshold:.3f}")
+            print("⚖️ Saved class weights:")
+            for metric, weight in self.class_weights.items():
+                print(f"   • {metric}: {weight:.2f}")
             
             return True
             
         except Exception as e:
-            print(f"Error saving configuration: {e}")
+            print(f"❌ Error saving configuration: {e}")
             return False
+    
+    def create_interactive_gui(self):
+        """Create interactive GUI with sliders and controls"""
+        if not WIDGETS_AVAILABLE:
+            print("❌ ipywidgets not available. Install with: pip install ipywidgets")
+            return
+        
+        # Create threshold sliders
+        threshold_widgets = {}
+        for metric, default_value in self.thresholds.items():
+            if metric in self.data.columns:
+                data_range = self.data[metric].dropna()
+                max_value = float(data_range.max())
+                min_value = float(data_range.min())
+                
+                threshold_widgets[metric] = widgets.FloatSlider(
+                    value=max(min_value, min(default_value, max_value)),
+                    min=min_value,
+                    max=max_value,
+                    step=0.001 if metric != 'resolution_score' else 0.01,
+                    description=f'{metric.replace("_", " ").title()}:',
+                    continuous_update=False,
+                    readout_format='.3f',
+                    layout=widgets.Layout(width='500px'),
+                    style={'description_width': '180px'}
+                )
+        
+        # Create weight sliders
+        weight_widgets = {}
+        for metric, default_value in self.class_weights.items():
+            weight_widgets[metric] = widgets.FloatSlider(
+                value=default_value,
+                min=0.0,
+                max=1.0,
+                step=0.01,
+                description=f'{metric.replace("_", " ").title()}:',
+                continuous_update=False,
+                readout_format='.2f',
+                layout=widgets.Layout(width='500px'),
+                style={'description_width': '180px'}
+            )
+        
+        # Create tabs
+        tab = widgets.Tab()
+        tab.children = [
+            widgets.VBox(list(threshold_widgets.values())),
+            widgets.VBox(list(weight_widgets.values()))
+        ]
+        tab.set_title(0, 'Quality Thresholds')
+        tab.set_title(1, 'Class Weights')
+        
+        # Create buttons
+        apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
+        visualize_button = widgets.Button(description='Show Samples', button_style='info', icon='image')
+        save_data_button = widgets.Button(description='Save Data', button_style='success', icon='save')
+        save_config_button = widgets.Button(description='Save Config', button_style='warning', icon='cog')
+        
+        # Output widget for results
+        output = widgets.Output()
+        filtered_count = widgets.HTML(value=f"<h4>Filtered data: {len(self.filtered_data):,} items</h4>")
+        
+        # Define callbacks
+        def on_apply_clicked(b):
+            with output:
+                clear_output()
+                
+                # Update thresholds
+                for metric, widget in threshold_widgets.items():
+                    self.set_threshold(metric, widget.value)
+                
+                # Update weights
+                for metric, widget in weight_widgets.items():
+                    self.set_class_weight(metric, widget.value)
+                
+                # Apply filters
+                count = self.apply_thresholds()
+                filtered_count.value = f"<h4>Filtered data: {count:,} items</h4>"
+                
+                # Show visualizations
+                self.visualize_distributions()
+        
+        def on_visualize_clicked(b):
+            with output:
+                clear_output()
+                self.visualize_sample_images()
+        
+        def on_save_data_clicked(b):
+            with output:
+                clear_output()
+                save_path = self.save_filtered_data()
+                if save_path:
+                    print(f"✅ Data saved to: {save_path}")
+        
+        def on_save_config_clicked(b):
+            with output:
+                clear_output()
+                if self.config_file is None:
+                    print("❌ No configuration file specified")
+                    print("💡 Please provide config_file parameter when creating the GUI")
+                    print("   Example: start_interactive_gui('cifar10', '/path/to/maveric_config.yaml')")
+                    return
+                
+                success = self.save_configuration()
+                if success:
+                    print(f"✅ Configuration saved successfully!")
+                else:
+                    print(f"❌ Failed to save configuration")
+        
+        # Connect callbacks
+        apply_button.on_click(on_apply_clicked)
+        visualize_button.on_click(on_visualize_clicked)
+        save_data_button.on_click(on_save_data_clicked)
+        save_config_button.on_click(on_save_config_clicked)
+        
+        # Layout
+        button_box = widgets.HBox([apply_button, visualize_button, save_data_button, save_config_button])
+        
+        # Display GUI
+        display(widgets.VBox([
+            widgets.HTML(f"<h2>🎛️ MAVERIC Quality Control - {self.dataset_name.upper()}</h2>"),
+            widgets.HTML(f"<p><b>Total samples:</b> {len(self.data):,} | <b>Classes:</b> {len(set(self.data['label']))}</p>"),
+            tab,
+            filtered_count,
+            button_box,
+            output
+        ]))
+        
+        # Show initial distribution
+        with output:
+            self.visualize_distributions()
 
 
-def create_interactive_gui(dataset_name, config_file):
+# Convenience functions for easy use
+def create_quality_control(dataset_name='cifar10', data_path=None, config_file=None):
     """
-    Create MAVERIC interactive data curation GUI
+    Create MAVERIC Quality Control interface
     
     Args:
-        dataset_name: Target dataset name (e.g., 'cifar10')
-        config_file: Path to MAVERIC configuration file
+        dataset_name: Target dataset ('cifar10', 'cifar100', etc.)
+        data_path: Path to data directory (auto-detected if None)
+        config_file: MAVERIC configuration file path (required for saving config)
     
     Returns:
-        InteractiveDataCuration instance
+        MAVERICInteractiveQualityControl instance
     """
-    return InteractiveDataCuration(dataset_name, config_file)
+    if config_file is None:
+        print("⚠️ Warning: No config file provided. Configuration saving will be disabled.")
+        print("💡 Usage: create_quality_control('cifar10', config_file='/path/to/maveric_config.yaml')")
+    
+    return MAVERICInteractiveQualityControl(dataset_name, data_path, config_file)
+
+def start_interactive_gui(dataset_name, config_file, data_path=None):
+    """
+    Start interactive GUI for quality control
+    
+    Args:
+        dataset_name: Target dataset ('cifar10', 'cifar100', etc.)  
+        config_file: MAVERIC configuration file path (required)
+        data_path: Path to data directory (auto-detected if None)
+    
+    Returns:
+        MAVERICInteractiveQualityControl instance with GUI displayed
+    
+    Example:
+        gui = start_interactive_gui('cifar10', '/content/drive/MyDrive/MAVERIC/maveric_config.yaml')
+    """
+    if config_file is None:
+        raise ValueError("config_file parameter is required. Please provide path to maveric_config.yaml")
+    
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f"Configuration file not found: {config_file}")
+    
+    qc = MAVERICInteractiveQualityControl(dataset_name, data_path, config_file)
+    if qc.data is not None:
+        qc.create_interactive_gui()
+    else:
+        print("❌ Failed to load data. Check your data path and dataset name.")
+    return qc
