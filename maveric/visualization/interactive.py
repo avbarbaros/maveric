@@ -93,6 +93,10 @@ class MAVERICInteractiveQualityControl:
         if self.data_path is None:
             self.data_path = self._detect_data_path()
         
+        # Load config file to get proper results directory if available
+        if self.config_file and os.path.exists(self.config_file):
+            self._load_config_and_update_paths()
+        
         # Set matplotlib backend
         try:
             import matplotlib
@@ -118,9 +122,9 @@ class MAVERICInteractiveQualityControl:
     def _detect_data_path(self):
         """Auto-detect data path based on common locations"""
         possible_paths = [
-            f'/content/drive/MyDrive/MAVERIC_Cache',
             f'/content/drive/MyDrive/MAVERIC/maveric_experiments/{self.dataset_name}/raw',
             f'./results/{self.dataset_name}/raw',
+            f'/content/drive/MyDrive/MAVERIC_Cache',
             f'/content/{self.dataset_name}_cache',
         ]
         
@@ -132,7 +136,35 @@ class MAVERICInteractiveQualityControl:
                     return path
         
         # Default fallback
-        return '/content/drive/MyDrive/MAVERIC_Cache'
+        return '/content/drive/MyDrive/MAVERIC/maveric_experiments'
+    
+    def _load_config_and_update_paths(self):
+        """Load config file and update data path based on results_dir"""
+        try:
+            with open(self.config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # Get results_dir from config
+            results_dir = config.get('results_dir', '/content/drive/MyDrive/MAVERIC/maveric_experiments')
+            
+            # Construct the correct data path: results_dir/dataset_name/raw
+            config_data_path = os.path.join(results_dir, self.dataset_name, 'raw')
+            
+            # Check if the config-based path exists and has data
+            if os.path.exists(config_data_path):
+                pattern = os.path.join(config_data_path, f"{self.dataset_name}*maveric*.json")
+                if glob.glob(pattern):
+                    self.data_path = config_data_path
+                    print(f"📁 Using data path from config: {config_data_path}")
+                    return
+            
+            # Fallback to original detected path
+            print(f"⚠️ Config data path not found: {config_data_path}")
+            print(f"📁 Using detected path: {self.data_path}")
+            
+        except Exception as e:
+            print(f"⚠️ Could not load config for path detection: {e}")
+            print(f"📁 Using detected path: {self.data_path}")
     
     def _load_data(self):
         """Load all MAVERIC JSON files from the data directory"""
@@ -402,7 +434,12 @@ class MAVERICInteractiveQualityControl:
             return None
         
         if output_file is None:
-            output_file = os.path.join(self.data_path, f"{self.dataset_name}_filtered_dataset.json")
+            # Save to parent directory of raw data (remove /raw from path)
+            if self.data_path.endswith('/raw'):
+                base_dir = os.path.dirname(self.data_path)
+            else:
+                base_dir = self.data_path
+            output_file = os.path.join(base_dir, f"{self.dataset_name}_filtered_dataset.json")
         
         try:
             # Create simplified output format
@@ -441,6 +478,7 @@ class MAVERICInteractiveQualityControl:
             possible_configs = [
                 'maveric_config.yaml',
                 '/content/drive/MyDrive/MAVERIC/maveric_experiments/maveric_config.yaml',
+                '/content/drive/MyDrive/MAVERIC/repo/maveric/experiments/maveric_config.yaml',
                 './experiments/maveric_config.yaml',
                 '../maveric_config.yaml'
             ]

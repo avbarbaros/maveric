@@ -247,32 +247,6 @@ def test_installation():
         print("ℹ️  Try importing maveric in a new Python session")
         return False
 
-def test_interactive_gui():
-    """Test MAVERIC interactive GUI availability."""
-    print("🧪 Testing interactive GUI...")
-    
-    try:
-        from maveric.visualization import INTERACTIVE_AVAILABLE, check_interactive_requirements
-        print("✅ MAVERIC visualization module imported")
-        
-        if INTERACTIVE_AVAILABLE:
-            print("✅ Interactive GUI is available")
-            
-            if check_interactive_requirements():
-                print("✅ All GUI requirements satisfied")
-                return True
-            else:
-                print("⚠️ Some GUI requirements missing")
-                return False
-        else:
-            print("❌ Interactive GUI not available")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Interactive GUI test failed: {e}")
-        return False
-
-
 def test_cache_access(config):
     """Test read/write access to cache directories."""
     print("🧪 Testing cache access...")
@@ -316,46 +290,6 @@ def show_summary(config):
     print(f"🤖 CLIP model: {config['clip_model']}")
     print(f"📦 Batch size: {config['batch_size']}")
     print(f"\n🎯 Ready for MAVERIC experiments!")
-    print("=" * 60)
-
-def show_gui_instructions(gui_available):
-    """Display instructions for using the interactive GUI."""
-    print("\n" + "🎛️" + " INTERACTIVE DATA CURATION GUI " + "🎛️")
-    print("=" * 60)
-    
-    if gui_available:
-        print("✅ Interactive GUI is ready to use!")
-        print("\n📋 To start the interactive data curation GUI:")
-        print("```python")
-        print("from maveric.visualization.interactive import start_interactive_gui")
-        print("gui = start_interactive_gui('cifar10', '/content/drive/MyDrive/MAVERIC/maveric_config.yaml')")
-        print("```")
-        print("\n📋 Or create quality control instance:")
-        print("```python")
-        print("from maveric.visualization.interactive import create_quality_control")
-        print("qc = create_quality_control('cifar10', config_file='/path/to/maveric_config.yaml')")
-        print("qc.create_interactive_gui()")
-        print("```")
-        print("\n🎯 Features:")
-        print("• Interactive sliders for quality thresholds")
-        print("• Real-time visualization updates")
-        print("• Sample image gallery")
-        print("• Configuration saving")
-        print("• Live filtering statistics")
-    else:
-        print("⚠️ Interactive GUI setup incomplete")
-        print("\n🔧 To fix GUI issues:")
-        print("1. Restart your runtime (Runtime > Restart runtime)")
-        print("2. Re-run this setup script")
-        print("3. If issues persist, manually install:")
-        print("   !pip install ipywidgets")
-        print("   !jupyter nbextension enable --py widgetsnbextension")
-        print("\n💡 You can still use MAVERIC without the interactive GUI")
-    
-    print("\n📖 Next steps:")
-    print("1. Run data retrieval: python 01_data_retrieval.py")
-    print("2. Use interactive GUI to determine thresholds")
-    print("3. Run data curation: python 02_data_curation.py")
     print("=" * 60)
 
 def parse_arguments():
@@ -421,21 +355,12 @@ def main():
     install_interactive_packages()
     setup_jupyter_widgets()
     
-    # Testing and validation
-    # if not test_installation():
-    #     print("❌ Installation test failed")
-    #     return False
-    
     if not test_cache_access(config):
         print("❌ Cache access test failed")
         return False
     
-    # Test interactive GUI
-    gui_available = test_interactive_gui()
-    
     # Show completion summary
     show_summary(config)
-    show_gui_instructions(gui_available)
     return True
 
 if __name__ == "__main__":
