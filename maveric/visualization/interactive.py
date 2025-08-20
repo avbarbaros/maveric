@@ -787,7 +787,7 @@ class MAVERICInteractiveQualityControl:
         # Create buttons
         apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
         visualize_button = widgets.Button(description='Show Samples', button_style='info', icon='image')
-        compare_button = widgets.Button(description='Class Comparison', button_style='secondary', icon='bar-chart')
+        compare_button = widgets.Button(description='Class Comparison', button_style='', icon='bar-chart')
         save_data_button = widgets.Button(description='Save Data', button_style='success', icon='save')
         save_config_button = widgets.Button(description='Save Config', button_style='warning', icon='cog')
         
