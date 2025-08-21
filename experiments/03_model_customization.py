@@ -32,16 +32,58 @@ def load_config_file(config_path: str) -> Dict:
         return None
 
 
-def load_training_dataset(file_path: str) -> Optional[List[Dict]]:
-    """Load training dataset JSON file."""
+def load_training_dataset(input_path: str) -> Optional[List[Dict]]:
+    """Load training dataset from directory or single JSON file."""
     try:
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-        print(f"✅ Training dataset loaded from: {file_path}")
-        print(f"📊 Total training samples: {len(data)}")
-        return data
+        if os.path.isdir(input_path):
+            # Load from directory containing multiple JSON files
+            return load_training_dataset_from_directory(input_path)
+        else:
+            # Load single JSON file (backward compatibility)
+            with open(input_path, 'r') as f:
+                data = json.load(f)
+            print(f"✅ Training dataset loaded from: {input_path}")
+            print(f"📊 Total training samples: {len(data)}")
+            return data
     except Exception as e:
         print(f"❌ Error loading training dataset: {e}")
+        return None
+
+
+def load_training_dataset_from_directory(directory_path: str) -> Optional[List[Dict]]:
+    """Load and combine multiple training dataset JSON files from directory."""
+    try:
+        directory = Path(directory_path)
+        json_files = list(directory.glob("*training*maveric*.json"))
+        
+        if not json_files:
+            print(f"❌ No training JSON files found in directory: {directory_path}")
+            return None
+        
+        print(f"🔍 Found {len(json_files)} training JSON files in directory: {directory_path}")
+        
+        all_data = []
+        for json_file in sorted(json_files):
+            try:
+                with open(json_file, 'r') as f:
+                    file_data = json.load(f)
+                    if isinstance(file_data, list):
+                        all_data.extend(file_data)
+                    else:
+                        all_data.append(file_data)
+                print(f"   ✅ Loaded {json_file.name}: {len(file_data) if isinstance(file_data, list) else 1} samples")
+            except Exception as e:
+                print(f"   ❌ Error loading {json_file.name}: {e}")
+        
+        if not all_data:
+            print("❌ No data loaded from any files")
+            return None
+            
+        print(f"📊 Total training samples from all files: {len(all_data)}")
+        return all_data
+        
+    except Exception as e:
+        print(f"❌ Error loading from directory: {e}")
         return None
 
 
@@ -57,16 +99,34 @@ def convert_to_quality_result(data: List[Dict]) -> QualityResult:
     )
 
 
-def extract_dataset_info_from_filename(filename: str) -> tuple:
-    """Extract dataset name and ID from the input filename."""
-    # Extract from filename like "cifar10_training_maveric_dataset1.json"
-    basename = Path(filename).stem  # Remove extension
-    if '_training_maveric_dataset' in basename:
-        parts = basename.split('_training_maveric_dataset')
-        dataset_name = parts[0]
-        dataset_id = int(parts[1]) if parts[1].isdigit() else 1
-        return dataset_name, dataset_id
-    return "unknown", 1
+def extract_dataset_info_from_path(input_path: str) -> tuple:
+    """Extract dataset name from input path (directory or filename)."""
+    if os.path.isdir(input_path):
+        # Extract from directory name or first file found
+        directory = Path(input_path)
+        json_files = list(directory.glob("*training*maveric*.json"))
+        if json_files:
+            # Extract from first file
+            basename = json_files[0].stem
+            if '_training_maveric_' in basename:
+                parts = basename.split('_training_maveric_')
+                dataset_name = parts[0]
+                return dataset_name, "multiple"
+            return json_files[0].stem.split('_')[0], "multiple"
+        return directory.name, "multiple"
+    else:
+        # Extract from filename like "cifar10_training_maveric_dataset1.json"
+        basename = Path(input_path).stem  # Remove extension
+        if '_training_maveric_dataset' in basename:
+            parts = basename.split('_training_maveric_dataset')
+            dataset_name = parts[0]
+            dataset_id = int(parts[1]) if parts[1].isdigit() else 1
+            return dataset_name, dataset_id
+        elif '_training_maveric_' in basename:
+            parts = basename.split('_training_maveric_')
+            dataset_name = parts[0]
+            return dataset_name, 1
+        return "unknown", 1
 
 
 def get_class_names_from_data(data: List[Dict]) -> List[str]:
@@ -85,8 +145,14 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Single file input
   python 03_model_customization.py --input cifar10_training_maveric_dataset1.json --config maveric_config.yaml
-  python 03_model_customization.py -i results/imagenet_training_maveric_dataset1.json -c config.yaml --epochs 10
+  
+  # Directory input (multiple files)
+  python 03_model_customization.py --input ./results/cifar10/ --config maveric_config.yaml --epochs 10
+  
+  # Directory with specific pattern
+  python 03_model_customization.py -i /path/to/training_data/ -c config.yaml
         """
     )
     
@@ -94,7 +160,7 @@ Examples:
         '--input', '-i',
         type=str,
         required=True,
-        help='Path to training dataset JSON file'
+        help='Path to training dataset JSON file or directory containing multiple JSON files'
     )
     
     parser.add_argument(
@@ -189,12 +255,12 @@ def main():
     args = parse_arguments()
     
     print("🚀 Starting MAVERIC Model Customization...")
-    print(f"📁 Input file: {args.input}")
+    print(f"📁 Input path: {args.input}")
     print(f"📋 Configuration file: {args.config}")
     
-    # Validate input files exist
+    # Validate input path exists
     if not os.path.exists(args.input):
-        print(f"❌ Input file not found: {args.input}")
+        print(f"❌ Input path not found: {args.input}")
         return False
     
     if not os.path.exists(args.config):
@@ -214,8 +280,8 @@ def main():
             print("❌ Failed to load training dataset")
             return False
         
-        # Extract dataset information from filename
-        target_dataset, dataset_id = extract_dataset_info_from_filename(args.input)
+        # Extract dataset information from input path
+        target_dataset, dataset_id = extract_dataset_info_from_path(args.input)
         print(f"🎯 Target dataset: {target_dataset}")
         print(f"🆔 Dataset ID: {dataset_id}")
         
