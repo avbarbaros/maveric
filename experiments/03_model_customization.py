@@ -201,16 +201,19 @@ Examples:
     return parser.parse_args()
 
 
-def setup_maveric(config: Dict) -> MAVERIC:
+def setup_maveric(config: Dict, args) -> MAVERIC:
     """Setup MAVERIC instance with configuration."""
     print("🔧 Setting up MAVERIC...")
     
     try:
+        # Override batch_size if provided via CLI
+        batch_size = args.batch_size if args.batch_size is not None else config.get('batch_size', 32)
+        
         # Create MAVERICConfig object from loaded config
         maveric_config = MAVERICConfig(
             cache_base_dir=config['cache_base_dir'],
             clip_model=config.get('clip_model', 'ViT-B/32'),
-            batch_size=config.get('batch_size', 32),
+            batch_size=batch_size,
             device=config.get('device', 'auto'),
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True)
         )
@@ -232,21 +235,30 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
     
     # Override with command line arguments if provided
     epochs = args.epochs if args.epochs is not None else training_cfg.get('epochs', 10)
-    learning_rate = args.learning_rate if args.learning_rate is not None else training_cfg.get('learning_rate', 1e-4)
-    batch_size = args.batch_size if args.batch_size is not None else training_cfg.get('batch_size', 16)
+    learning_rate = args.learning_rate if args.learning_rate is not None else training_cfg.get('learning_rate', 1e-5)
     
     return TrainingConfig(
         epochs=epochs,
         learning_rate=learning_rate,
-        batch_size=batch_size,
         weight_decay=training_cfg.get('weight_decay', 0.01),
-        warmup_steps=training_cfg.get('warmup_steps', 100),
-        save_strategy=training_cfg.get('save_strategy', 'epoch'),
-        evaluation_strategy=training_cfg.get('evaluation_strategy', 'epoch'),
-        logging_steps=training_cfg.get('logging_steps', 50),
-        save_total_limit=training_cfg.get('save_total_limit', 3),
+        warmup_steps=training_cfg.get('warmup_steps', 0),
         use_regularization=training_cfg.get('use_regularization', True),
-        checkpoint_dir=args.output_dir
+        regularization_weight=training_cfg.get('regularization_weight', 0.5),
+        dropout_rate=training_cfg.get('dropout_rate', 0.1),
+        use_augmentation=training_cfg.get('use_augmentation', True),
+        augmentation_strength=training_cfg.get('augmentation_strength', 2),
+        augmentation_magnitude=training_cfg.get('augmentation_magnitude', 9),
+        optimizer=training_cfg.get('optimizer', 'adamw'),
+        scheduler=training_cfg.get('scheduler', 'cosine'),
+        gradient_clip_value=training_cfg.get('gradient_clip_value', 1.0),
+        eval_frequency=training_cfg.get('eval_frequency', 1),
+        save_best_model=training_cfg.get('save_best_model', True),
+        early_stopping_patience=training_cfg.get('early_stopping_patience', 3),
+        checkpoint_dir=args.output_dir,
+        save_frequency=training_cfg.get('save_frequency', 1),
+        keep_last_n_checkpoints=training_cfg.get('keep_last_n_checkpoints', 3),
+        mixed_precision=training_cfg.get('mixed_precision', False),
+        gradient_accumulation_steps=training_cfg.get('gradient_accumulation_steps', 1)
     )
 
 
@@ -291,7 +303,7 @@ def main():
         print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
         
         # Setup MAVERIC
-        maveric = setup_maveric(config)
+        maveric = setup_maveric(config, args)
         if not maveric:
             print("❌ Failed to initialize MAVERIC")
             return False
@@ -308,8 +320,9 @@ def main():
         print(f"⚙️  Training configuration:")
         print(f"   Epochs: {training_config.epochs}")
         print(f"   Learning rate: {training_config.learning_rate}")
-        print(f"   Batch size: {training_config.batch_size}")
         print(f"   Weight decay: {training_config.weight_decay}")
+        print(f"   Optimizer: {training_config.optimizer}")
+        print(f"   Scheduler: {training_config.scheduler}")
         
         # Perform model customization
         print("🤖 Starting model customization...")
