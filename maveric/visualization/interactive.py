@@ -84,7 +84,7 @@ class MAVERICInteractiveQualityControl:
         self.thresholds = {
             'resolution_score': 1.000,
             'sharpness_score': 0.850,
-            'color_diversity': 0.750,
+            'color_diversity_score': 0.750,
             'weighted_class_score': 0.400,
             'consistency': 0.780
         }
@@ -437,7 +437,7 @@ class MAVERICInteractiveQualityControl:
             return
         
         if metrics is None:
-            metrics = ['resolution_score', 'sharpness_score', 'color_diversity', 'weighted_class_score', 'consistency']
+            metrics = ['resolution_score', 'sharpness_score', 'color_diversity_score', 'weighted_class_score', 'consistency']
         
         # Filter valid metrics
         metrics = [m for m in metrics if m in self.data.columns]
@@ -536,7 +536,7 @@ class MAVERICInteractiveQualityControl:
                     metrics_text += f"Consistency: {row.get('consistency', 0):.3f}\n"
                     metrics_text += f"Resolution: {row.get('resolution_score', 0):.2f}\n"
                     metrics_text += f"Sharpness: {row.get('sharpness_score', 0):.3f}\n"
-                    metrics_text += f"Color Div: {row.get('color_diversity', 0):.3f}"
+                    metrics_text += f"Color Div: {row.get('color_diversity_score', 0):.3f}"
                     
                     ax.set_title(metrics_text, fontsize=9)
                 else:
@@ -704,7 +704,7 @@ class MAVERICInteractiveQualityControl:
                     config['quality_thresholds']['resolution_score'] = threshold
                 elif metric == 'sharpness_score':
                     config['quality_thresholds']['sharpness_score'] = threshold
-                elif metric == 'color_diversity':
+                elif metric == 'color_diversity_score':
                     config['quality_thresholds']['color_diversity'] = threshold
             
             # Update class weights (save to metric_weights section)
