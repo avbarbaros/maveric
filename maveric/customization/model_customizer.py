@@ -54,8 +54,29 @@ class ModelCustomizer(BaseComponent):
         """Load the base pre-trained model."""
         try:
             self.log_info(f"Loading base model: {self.base_model_name}")
-            self.model = CLIPModel.from_pretrained(self.base_model_name).to(self.device)
-            self.processor = CLIPProcessor.from_pretrained(self.base_model_name)
+            
+            # Map OpenAI CLIP model names to Hugging Face model identifiers
+            model_mapping = {
+                "ViT-B/32": "openai/clip-vit-base-patch32",
+                "ViT-B/16": "openai/clip-vit-base-patch16", 
+                "ViT-L/14": "openai/clip-vit-large-patch14",
+                "ViT-L/14@336px": "openai/clip-vit-large-patch14-336",
+                "RN50": "openai/clip-resnet-50",
+                "RN101": "openai/clip-resnet-101",
+                "RN50x4": "openai/clip-resnet-50x4",
+                "RN50x16": "openai/clip-resnet-50x16",
+                "RN50x64": "openai/clip-resnet-50x64"
+            }
+            
+            # Get the correct Hugging Face model name
+            hf_model_name = model_mapping.get(self.base_model_name, self.base_model_name)
+            
+            if hf_model_name != self.base_model_name:
+                self.log_info(f"Mapping {self.base_model_name} to Hugging Face model: {hf_model_name}")
+            
+            self.model = CLIPModel.from_pretrained(hf_model_name).to(self.device)
+            self.processor = CLIPProcessor.from_pretrained(hf_model_name)
+            
         except Exception as e:
             raise ModelError(f"Failed to load base model: {e}")
     
