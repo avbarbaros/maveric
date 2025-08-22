@@ -269,9 +269,9 @@ class ModelCustomizer(BaseComponent):
             # Create custom dataset for test data
             test_samples = []
             
-            # Convert dataset to samples format
-            if hasattr(test_dataset_handler, 'dataset') and test_dataset_handler.dataset:
-                dataset = test_dataset_handler.dataset
+            # Convert dataset to samples format  
+            if hasattr(test_dataset_handler, '_dataset') and test_dataset_handler._dataset:
+                dataset = test_dataset_handler._dataset
                 class_to_idx = {name: idx for idx, name in enumerate(class_names)}
                 
                 self.log_info(f"Processing {len(dataset)} test samples from {target_dataset_name}")
