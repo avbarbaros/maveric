@@ -141,9 +141,13 @@ def get_class_names_from_data(data: List[Dict]) -> List[str]:
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="MAVERIC Model Customization",
+        description="MAVERIC Model Customization with Mandatory Test Evaluation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+IMPORTANT: Test data evaluation is mandatory for reliable model selection.
+The input files must follow the naming convention: <dataset_name>_training_maveric_<id>.json
+where dataset_name is a valid ELEVATER dataset (e.g., cifar10, cifar100, food101).
+
 Examples:
   # Single file input
   python 03_model_customization.py --input cifar10_training_maveric_dataset1.json --config maveric_config.yaml
@@ -153,6 +157,8 @@ Examples:
   
   # Directory with specific pattern
   python 03_model_customization.py -i /path/to/training_data/ -c config.yaml
+
+Note: The model will be evaluated on the actual test set of the target dataset at each epoch.
         """
     )
     
@@ -296,6 +302,14 @@ def main():
         target_dataset, dataset_id = extract_dataset_info_from_path(args.input)
         print(f"🎯 Target dataset: {target_dataset}")
         print(f"🆔 Dataset ID: {dataset_id}")
+        
+        # Validate target dataset for test evaluation
+        if target_dataset == "unknown":
+            print("⚠️  Warning: Could not determine target dataset from input path.")
+            print("   Test data evaluation requires a valid ELEVATER dataset name.")
+            print("   Please ensure your input file follows the naming convention:")
+            print("   <dataset_name>_training_maveric_<id>.json")
+            return False
         
         # Extract class names from training data
         class_names = get_class_names_from_data(training_data)

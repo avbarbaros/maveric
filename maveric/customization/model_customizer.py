@@ -98,6 +98,9 @@ class ModelCustomizer(BaseComponent):
             
         Returns:
             CustomizationResult with trained model and metrics
+            
+        Note:
+            Test data evaluation is mandatory for reliable model selection.
         """
         self.log_info("Starting model customization")
         
@@ -108,12 +111,13 @@ class ModelCustomizer(BaseComponent):
             regularize=training_config.use_regularization
         ).to(self.device)
         
-        # Prepare data
-        train_loader, val_loader = self._prepare_data(
+        # Prepare data (test data is mandatory)
+        train_loader, val_loader, test_loader = self._prepare_data(
             quality_result,
             class_names,
             training_config,
-            validation_split
+            validation_split,
+            target_dataset_name
         )
         
         # Create trainer
@@ -126,24 +130,27 @@ class ModelCustomizer(BaseComponent):
         # Create evaluator
         self.evaluator = Evaluator(device=self.device)
         
-        # Get baseline performance
+        # Get baseline performance (always use test data)
         self.log_info("Evaluating baseline model")
-        baseline_accuracy = self._evaluate_baseline(val_loader, class_names)
+        if not test_loader:
+            raise ValueError(f"Test data is required for evaluation but could not load test set for {target_dataset_name}")
+        baseline_accuracy = self._evaluate_baseline(test_loader, class_names)
         
-        # Train model
+        # Train model (test data is mandatory)
         self.log_info("Training customized model")
         training_history = self.trainer.train(
             train_loader=train_loader,
             val_loader=val_loader,
+            test_loader=test_loader,
             training_config=training_config,
             class_names=class_names
         )
         
-        # Final evaluation
-        self.log_info("Evaluating customized model")
+        # Final evaluation (always use test data)
+        self.log_info("Evaluating customized model on test set")
         final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
             customized_model,
-            val_loader,
+            test_loader,
             class_names
         )
         
@@ -185,8 +192,12 @@ class ModelCustomizer(BaseComponent):
                       quality_result: QualityResult,
                       class_names: List[str],
                       training_config: TrainingConfig,
-                      validation_split: float) -> Tuple[Any, Any]:
-        """Prepare data loaders for training."""
+                      validation_split: float,
+                      target_dataset_name: str) -> Tuple[Any, Any, Any]:
+        """Prepare data loaders for training and evaluation.
+        
+        Test data loader is mandatory for proper model evaluation.
+        """
         from torch.utils.data import DataLoader, random_split
         
         # Create dataset
@@ -231,9 +242,80 @@ class ModelCustomizer(BaseComponent):
             collate_fn=custom_collate_fn
         )
         
-        self.log_info(f"Created data loaders: {train_size} train, {val_size} validation")
+        # Create test loader (mandatory)
+        test_loader = self._create_test_loader(target_dataset_name, class_names)
         
-        return train_loader, val_loader
+        if not test_loader:
+            raise ValueError(
+                f"Failed to load test data for {target_dataset_name}. "
+                f"Test data evaluation is mandatory for reliable model selection. "
+                f"Please ensure the target dataset supports test splits."
+            )
+        
+        self.log_info(f"Created data loaders: {train_size} train, {val_size} validation, test from {target_dataset_name}")
+        
+        return train_loader, val_loader, test_loader
+    
+    def _create_test_loader(self, target_dataset_name: str, class_names: List[str]) -> Optional[Any]:
+        """Create test data loader from target dataset."""
+        try:
+            from ..datasets import get_dataset
+            from torch.utils.data import DataLoader
+            
+            # Load test split of the target dataset
+            self.log_info(f"Loading test data from {target_dataset_name}")
+            test_dataset_handler = get_dataset(target_dataset_name, train=False)  # Get test split
+            
+            # Create custom dataset for test data
+            test_samples = []
+            
+            # Convert dataset to samples format
+            if hasattr(test_dataset_handler, 'dataset') and test_dataset_handler.dataset:
+                dataset = test_dataset_handler.dataset
+                class_to_idx = {name: idx for idx, name in enumerate(class_names)}
+                
+                self.log_info(f"Processing {len(dataset)} test samples from {target_dataset_name}")
+                
+                # Use all test samples for complete evaluation
+                from tqdm import tqdm
+                
+                for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
+                    try:
+                        image, label = dataset[idx]
+                        if isinstance(label, int) and label < len(class_names):
+                            class_name = class_names[label]
+                            test_samples.append({
+                                'image': image,
+                                'label': class_name,
+                                'text': f"a photo of a {class_name}."
+                            })
+                    except Exception as e:
+                        if idx < 10:  # Only log first few errors to avoid spam
+                            self.log_warning(f"Error processing test sample {idx}: {e}")
+                        continue
+            
+            if not test_samples:
+                self.log_warning(f"No test samples loaded from {target_dataset_name}")
+                return None
+            
+            # Create test dataset
+            test_dataset = TestDataset(test_samples, class_names, self.processor)
+            
+            # Create test loader
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=32,
+                shuffle=False,
+                num_workers=0,
+                collate_fn=custom_collate_fn
+            )
+            
+            self.log_info(f"Created test loader with {len(test_samples)} samples (complete test set)")
+            return test_loader
+            
+        except Exception as e:
+            self.log_warning(f"Failed to create test loader for {target_dataset_name}: {e}")
+            return None
     
     def _evaluate_baseline(self, val_loader: Any, class_names: List[str]) -> float:
         """Evaluate baseline model performance."""
@@ -386,6 +468,41 @@ class CustomizedCLIP(nn.Module):
             text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
         
         return text_embeds
+
+
+class TestDataset(torch.utils.data.Dataset):
+    """Dataset for test data evaluation."""
+    
+    def __init__(self, test_samples: List[Dict], class_names: List[str], processor):
+        """
+        Initialize test dataset.
+        
+        Args:
+            test_samples: List of test sample dictionaries
+            class_names: List of class names
+            processor: CLIP processor
+        """
+        self.test_samples = test_samples
+        self.class_names = class_names
+        self.class_to_idx = {name: i for i, name in enumerate(class_names)}
+        self.processor = processor
+    
+    def __len__(self):
+        return len(self.test_samples)
+    
+    def __getitem__(self, idx):
+        sample = self.test_samples[idx]
+        
+        # Get image (already PIL Image from dataset)
+        image = sample['image']
+        
+        # Get label
+        label = self.class_to_idx.get(sample['label'], 0)
+        
+        # Get text
+        text = sample.get('text', f"a photo of a {sample['label']}.")
+        
+        return image, text, label
 
 
 class LAIONCustomDataset(torch.utils.data.Dataset):

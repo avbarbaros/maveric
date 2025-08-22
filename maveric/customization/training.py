@@ -39,6 +39,7 @@ class Trainer(BaseComponent):
     def train(self,
               train_loader: Any,
               val_loader: Any,
+              test_loader: Any,
               training_config: TrainingConfig,
               class_names: List[str]) -> Dict[str, List[float]]:
         """
@@ -47,12 +48,20 @@ class Trainer(BaseComponent):
         Args:
             train_loader: Training data loader
             val_loader: Validation data loader
+            test_loader: Test data loader (mandatory for proper evaluation)
             training_config: Training configuration
             class_names: List of class names
             
         Returns:
             Training history dictionary
+            
+        Note:
+            Test data evaluation is mandatory at each epoch for reliable model selection.
         """
+        # Validate test loader is provided
+        if test_loader is None:
+            raise ValueError("Test data loader is required for training. Test evaluation is mandatory for reliable model selection.")
+        
         # Create text features for all classes
         class_prompts = [f"a photo of a {name}." for name in class_names]
         with torch.no_grad():
@@ -72,7 +81,9 @@ class Trainer(BaseComponent):
             'train_loss': [],
             'train_acc': [],
             'val_loss': [],
-            'val_acc': []
+            'val_acc': [],
+            'test_loss': [],
+            'test_acc': []
         }
         
         # Best model tracking
@@ -98,7 +109,7 @@ class Trainer(BaseComponent):
             history['train_loss'].append(train_loss)
             history['train_acc'].append(train_acc)
             
-            # Validate
+            # Validate and Test
             if epoch % training_config.eval_frequency == 0:
                 val_loss, val_acc = self._validate_epoch(
                     val_loader,
@@ -109,14 +120,26 @@ class Trainer(BaseComponent):
                 history['val_loss'].append(val_loss)
                 history['val_acc'].append(val_acc)
                 
-                self.log_info(
-                    f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
-                    f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%"
+                # Evaluate on test set (mandatory)
+                test_loss, test_acc = self._validate_epoch(
+                    test_loader,
+                    class_text_features,
+                    criterion,
+                    desc="Testing"
                 )
+                history['test_loss'].append(test_loss)
+                history['test_acc'].append(test_acc)
                 
-                # Check for improvement
-                if val_acc > best_val_acc:
-                    best_val_acc = val_acc
+                # Log results (always includes test metrics)
+                log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
+                          f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%, "
+                          f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%")
+                self.log_info(log_msg)
+                
+                # Check for improvement (always use test accuracy)
+                eval_acc = test_acc
+                if eval_acc > best_val_acc:
+                    best_val_acc = eval_acc
                     best_epoch = epoch
                     patience_counter = 0
                     
@@ -130,7 +153,7 @@ class Trainer(BaseComponent):
                         best_checkpoint_path = self.save_checkpoint(
                             self.model,
                             f"best_model",
-                            {'epoch': epoch, 'val_acc': val_acc, 'is_best': True}
+                            {'epoch': epoch, 'test_acc': eval_acc, 'val_acc': val_acc, 'is_best': True}
                         )
                 else:
                     patience_counter += 1
@@ -214,7 +237,8 @@ class Trainer(BaseComponent):
     def _validate_epoch(self,
                        val_loader: Any,
                        class_text_features: torch.Tensor,
-                       criterion: nn.Module) -> Tuple[float, float]:
+                       criterion: nn.Module,
+                       desc: str = "Validating") -> Tuple[float, float]:
         """Validate for one epoch."""
         self.model.eval()
         
@@ -223,7 +247,7 @@ class Trainer(BaseComponent):
         total = 0
         
         with torch.no_grad():
-            for images, texts, labels in tqdm(val_loader, desc="Validating"):
+            for images, texts, labels in tqdm(val_loader, desc=desc):
                 labels = labels.to(self.device)
                 
                 # Forward pass
