@@ -68,6 +68,27 @@ processing:
   shuffle_data: true
   seed: 42                         # For reproducible results
   
+# Training configuration (for model customization)
+training:
+  epochs: 10
+  learning_rate: 0.00001
+  weight_decay: 0.01
+  optimizer: "adamw"  # adamw, adam, sgd
+  scheduler: "cosine"  # cosine, linear, constant
+  use_regularization: true
+  use_augmentation: true
+  
+  # Validation settings
+  use_validation: true  # Set to false to disable validation and use all data for training
+  validation_method: "stratified_kfold"  # "stratified_kfold" or "simple_split"
+  validation_k_folds: 5  # Number of folds for stratified k-fold validation
+  validation_split: 0.2  # Fraction for simple split validation (used if method is "simple_split")
+  
+  # Early stopping and checkpointing
+  save_best_model: true
+  early_stopping_patience: 3
+  eval_frequency: 1
+
 # Logging and monitoring
 logging:
   level: "INFO"

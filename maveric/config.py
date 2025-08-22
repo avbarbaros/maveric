@@ -244,6 +244,12 @@ class TrainingConfig:
     save_best_model: bool = True
     early_stopping_patience: int = 3
     
+    # Validation strategy
+    use_validation: bool = True  # Whether to use validation during training
+    validation_method: str = "stratified_kfold"  # "stratified_kfold" or "simple_split"
+    validation_k_folds: int = 5  # Number of folds for k-fold validation
+    validation_split: float = 0.2  # Fraction for simple split validation
+    
     # Checkpointing
     checkpoint_dir: Optional[str] = None
     save_frequency: int = 1  # Save checkpoint every N epochs

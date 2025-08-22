@@ -260,6 +260,10 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
         eval_frequency=training_cfg.get('eval_frequency', 1),
         save_best_model=training_cfg.get('save_best_model', True),
         early_stopping_patience=training_cfg.get('early_stopping_patience', 3),
+        use_validation=training_cfg.get('use_validation', True),
+        validation_method=training_cfg.get('validation_method', 'stratified_kfold'),
+        validation_k_folds=training_cfg.get('validation_k_folds', 5),
+        validation_split=training_cfg.get('validation_split', 0.2),
         checkpoint_dir=args.output_dir,
         save_frequency=training_cfg.get('save_frequency', 1),
         keep_last_n_checkpoints=training_cfg.get('keep_last_n_checkpoints', 3),
@@ -337,6 +341,13 @@ def main():
         print(f"   Weight decay: {training_config.weight_decay}")
         print(f"   Optimizer: {training_config.optimizer}")
         print(f"   Scheduler: {training_config.scheduler}")
+        print(f"   Validation: {training_config.use_validation}")
+        if training_config.use_validation:
+            print(f"   Validation method: {training_config.validation_method}")
+            if training_config.validation_method == "stratified_kfold":
+                print(f"   K-folds: {training_config.validation_k_folds}")
+            else:
+                print(f"   Validation split: {training_config.validation_split}")
         
         # Perform model customization
         print("🤖 Starting model customization...")

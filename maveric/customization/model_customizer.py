@@ -116,7 +116,6 @@ class ModelCustomizer(BaseComponent):
             quality_result,
             class_names,
             training_config,
-            validation_split,
             target_dataset_name
         )
         
@@ -146,21 +145,29 @@ class ModelCustomizer(BaseComponent):
             class_names=class_names
         )
         
-        # Final evaluation (always use test data)
-        self.log_info("Evaluating customized model on test set")
-        final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
-            customized_model,
-            test_loader,
-            class_names
-        )
-        
-        # Get the best checkpoint path from training (already saved during training)
+        # Load and evaluate the best model from training
         best_checkpoint = None
         if training_config.save_best_model and self.checkpoint_dir:
             # The best model is already saved during training as "best_model.pth"
             best_checkpoint = self.checkpoint_dir / "best_model.pth"
-            if not best_checkpoint.exists():
-                # Fallback: save current model if no best checkpoint exists
+            if best_checkpoint.exists():
+                self.log_info("Loading best model checkpoint for final evaluation")
+                best_model = self.load_checkpoint(str(best_checkpoint))
+                # Final evaluation using the best model
+                self.log_info("Evaluating best customized model on test set")
+                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                    best_model,
+                    test_loader,
+                    class_names
+                )
+            else:
+                # Fallback: evaluate current model and save it
+                self.log_info("No best checkpoint found, evaluating current model")
+                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                    customized_model,
+                    test_loader,
+                    class_names
+                )
                 best_checkpoint = self.trainer.save_checkpoint(
                     customized_model,
                     f"best_model_{target_dataset_name}",
@@ -170,6 +177,14 @@ class ModelCustomizer(BaseComponent):
                         'config': training_config.to_dict()
                     }
                 )
+        else:
+            # No checkpointing enabled, evaluate current model
+            self.log_info("Evaluating current customized model on test set")
+            final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                customized_model,
+                test_loader,
+                class_names
+            )
         
         # Create result
         result = CustomizationResult(
@@ -192,15 +207,15 @@ class ModelCustomizer(BaseComponent):
                       quality_result: QualityResult,
                       class_names: List[str],
                       training_config: TrainingConfig,
-                      validation_split: float,
                       target_dataset_name: str) -> Tuple[Any, Any, Any]:
         """Prepare data loaders for training and evaluation.
         
         Test data loader is mandatory for proper model evaluation.
+        Uses stratified k-fold cross-validation by default.
         """
-        from torch.utils.data import DataLoader, random_split
+        from torch.utils.data import DataLoader
         
-        # Create dataset
+        # Create full dataset
         dataset = LAIONCustomDataset(
             quality_result.filtered_samples,
             class_names,
@@ -212,35 +227,26 @@ class ModelCustomizer(BaseComponent):
             }
         )
         
-        # Split dataset
-        val_size = int(len(dataset) * validation_split)
-        train_size = len(dataset) - val_size
-        
-        train_dataset, val_dataset = random_split(
-            dataset,
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(42)
-        )
-        
-        # Disable augmentation for validation
-        val_dataset.dataset.use_augmentation = False
-        
-        # Create loaders
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=32,  # Fixed batch size for CLIP
-            shuffle=True,
-            num_workers=0,
-            collate_fn=custom_collate_fn
-        )
-        
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=32,
-            shuffle=False,
-            num_workers=0,
-            collate_fn=custom_collate_fn
-        )
+        # Prepare validation based on configuration
+        if training_config.use_validation:
+            if training_config.validation_method == "stratified_kfold":
+                train_loader, val_loader = self._prepare_stratified_kfold_data(
+                    dataset, training_config.validation_k_folds
+                )
+            else:  # simple_split
+                train_loader, val_loader = self._prepare_simple_split_data(
+                    dataset, training_config.validation_split
+                )
+        else:
+            # No validation - use all data for training
+            train_loader = DataLoader(
+                dataset,
+                batch_size=32,
+                shuffle=True,
+                num_workers=0,
+                collate_fn=custom_collate_fn
+            )
+            val_loader = None
         
         # Create test loader (mandatory)
         test_loader = self._create_test_loader(target_dataset_name, class_names)
@@ -252,7 +258,14 @@ class ModelCustomizer(BaseComponent):
                 f"Please ensure the target dataset supports test splits."
             )
         
-        self.log_info(f"Created data loaders: {train_size} train, {val_size} validation, test from {target_dataset_name}")
+        # Log data loader info
+        if val_loader is not None:
+            train_size = len(train_loader.dataset)
+            val_size = len(val_loader.dataset)
+            self.log_info(f"Created data loaders: {train_size} train, {val_size} validation, test from {target_dataset_name}")
+        else:
+            train_size = len(train_loader.dataset)
+            self.log_info(f"Created data loaders: {train_size} train (no validation), test from {target_dataset_name}")
         
         return train_loader, val_loader, test_loader
     
@@ -317,6 +330,101 @@ class ModelCustomizer(BaseComponent):
             self.log_warning(f"Failed to create test loader for {target_dataset_name}: {e}")
             return None
     
+    def _prepare_stratified_kfold_data(self, dataset, k_folds=5):
+        """Prepare data using stratified k-fold cross-validation."""
+        from sklearn.model_selection import StratifiedKFold
+        from torch.utils.data import DataLoader, Subset
+        import numpy as np
+        
+        # Get labels for stratification
+        labels = []
+        for i in range(len(dataset)):
+            _, _, label = dataset[i]
+            labels.append(label)
+        
+        labels = np.array(labels)
+        indices = np.arange(len(dataset))
+        
+        # Use stratified k-fold
+        skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
+        
+        # Get the first fold (we'll use just one fold for validation)
+        train_idx, val_idx = next(iter(skf.split(indices, labels)))
+        
+        # Create datasets
+        train_dataset = Subset(dataset, train_idx)
+        val_dataset = Subset(dataset, val_idx)
+        
+        # Disable augmentation for validation dataset
+        if hasattr(val_dataset, 'dataset') and hasattr(val_dataset.dataset, 'use_augmentation'):
+            # Create a copy of the dataset for validation without augmentation
+            val_dataset_copy = LAIONCustomDataset(
+                [dataset.samples[i] for i in val_idx],
+                dataset.class_names,
+                dataset.processor,
+                use_augmentation=False
+            )
+            val_dataset = val_dataset_copy
+        
+        # Create data loaders
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=32,
+            shuffle=True,
+            num_workers=0,
+            collate_fn=custom_collate_fn
+        )
+        
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=32,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=custom_collate_fn
+        )
+        
+        self.log_info(f"Using stratified {k_folds}-fold validation: {len(train_idx)} train, {len(val_idx)} validation samples")
+        return train_loader, val_loader
+    
+    def _prepare_simple_split_data(self, dataset, validation_split=0.2):
+        """Prepare data using simple random split."""
+        from torch.utils.data import DataLoader, random_split
+        import torch
+        
+        # Split dataset
+        val_size = int(len(dataset) * validation_split)
+        train_size = len(dataset) - val_size
+        
+        train_dataset, val_dataset = random_split(
+            dataset,
+            [train_size, val_size],
+            generator=torch.Generator().manual_seed(42)
+        )
+        
+        # Disable augmentation for validation
+        if hasattr(val_dataset.dataset, 'use_augmentation'):
+            val_dataset.dataset.use_augmentation = False
+        
+        # Create loaders
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=32,
+            shuffle=True,
+            num_workers=0,
+            collate_fn=custom_collate_fn
+        )
+        
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=32,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=custom_collate_fn
+        )
+        
+        self.log_info(f"Using simple split validation: {train_size} train, {val_size} validation samples")
+        return train_loader, val_loader
+    
     def _evaluate_baseline(self, val_loader: Any, class_names: List[str]) -> float:
         """Evaluate baseline model performance."""
         baseline_model = CustomizedCLIP(
@@ -331,6 +439,7 @@ class ModelCustomizer(BaseComponent):
             class_names
         )
         
+        self.log_info(f"Baseline model accuracy: {accuracy:.2f}%")
         return accuracy
     
     def load_checkpoint(self, checkpoint_path: str) -> 'CustomizedCLIP':
