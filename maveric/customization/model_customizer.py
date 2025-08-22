@@ -147,18 +147,22 @@ class ModelCustomizer(BaseComponent):
             class_names
         )
         
-        # Save best model
+        # Get the best checkpoint path from training (already saved during training)
         best_checkpoint = None
         if training_config.save_best_model and self.checkpoint_dir:
-            best_checkpoint = self.trainer.save_checkpoint(
-                customized_model,
-                f"best_model_{target_dataset_name}",
-                {
-                    'accuracy': final_accuracy,
-                    'baseline': baseline_accuracy,
-                    'config': training_config.to_dict()
-                }
-            )
+            # The best model is already saved during training as "best_model.pth"
+            best_checkpoint = self.checkpoint_dir / "best_model.pth"
+            if not best_checkpoint.exists():
+                # Fallback: save current model if no best checkpoint exists
+                best_checkpoint = self.trainer.save_checkpoint(
+                    customized_model,
+                    f"best_model_{target_dataset_name}",
+                    {
+                        'accuracy': final_accuracy,
+                        'baseline': baseline_accuracy,
+                        'config': training_config.to_dict()
+                    }
+                )
         
         # Create result
         result = CustomizationResult(

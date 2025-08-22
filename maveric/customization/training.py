@@ -79,6 +79,7 @@ class Trainer(BaseComponent):
         best_val_acc = 0.0
         best_epoch = 0
         patience_counter = 0
+        best_checkpoint_path = None
         
         # Training loop
         for epoch in range(training_config.epochs):
@@ -119,12 +120,17 @@ class Trainer(BaseComponent):
                     best_epoch = epoch
                     patience_counter = 0
                     
-                    # Save best model
+                    # Save best model (remove previous best if exists)
                     if training_config.save_best_model and self.checkpoint_dir:
-                        self.save_checkpoint(
+                        # Remove previous best checkpoint to save disk space
+                        if best_checkpoint_path and best_checkpoint_path.exists():
+                            best_checkpoint_path.unlink()
+                            self.log_info(f"Removed previous best checkpoint: {best_checkpoint_path}")
+                        
+                        best_checkpoint_path = self.save_checkpoint(
                             self.model,
-                            f"best_epoch_{epoch}",
-                            {'epoch': epoch, 'val_acc': val_acc}
+                            f"best_model",
+                            {'epoch': epoch, 'val_acc': val_acc, 'is_best': True}
                         )
                 else:
                     patience_counter += 1
@@ -134,13 +140,8 @@ class Trainer(BaseComponent):
                     self.log_info(f"Early stopping at epoch {epoch}")
                     break
             
-            # Save periodic checkpoint
-            if (epoch + 1) % training_config.save_frequency == 0 and self.checkpoint_dir:
-                self.save_checkpoint(
-                    self.model,
-                    f"checkpoint_epoch_{epoch}",
-                    {'epoch': epoch}
-                )
+            # Skip periodic checkpoints to save disk space - only keep best model
+            # Periodic checkpoints disabled for disk efficiency
         
         self.log_info(f"Training complete. Best epoch: {best_epoch} with {best_val_acc:.2f}% accuracy")
         
