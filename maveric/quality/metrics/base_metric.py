@@ -86,11 +86,11 @@ class BaseQualityMetric(BaseMetric):
         
         scores_array = np.array(scores)
         return {
-            'mean': float(np.mean(scores_array)),
-            'std': float(np.std(scores_array)),
-            'min': float(np.min(scores_array)),
-            'max': float(np.max(scores_array)),
-            'median': float(np.median(scores_array))
+            'mean': round(float(np.mean(scores_array)), 5),
+            'std': round(float(np.std(scores_array)), 5),
+            'min': round(float(np.min(scores_array)), 5),
+            'max': round(float(np.max(scores_array)), 5),
+            'median': round(float(np.median(scores_array)), 5)
         }
 
 

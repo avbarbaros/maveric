@@ -50,7 +50,7 @@ class ResolutionMetric(BaseQualityMetric):
         width, height = image.size
         resolution_score = min(width, height) / 224.0
         
-        return float(resolution_score)
+        return round(float(resolution_score), 5)
 
 
 class SharpnessMetric(BaseQualityMetric):
@@ -104,7 +104,7 @@ class SharpnessMetric(BaseQualityMetric):
         # This maps the variance to a 0-1 range with most values between 0.2-0.9
         score = 1.0 / (1.0 + np.exp(-self.sigmoid_scale * variance))
         
-        return float(score)
+        return round(float(score), 5)
 
 
 class ColorDiversityMetric(BaseQualityMetric):
@@ -163,7 +163,7 @@ class ColorDiversityMetric(BaseQualityMetric):
         # Normalize to 0-1 range
         score = min(avg_std / self.normalize_factor, 1.0)
         
-        return float(score)
+        return round(float(score), 5)
 
 
 class FeatureResNetMeanMetric(BaseQualityMetric):

@@ -307,11 +307,11 @@ class QualityController(BaseComponent):
                 values = self.data[col].dropna()
                 if len(values) > 0:
                     stats['metric_statistics'][col] = {
-                        'mean': float(values.mean()),
-                        'std': float(values.std()),
-                        'min': float(values.min()),
-                        'max': float(values.max()),
-                        'median': float(values.median())
+                        'mean': round(float(values.mean()), 5),
+                        'std': round(float(values.std()), 5),
+                        'min': round(float(values.min()), 5),
+                        'max': round(float(values.max()), 5),
+                        'median': round(float(values.median()), 5)
                     }
         
         return stats
@@ -371,14 +371,14 @@ class QualityController(BaseComponent):
                     'url': row.get('url', ''),
                     'label': row.get('label', ''),
                     'text': row.get('text', ''),
-                    'weighted_class_score': float(row.get('weighted_class_score', 0)),
-                    'consistency': float(row.get('consistency', 0))
+                    'weighted_class_score': round(float(row.get('weighted_class_score', 0)), 5),
+                    'consistency': round(float(row.get('consistency', 0)), 5)
                 }
                 
                 # Add quality scores
                 for metric in ['resolution_score', 'sharpness_score', 'color_score', 'feature_resnet_mean', 'feature_resnet_std']:
                     if metric in row:
-                        item[metric] = float(row[metric])
+                        item[metric] = round(float(row[metric]), 5)
                 
                 simplified_data.append(item)
             

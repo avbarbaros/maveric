@@ -313,12 +313,12 @@ class Retriever(BaseComponent):
                 consistency = 1.0 - np.std(similarities)
                 
                 class_scores[class_name] = {
-                    'hybrid_score': float(hybrid_score),
-                    'img2img': float(img2img),
-                    'txt2txt': float(txt2txt),
-                    'img2txt': float(img2txt),
-                    'txt2img': float(txt2img),
-                    'consistency': float(consistency)
+                    'hybrid_score': round(float(hybrid_score), 5),
+                    'img2img': round(float(img2img), 5),
+                    'txt2txt': round(float(txt2txt), 5),
+                    'img2txt': round(float(img2txt), 5),
+                    'txt2img': round(float(txt2img), 5),
+                    'consistency': round(float(consistency), 5)
                 }
             
             # Compute quality scores
@@ -328,10 +328,10 @@ class Retriever(BaseComponent):
             for metric_name, metric in self.quality_metrics.items():
                 try:
                     score = metric.compute(image, metadata)
-                    quality_scores[f"{metric_name}_score"] = float(score)
+                    quality_scores[metric.metric_name] = round(float(score), 5)
                 except Exception as e:
                     self.log_warning(f"Error computing {metric_name}: {e}")
-                    quality_scores[f"{metric_name}_score"] = 0.0
+                    quality_scores[metric.metric_name] = 0.0
             
             return class_scores, quality_scores
             

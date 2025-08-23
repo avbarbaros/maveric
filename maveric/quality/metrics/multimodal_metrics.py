@@ -114,7 +114,7 @@ class MultimodalConsistencyMetric(BaseQualityMetric):
             similarities = [img2img, txt2txt, img2txt, txt2img]
             consistency = 1.0 - np.std(similarities)
             
-            return float(consistency)
+            return round(float(consistency), 5)
             
         except Exception as e:
             self.log_warning(f"Error computing consistency: {e}")
@@ -211,7 +211,7 @@ class CrossModalAlignmentMetric(BaseQualityMetric):
                 # Convert to 0-1 range (CLIP similarities are typically in [-1, 1])
                 score = (similarity + 1.0) / 2.0
             
-            return float(score)
+            return round(float(score), 5)
             
         except Exception as e:
             self.log_warning(f"Error computing alignment: {e}")

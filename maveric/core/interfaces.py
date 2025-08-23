@@ -67,11 +67,11 @@ class RetrievalResult:
                 if len(values) > 0:
                     # Store comprehensive statistics for this metric
                     self.score_statistics[col] = {
-                        'mean': float(values.mean()),    # Average score
-                        'std': float(values.std()),      # Standard deviation
-                        'min': float(values.min()),      # Minimum score
-                        'max': float(values.max()),      # Maximum score
-                        'median': float(values.median()) # Median score
+                        'mean': round(float(values.mean()), 5),    # Average score
+                        'std': round(float(values.std()), 5),      # Standard deviation
+                        'min': round(float(values.min()), 5),      # Minimum score
+                        'max': round(float(values.max()), 5),      # Maximum score
+                        'median': round(float(values.median()), 5) # Median score
                     }
     
     def to_dataframe(self) -> pd.DataFrame:
@@ -175,19 +175,19 @@ class RetrievalResult:
             # Add class-specific scores
             for class_name in class_names:
                 class_prefix = f'Class_{class_name}'
-                formatted_sample[f'{class_prefix}_hybrid_score'] = float(sample.get(f'{class_prefix}_hybrid_score', 0.0))
-                formatted_sample[f'{class_prefix}_img2img'] = float(sample.get(f'{class_prefix}_img2img', 0.0))
-                formatted_sample[f'{class_prefix}_txt2txt'] = float(sample.get(f'{class_prefix}_txt2txt', 0.0))
-                formatted_sample[f'{class_prefix}_img2txt'] = float(sample.get(f'{class_prefix}_img2txt', 0.0))
-                formatted_sample[f'{class_prefix}_txt2img'] = float(sample.get(f'{class_prefix}_txt2img', 0.0))
-                formatted_sample[f'{class_prefix}_consistency'] = float(sample.get(f'{class_prefix}_consistency', 0.0))
+                formatted_sample[f'{class_prefix}_hybrid_score'] = round(float(sample.get(f'{class_prefix}_hybrid_score', 0.0)), 5)
+                formatted_sample[f'{class_prefix}_img2img'] = round(float(sample.get(f'{class_prefix}_img2img', 0.0)), 5)
+                formatted_sample[f'{class_prefix}_txt2txt'] = round(float(sample.get(f'{class_prefix}_txt2txt', 0.0)), 5)
+                formatted_sample[f'{class_prefix}_img2txt'] = round(float(sample.get(f'{class_prefix}_img2txt', 0.0)), 5)
+                formatted_sample[f'{class_prefix}_txt2img'] = round(float(sample.get(f'{class_prefix}_txt2img', 0.0)), 5)
+                formatted_sample[f'{class_prefix}_consistency'] = round(float(sample.get(f'{class_prefix}_consistency', 0.0)), 5)
             
             # Add quality metrics
-            formatted_sample['resolution_score'] = float(sample.get('resolution_score', 0.0))
-            formatted_sample['sharpness_score'] = float(sample.get('sharpness_score', 0.0))
-            formatted_sample['color_score'] = float(sample.get('color_score', 0.0))
-            formatted_sample['feature_resnet_mean'] = float(sample.get('feature_resnet_mean', 0.0))
-            formatted_sample['feature_resnet_std'] = float(sample.get('feature_resnet_std', 0.0))
+            formatted_sample['resolution_score'] = round(float(sample.get('resolution_score', 0.0)), 5)
+            formatted_sample['sharpness_score'] = round(float(sample.get('sharpness_score', 0.0)), 5)
+            formatted_sample['color_score'] = round(float(sample.get('color_score', 0.0)), 5)
+            formatted_sample['feature_resnet_mean'] = round(float(sample.get('feature_resnet_mean', 0.0)), 5)
+            formatted_sample['feature_resnet_std'] = round(float(sample.get('feature_resnet_std', 0.0)), 5)
             
             formatted_samples.append(formatted_sample)
         
@@ -365,9 +365,9 @@ class QualityResult:
                 'url': str(sample.get('url', '')),
                 'label': str(sample.get('label', sample.get('class', ''))),
                 'text': str(sample.get('text', '')),
-                'weighted_class_score': float(sample.get('weighted_class_score', 
-                                            sample.get('hybrid_score', 0.0))),
-                'consistency': float(sample.get('consistency', 0.0))
+                'weighted_class_score': round(float(sample.get('weighted_class_score', 
+                                            sample.get('hybrid_score', 0.0))), 5),
+                'consistency': round(float(sample.get('consistency', 0.0)), 5)
             }
             
             formatted_samples.append(formatted_sample)

@@ -72,7 +72,7 @@ class TextQualityMetric(BaseQualityMetric):
             language_score * 0.3
         )
         
-        return float(combined_score)
+        return round(float(combined_score), 5)
     
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text."""

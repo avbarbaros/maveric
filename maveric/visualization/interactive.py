@@ -738,9 +738,9 @@ class MAVERICInteractiveQualityControl:
                     'url': str(row.get('url', '')),
                     'label': str(row.get('label', row.get('class', ''))),
                     'text': str(row.get('text', '')),
-                    'weighted_class_score': float(row.get('weighted_class_score', 
-                                                row.get('hybrid_score', 0.0))),
-                    'consistency': float(row.get('consistency', 0.0))
+                    'weighted_class_score': round(float(row.get('weighted_class_score', 
+                                                row.get('hybrid_score', 0.0))), 5),
+                    'consistency': round(float(row.get('consistency', 0.0)), 5)
                 }
                 formatted_samples.append(formatted_sample)
             
