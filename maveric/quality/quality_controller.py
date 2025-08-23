@@ -376,7 +376,7 @@ class QualityController(BaseComponent):
                 }
                 
                 # Add quality scores
-                for metric in ['resolution_score', 'sharpness_score', 'color_score']:
+                for metric in ['resolution_score', 'sharpness_score', 'color_score', 'feature_resnet_mean', 'feature_resnet_std']:
                     if metric in row:
                         item[metric] = float(row[metric])
                 

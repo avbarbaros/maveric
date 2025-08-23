@@ -37,7 +37,7 @@ class MAVERICConfig:
     # Quality metrics configuration
     quality_metrics: List[str] = field(default_factory=lambda: [
         'resolution', 'sharpness', 'color_diversity', 
-        'feature_richness', 'multimodal_consistency'
+        'feature_resnet_mean', 'feature_resnet_std', 'multimodal_consistency'
     ])
     
     # Metric weights for composite scoring

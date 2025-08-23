@@ -166,24 +166,22 @@ class ColorDiversityMetric(BaseQualityMetric):
         return float(score)
 
 
-class FeatureRichnessMetric(BaseQualityMetric):
+class FeatureResNetMeanMetric(BaseQualityMetric):
     """
-    Feature richness metric using pre-trained neural network.
+    ResNet feature mean metric.
     
-    This metric uses a pre-trained ResNet to extract features and measures
-    their diversity. Images that activate diverse features are considered
-    to have richer content and be more useful for training.
+    This metric uses a pre-trained ResNet to extract features and computes
+    their absolute mean activation. Matches the original MAVERIC implementation.
     """
     
-    def __init__(self, model_name: str = "resnet50", device: str = "cuda"):
+    def __init__(self, device: str = "cuda"):
         """
-        Initialize feature richness metric.
+        Initialize ResNet feature mean metric.
         
         Args:
-            model_name: Pre-trained model to use
             device: Device for computation
         """
-        super().__init__("feature_richness")
+        super().__init__("feature_resnet_mean")
         
         # Set device
         self.device = device if torch.cuda.is_available() else "cpu"
@@ -192,23 +190,18 @@ class FeatureRichnessMetric(BaseQualityMetric):
         self.model = resnet50(pretrained=True).to(self.device)
         self.model.eval()
         
-        # Remove final classification layer to get features
-        self.model = torch.nn.Sequential(*list(self.model.children())[:-1])
-        
-        # Image preprocessing
+        # Image preprocessing to match original code
         self.transform = transforms.Compose([
-            transforms.Resize(256),              # Resize to 256x256
-            transforms.CenterCrop(224),          # Crop center 224x224 (ResNet input size)
-            transforms.ToTensor(),               # Convert PIL to tensor
-            transforms.Normalize(                # Normalize with ImageNet stats
-                mean=[0.485, 0.456, 0.406],      # ImageNet mean values
-                std=[0.229, 0.224, 0.225]        # ImageNet standard deviation
-            )
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                              std=[0.229, 0.224, 0.225])
         ])
     
     @property
     def metric_name(self) -> str:
-        return "feature_score"
+        return "feature_resnet_mean"
     
     @property
     def requires_reference(self) -> bool:
@@ -216,18 +209,14 @@ class FeatureRichnessMetric(BaseQualityMetric):
     
     def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
         """
-        Compute feature richness score.
-        
-        This extracts features using a pre-trained network and measures their
-        standard deviation and mean activation. Higher values indicate more
-        distinctive and diverse features.
+        Compute ResNet feature mean matching original code.
         
         Args:
             image: PIL Image
             metadata: Image metadata
             
         Returns:
-            Feature richness score (0-1)
+            Feature mean value
         """
         try:
             # Ensure RGB
@@ -235,25 +224,87 @@ class FeatureRichnessMetric(BaseQualityMetric):
                 image = image.convert('RGB')
             
             # Preprocess image
-            img_tensor = self.transform(image).unsqueeze(0).to(self.device)
+            image_tensor = self.transform(image).unsqueeze(0).to(self.device)
             
-            # Extract features
+            # Extract features using ResNet
             with torch.no_grad():
-                features = self.model(img_tensor)
+                features = self.model(image_tensor)
+                feature_resnet_mean = features.abs().mean().item()
             
-            # Calculate statistics
-            feature_std = features.std().item()
-            feature_mean = features.abs().mean().item()
-            
-            # Combine statistics
-            # We use both std (diversity) and mean (activation strength)
-            combined_score = (feature_std * 0.5 + feature_mean * 0.5)
-            
-            # Normalize to 0-1 range (based on empirical observations)
-            normalized_score = min(combined_score / 2.0, 1.0)
-            
-            return float(normalized_score)
+            return round(float(feature_resnet_mean), 5)
             
         except Exception as e:
-            self.log_warning(f"Error computing feature richness: {e}")
+            self.log_warning(f"Error computing feature resnet mean: {e}")
+            return 0.0
+
+
+class FeatureResNetStdMetric(BaseQualityMetric):
+    """
+    ResNet feature standard deviation metric.
+    
+    This metric uses a pre-trained ResNet to extract features and computes
+    their standard deviation. Matches the original MAVERIC implementation.
+    """
+    
+    def __init__(self, device: str = "cuda"):
+        """
+        Initialize ResNet feature std metric.
+        
+        Args:
+            device: Device for computation
+        """
+        super().__init__("feature_resnet_std")
+        
+        # Set device
+        self.device = device if torch.cuda.is_available() else "cpu"
+        
+        # Load pre-trained model
+        self.model = resnet50(pretrained=True).to(self.device)
+        self.model.eval()
+        
+        # Image preprocessing to match original code
+        self.transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                              std=[0.229, 0.224, 0.225])
+        ])
+    
+    @property
+    def metric_name(self) -> str:
+        return "feature_resnet_std"
+    
+    @property
+    def requires_reference(self) -> bool:
+        return False
+    
+    def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
+        """
+        Compute ResNet feature std matching original code.
+        
+        Args:
+            image: PIL Image
+            metadata: Image metadata
+            
+        Returns:
+            Feature standard deviation value
+        """
+        try:
+            # Ensure RGB
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Preprocess image
+            image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+            
+            # Extract features using ResNet
+            with torch.no_grad():
+                features = self.model(image_tensor)
+                feature_resnet_std = features.std().item()
+            
+            return round(float(feature_resnet_std), 5)
+            
+        except Exception as e:
+            self.log_warning(f"Error computing feature resnet std: {e}")
             return 0.0

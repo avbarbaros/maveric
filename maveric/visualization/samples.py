@@ -74,7 +74,7 @@ class SampleVisualizer(BaseComponent):
         if metrics_to_show is None:
             metrics_to_show = [
                 'label', 'weighted_class_score', 'consistency',
-                'resolution_score', 'sharpness_score', 'color_score'
+                'resolution_score', 'sharpness_score', 'color_score', 'feature_resnet_mean', 'feature_resnet_std'
             ]
         
         # Display each sample

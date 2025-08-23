@@ -17,7 +17,8 @@ from ..quality.metrics import (
     ResolutionMetric,
     SharpnessMetric,
     ColorDiversityMetric,
-    FeatureRichnessMetric
+    FeatureResNetMeanMetric,
+    FeatureResNetStdMetric
 )
 from .cache_manager import CacheManager
 from .dataset_handlers import DatasetHandler
@@ -87,7 +88,8 @@ class Retriever(BaseComponent):
             'resolution': ResolutionMetric(),
             'sharpness': SharpnessMetric(),
             'color_diversity': ColorDiversityMetric(),
-            'feature_richness': FeatureRichnessMetric(device=self.device)
+            'feature_resnet_mean': FeatureResNetMeanMetric(device=self.device),
+            'feature_resnet_std': FeatureResNetStdMetric(device=self.device)
         }
     
     def prepare_reference_embeddings(self, 
