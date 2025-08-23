@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional, Any
 import json
 import random
+import numpy as np
 from pathlib import Path
 from PIL import Image
 import torch
@@ -417,8 +418,9 @@ class ELEVATERDataset(BaseDataset):
             n_per_class: Number of reference samples per class
             seed: Random seed for reproducible sampling
         """
-        # Set random seed for reproducible sampling
+        # Set random seed for reproducible sampling (both random and numpy)
         random.seed(seed)
+        np.random.seed(seed)
         reference_samples = {}
         
         dataset_type = self.dataset_info.get('type', 'file_based')
@@ -439,29 +441,31 @@ class ELEVATERDataset(BaseDataset):
         
         reference_samples = {}
         
-        # Group indices by class
-        class_indices = {class_name: [] for class_name in self.class_names}
+        print(f"Selecting {self.dataset_name.upper()} sample data randomly...")
         
-        for idx in range(len(self._dataset)):
-            _, label = self._dataset[idx]
-            class_name = self.class_names[label]
-            class_indices[class_name].append(idx)
-        
-        # Sample from each class
-        for class_name, indices in class_indices.items():
-            # Randomly sample indices with fixed seed for reproducibility
-            sampled_indices = random.sample(
-                indices, 
-                min(n_per_class, len(indices))
+        # Process each class following the original code pattern exactly
+        for class_idx, class_name in enumerate(self.class_names):
+            # Find all indices for this class (using class index, not name)
+            class_indices = [i for i, (_, label) in enumerate(self._dataset) if label == class_idx]
+            
+            # Use np.random.choice exactly like the original code
+            sampled_indices = np.random.choice(
+                class_indices,
+                size=min(n_per_class, len(class_indices)),
+                replace=False
             )
             
-            # Get images
+            # Get images for this class
             images = []
             for idx in sampled_indices:
-                img, _ = self._dataset[idx]
-                if not isinstance(img, Image.Image):
-                    img = Image.fromarray(img)
-                images.append(img)
+                # Get the raw image
+                image, _ = self._dataset[idx]
+                
+                # Convert to PIL Image if needed
+                if not isinstance(image, Image.Image):
+                    image = Image.fromarray(image)
+                
+                images.append(image)
             
             reference_samples[class_name] = images
         
@@ -493,11 +497,13 @@ class ELEVATERDataset(BaseDataset):
                                     list(class_dir.glob('*.png')) + \
                                     list(class_dir.glob('*.jpeg'))
                         
-                        # Sample images
-                        sampled_files = random.sample(
-                            image_files,
-                            min(n_per_class, len(image_files))
+                        # Sample images using np.random.choice for consistency
+                        sampled_indices = np.random.choice(
+                            len(image_files),
+                            size=min(n_per_class, len(image_files)),
+                            replace=False
                         )
+                        sampled_files = [image_files[i] for i in sampled_indices]
                         
                         # Load images
                         images = []
