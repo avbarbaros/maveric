@@ -39,7 +39,7 @@ quality_thresholds:
   # Visual quality metrics
   sharpness_score: 0.1      # Image sharpness (0-1)
   resolution_score: 0.1     # Minimum resolution quality
-  color_diversity: 0.1      # Color distribution diversity
+  color_score: 0.1      # Color distribution diversity
   brightness_score: 0.1     # Brightness quality
   contrast_score: 0.1       # Contrast quality
   
