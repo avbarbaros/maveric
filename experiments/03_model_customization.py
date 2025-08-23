@@ -149,14 +149,18 @@ The input files must follow the naming convention: <dataset_name>_training_maver
 where dataset_name is a valid ELEVATER dataset (e.g., cifar10, cifar100, food101).
 
 Examples:
-  # Single file input
+  # Single file input (uses results_dir from config)
   python 03_model_customization.py --input cifar10_training_maveric_dataset1.json --config maveric_config.yaml
   
-  # Directory input (multiple files)
+  # Directory input (uses results_dir from config)
   python 03_model_customization.py --input ./results/cifar10/ --config maveric_config.yaml --epochs 10
   
-  # Directory with specific pattern
-  python 03_model_customization.py -i /path/to/training_data/ -c config.yaml
+  # Custom output directory
+  python 03_model_customization.py -i /path/to/training_data/ -c config.yaml --output-dir /custom/path
+
+Note: Models will be saved to <results_dir>/<dataset>/models/ unless --output-dir is specified.
+      Results will be saved to <results_dir>/<dataset>/
+      Dataset cache will be stored in <cache_base_dir>/<dataset>/datasets/
 
 Note: The model will be evaluated on the actual test set of the target dataset at each epoch.
         """
@@ -179,8 +183,8 @@ Note: The model will be evaluated on the actual test set of the target dataset a
     parser.add_argument(
         '--output-dir', '-o',
         type=str,
-        default='./models',
-        help='Output directory for model checkpoints (default: ./models)'
+        default=None,
+        help='Output directory for model checkpoints (default: use results_dir from config)'
     )
     
     parser.add_argument(
@@ -320,6 +324,14 @@ def main():
         print(f"📊 Number of classes: {len(class_names)}")
         print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
         
+        # Setup output directory from config with dataset name
+        if args.output_dir is None:
+            # Use results_dir from config + dataset + models subdirectory
+            results_dir = config.get('results_dir', './results')
+            args.output_dir = str(Path(results_dir) / target_dataset / 'models')
+        
+        print(f"📁 Output directory: {args.output_dir}")
+        
         # Setup MAVERIC
         maveric = setup_maveric(config, args)
         if not maveric:
@@ -383,8 +395,11 @@ def main():
             for i, (class_name, accuracy) in enumerate(sorted_classes, 1):
                 print(f"   {i}. {class_name}: {accuracy:.1f}%")
         
-        # Save detailed results
-        results_file = Path(args.output_dir) / f"{target_dataset}_customization_results_{dataset_id}.json"
+        # Save detailed results in dataset-specific results directory
+        results_dir = config.get('results_dir', './results')
+        dataset_results_dir = Path(results_dir) / target_dataset
+        results_file = dataset_results_dir / f"{target_dataset}_customization_results_{dataset_id}.json"
+        dataset_results_dir.mkdir(parents=True, exist_ok=True)
         with open(results_file, 'w') as f:
             json.dump({
                 'model_name': customization_result.model_name,

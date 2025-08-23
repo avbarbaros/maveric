@@ -26,7 +26,8 @@ class ModelCustomizer(BaseComponent):
     def __init__(self, 
                  base_model_name: str = "openai/clip-vit-base-patch32",
                  device: str = "cuda",
-                 checkpoint_dir: Optional[str] = None):
+                 checkpoint_dir: Optional[str] = None,
+                 cache_base_dir: Optional[str] = None):
         """
         Initialize model customizer.
         
@@ -34,12 +35,14 @@ class ModelCustomizer(BaseComponent):
             base_model_name: Pre-trained model to customize
             device: Device for computation
             checkpoint_dir: Directory for saving checkpoints
+            cache_base_dir: Base directory for caching datasets
         """
         super().__init__("ModelCustomizer")
         
         self.base_model_name = base_model_name
         self.device = device if torch.cuda.is_available() else "cpu"
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
+        self.cache_base_dir = cache_base_dir
         
         # Components
         self.model = None
@@ -274,10 +277,16 @@ class ModelCustomizer(BaseComponent):
         try:
             from ..datasets import get_dataset
             from torch.utils.data import DataLoader
+            from pathlib import Path
+            
+            # Use configured cache directory for dataset downloads with dataset name
+            dataset_cache_dir = Path('./data')  # Default fallback
+            if hasattr(self, 'cache_base_dir') and self.cache_base_dir:
+                dataset_cache_dir = Path(self.cache_base_dir) / target_dataset_name / 'datasets'
             
             # Load test split of the target dataset
             self.log_info(f"Loading test data from {target_dataset_name}")
-            test_dataset_handler = get_dataset(target_dataset_name, train=False)  # Get test split
+            test_dataset_handler = get_dataset(target_dataset_name, train=False, root=str(dataset_cache_dir))  # Get test split
             
             # Create custom dataset for test data
             test_samples = []

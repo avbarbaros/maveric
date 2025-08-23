@@ -308,7 +308,8 @@ class MAVERIC(BaseComponent):
             self.customizer = ModelCustomizer(
                 base_model_name=model_name,
                 device=self.config.device,
-                checkpoint_dir=checkpoint_dir
+                checkpoint_dir=checkpoint_dir,
+                cache_base_dir=self.config.cache_base_dir
             )
         
         # Get class names from the data

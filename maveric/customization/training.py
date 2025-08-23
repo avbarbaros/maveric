@@ -111,14 +111,20 @@ class Trainer(BaseComponent):
             
             # Validate and Test
             if epoch % training_config.eval_frequency == 0:
-                val_loss, val_acc = self._validate_epoch(
-                    val_loader,
-                    class_text_features,
-                    criterion
-                )
-                
-                history['val_loss'].append(val_loss)
-                history['val_acc'].append(val_acc)
+                # Validation (optional)
+                if val_loader is not None:
+                    val_loss, val_acc = self._validate_epoch(
+                        val_loader,
+                        class_text_features,
+                        criterion
+                    )
+                    history['val_loss'].append(val_loss)
+                    history['val_acc'].append(val_acc)
+                else:
+                    # No validation - use dummy values
+                    val_loss, val_acc = 0.0, 0.0
+                    history['val_loss'].append(val_loss)
+                    history['val_acc'].append(val_acc)
                 
                 # Evaluate on test set (mandatory)
                 test_loss, test_acc = self._validate_epoch(
@@ -131,9 +137,13 @@ class Trainer(BaseComponent):
                 history['test_acc'].append(test_acc)
                 
                 # Log results (always includes test metrics)
-                log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
-                          f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%, "
-                          f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%")
+                if val_loader is not None:
+                    log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
+                              f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%, "
+                              f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%")
+                else:
+                    log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
+                              f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}% (no validation)")
                 self.log_info(log_msg)
                 
                 # Check for improvement (always use test accuracy)
@@ -150,10 +160,20 @@ class Trainer(BaseComponent):
                             best_checkpoint_path.unlink()
                             self.log_info(f"Removed previous best checkpoint: {best_checkpoint_path}")
                         
+                        checkpoint_metadata = {
+                            'epoch': epoch, 
+                            'test_acc': eval_acc, 
+                            'is_best': True
+                        }
+                        if val_loader is not None:
+                            checkpoint_metadata['val_acc'] = val_acc
+                        else:
+                            checkpoint_metadata['val_acc'] = 0.0  # No validation
+                            
                         best_checkpoint_path = self.save_checkpoint(
                             self.model,
                             f"best_model",
-                            {'epoch': epoch, 'test_acc': eval_acc, 'val_acc': val_acc, 'is_best': True}
+                            checkpoint_metadata
                         )
                 else:
                     patience_counter += 1
