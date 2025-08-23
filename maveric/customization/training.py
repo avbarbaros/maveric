@@ -89,7 +89,6 @@ class Trainer(BaseComponent):
         # Best model tracking
         best_val_acc = 0.0
         best_epoch = 0
-        patience_counter = 0
         best_checkpoint_path = None
         
         # Training loop
@@ -151,7 +150,6 @@ class Trainer(BaseComponent):
                 if eval_acc > best_val_acc:
                     best_val_acc = eval_acc
                     best_epoch = epoch
-                    patience_counter = 0
                     
                     # Save best model (remove previous best if exists)
                     if training_config.save_best_model and self.checkpoint_dir:
@@ -175,13 +173,6 @@ class Trainer(BaseComponent):
                             f"best_model",
                             checkpoint_metadata
                         )
-                else:
-                    patience_counter += 1
-                
-                # Early stopping
-                if patience_counter >= training_config.early_stopping_patience:
-                    self.log_info(f"Early stopping at epoch {epoch}")
-                    break
             
             # Skip periodic checkpoints to save disk space - only keep best model
             # Periodic checkpoints disabled for disk efficiency

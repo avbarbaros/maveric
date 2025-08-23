@@ -242,7 +242,6 @@ class TrainingConfig:
     # Evaluation
     eval_frequency: int = 1  # Evaluate every N epochs
     save_best_model: bool = True
-    early_stopping_patience: int = 3
     
     # Validation strategy
     use_validation: bool = True  # Whether to use validation during training

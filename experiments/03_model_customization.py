@@ -263,7 +263,6 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
         gradient_clip_value=training_cfg.get('gradient_clip_value', 1.0),
         eval_frequency=training_cfg.get('eval_frequency', 1),
         save_best_model=training_cfg.get('save_best_model', True),
-        early_stopping_patience=training_cfg.get('early_stopping_patience', 3),
         use_validation=training_cfg.get('use_validation', True),
         validation_method=training_cfg.get('validation_method', 'stratified_kfold'),
         validation_k_folds=training_cfg.get('validation_k_folds', 5),

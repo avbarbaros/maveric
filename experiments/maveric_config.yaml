@@ -85,9 +85,8 @@ training:
   validation_k_folds: 5  # Number of folds for stratified k-fold validation
   validation_split: 0.2  # Fraction for simple split validation (used if method is "simple_split")
   
-  # Early stopping and checkpointing
+  # Model checkpointing
   save_best_model: true
-  early_stopping_patience: 3
   eval_frequency: 1
 
 # Logging and monitoring
