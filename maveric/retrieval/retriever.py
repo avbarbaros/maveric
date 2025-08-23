@@ -216,8 +216,8 @@ class Retriever(BaseComponent):
             # Create export directory if it doesn't exist
             Path(export_dir).mkdir(parents=True, exist_ok=True)
             
-            # Create filename: {datasetName}_raw_maveric_{file_id}.json
-            filename = f"{target_dataset.lower()}_raw_maveric_{file_id}.json"
+            # Create filename: {datasetName}_raw_maveric_dataset{file_id}.json
+            filename = f"{target_dataset.lower()}_raw_maveric_dataset{file_id}.json"
             filepath = Path(export_dir) / filename
             
             # Save the batch

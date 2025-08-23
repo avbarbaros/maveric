@@ -57,7 +57,7 @@ def get_user_file_sequence(start_index: int) -> int:
         print(f"\n📁 Output File Sequence Selection:")
         print(f"  • Starting index: {start_index:,}")
         print(f"  • Suggested file sequence: {suggested_file_id} (based on batch size 500)")
-        print(f"  • Output format: datasetname_raw_maveric_{{sequence}}.json")
+        print(f"  • Output format: datasetname_raw_maveric_dataset{{sequence}}.json")
         print("  • Enter file sequence number (e.g., '1', '5', '10')")
         print("  • Enter 'q' to quit")
         
@@ -315,7 +315,7 @@ def main():
         
         # List the rotation files that were created
         output_dir_path = dataset_output_dir
-        rotation_files = sorted(output_dir_path.glob(f"{selected_dataset.lower()}_raw_maveric_*.json"))
+        rotation_files = sorted(output_dir_path.glob(f"{selected_dataset.lower()}_raw_maveric_dataset*.json"))
         if rotation_files:
             print(f"📋 Created {len(rotation_files)} rotation files:")
             for file_path in rotation_files:

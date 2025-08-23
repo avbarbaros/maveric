@@ -223,8 +223,8 @@ class RetrievalResult:
         if not input_path.exists():
             raise ValueError(f"Input directory does not exist: {input_dir}")
         
-        # Find all rotation files: {dataset_name}_raw_maveric_*.json
-        pattern = f"{dataset_name.lower()}_raw_maveric_*.json"
+        # Find all rotation files: {dataset_name}_raw_maveric_dataset*.json
+        pattern = f"{dataset_name.lower()}_raw_maveric_dataset*.json"
         rotation_files = sorted(input_path.glob(pattern))
         
         if not rotation_files:

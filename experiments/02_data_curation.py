@@ -177,7 +177,7 @@ def validate_and_adjust_input_dir(input_dir: str, dataset_name: str) -> str:
     
     # If the provided path exists and contains rotation files, use it directly
     if input_path.exists():
-        pattern = f"{dataset_name.lower()}_raw_maveric_*.json"
+        pattern = f"{dataset_name.lower()}_raw_maveric_dataset*.json"
         rotation_files = list(input_path.glob(pattern))
         if rotation_files:
             return str(input_path)
