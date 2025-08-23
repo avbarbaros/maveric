@@ -97,7 +97,6 @@ class BalancedFilter(QualityFilter):
     def __init__(self,
                  strategy: str = 'median',
                  min_threshold: int = 15,
-                 max_target: int = 200,
                  enable_oversampling: bool = False,
                  sort_by: str = 'consistency'):
         """
@@ -106,14 +105,12 @@ class BalancedFilter(QualityFilter):
         Args:
             strategy: Balancing strategy ('median', 'mean', 'min', 'max')
             min_threshold: Minimum samples required per class
-            max_target: Maximum samples per class
             enable_oversampling: Whether to oversample small classes
             sort_by: Metric to use for selecting best samples
         """
         super().__init__("BalancedFilter")
         self.strategy = strategy
         self.min_threshold = min_threshold
-        self.max_target = max_target
         self.enable_oversampling = enable_oversampling
         self.sort_by = sort_by
     
@@ -176,8 +173,7 @@ class BalancedFilter(QualityFilter):
         else:
             raise ValueError(f"Unknown strategy: {self.strategy}")
         
-        # Apply max target constraint
-        target_samples = min(target_samples, self.max_target)
+        # Apply minimum threshold constraint
         target_samples = max(target_samples, self.min_threshold)
         
         self.log_info(f"Target samples per class: {target_samples}")

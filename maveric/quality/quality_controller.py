@@ -239,7 +239,6 @@ class QualityController(BaseComponent):
     def balance_dataset(self, 
                        strategy: str = 'median',
                        min_samples: int = 15,
-                       max_samples: int = 200,
                        enable_oversampling: bool = False) -> pd.DataFrame:
         """
         Balance the filtered dataset across classes.
@@ -247,7 +246,6 @@ class QualityController(BaseComponent):
         Args:
             strategy: Balancing strategy ('median', 'mean', 'min', 'max')
             min_samples: Minimum samples per class
-            max_samples: Maximum samples per class
             enable_oversampling: Whether to oversample small classes
             
         Returns:
@@ -259,7 +257,6 @@ class QualityController(BaseComponent):
         balancer = BalancedFilter(
             strategy=strategy,
             min_threshold=min_samples,
-            max_target=max_samples,
             enable_oversampling=enable_oversampling
         )
         

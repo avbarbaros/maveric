@@ -131,7 +131,9 @@ def setup_maveric(config: Dict) -> MAVERIC:
             device=config.get('device', 'auto'),
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
             default_thresholds=config.get('quality_thresholds', {}),
+            balance_strategy=config.get('elevater', {}).get('quality_control', {}).get('balance_strategy', 'median'),
             balance_min_samples=config.get('elevater', {}).get('quality_control', {}).get('min_samples_per_class', 15),
+            balance_enable_oversampling=config.get('elevater', {}).get('quality_control', {}).get('enable_oversampling', False),
             # Additional configuration mappings
             retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
             enable_real_time_stats=config.get('enable_real_time_stats', True),
@@ -239,11 +241,21 @@ def main():
         
         # Apply quality control using rotation files directly
         print("🔍 Loading rotation files and applying quality control filtering...")
+        
+        # The balance strategy will be automatically taken from the MAVERIC config
+        # unless explicitly overridden by command line argument
+        balance_strategy_override = None
+        if args.balance_strategy and args.balance_strategy != 'median':  # only override if explicitly set
+            balance_strategy_override = args.balance_strategy
+            print(f"⚖️  Balance strategy (override): {balance_strategy_override}")
+        else:
+            print(f"⚖️  Balance strategy: Using config default ({maveric.config.balance_strategy})")
+        
         quality_result = maveric.quality_control(
             data=(args.dataset_name, validated_input_dir),
             thresholds=config.get('quality_thresholds'),
             weights=config.get('metric_weights'),
-            balance_strategy=args.balance_strategy
+            balance_strategy=balance_strategy_override  # Will use config default if None
         )
         
         if quality_result is None or len(quality_result.filtered_samples) == 0:

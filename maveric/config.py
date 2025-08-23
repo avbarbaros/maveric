@@ -58,8 +58,8 @@ class MAVERICConfig:
     })
     
     # Dataset balancing configuration
+    balance_strategy: str = "median"  # Balancing strategy: median, mean, min, max, none
     balance_min_samples: int = 15
-    balance_max_samples: int = 200
     balance_enable_oversampling: bool = False
     
     # Logging configuration

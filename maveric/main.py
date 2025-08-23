@@ -172,7 +172,7 @@ class MAVERIC(BaseComponent):
                        data: Union[RetrievalResult, pd.DataFrame, str, tuple],
                        thresholds: Optional[Dict[str, float]] = None,
                        weights: Optional[Dict[str, float]] = None,
-                       balance_strategy: str = 'median',
+                       balance_strategy: Optional[str] = None,
                        balance_config: Optional[Dict[str, Any]] = None) -> QualityResult:
         """
         Apply quality control filtering to retrieved samples.
@@ -229,11 +229,14 @@ class MAVERIC(BaseComponent):
         filtered_count = self.quality_controller.apply_thresholds()
         self.log_info(f"Filtered to {filtered_count} samples")
         
+        # Set balance strategy from config if not provided
+        if balance_strategy is None:
+            balance_strategy = self.config.balance_strategy
+        
         # Apply balancing if requested
         if balance_strategy != 'none':
             balance_cfg = balance_config or {
                 'min_samples': self.config.balance_min_samples,
-                'max_samples': self.config.balance_max_samples,
                 'enable_oversampling': self.config.balance_enable_oversampling
             }
             

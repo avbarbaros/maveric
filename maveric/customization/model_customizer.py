@@ -646,26 +646,38 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         self.class_names = class_names
         self.class_to_idx = {name: i for i, name in enumerate(class_names)}
         self.processor = processor
-        self.use_augmentation = use_augmentation
         
-        # Setup augmentation
-        if use_augmentation:
-            from torchvision import transforms
-            
-            aug_config = augmentation_config or {}
-            self.augmentation = transforms.Compose([
-                transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandAugment(
-                    num_ops=aug_config.get('num_ops', 2),
-                    magnitude=aug_config.get('magnitude', 9)
-                )
-            ])
-        else:
-            self.augmentation = None
+        # Setup augmentation configuration
+        self.use_augmentation = use_augmentation
+        self.augmentation_config = augmentation_config or {}
     
     def __len__(self):
         return len(self.samples)
+    
+    def _apply_transforms(self, image):
+        """Apply appropriate transforms based on augmentation settings"""
+        if self.use_augmentation:
+            try:
+                from torchvision import transforms
+                
+                # Convert PIL to tensor for RandAugment, then back to PIL
+                tensor_image = transforms.PILToTensor()(image)
+                # Apply RandAugment (note: RandAugment expects tensor input)
+                augmented_tensor = transforms.RandAugment(
+                    num_ops=self.augmentation_config.get('num_ops', 2),
+                    magnitude=self.augmentation_config.get('magnitude', 9),
+                    interpolation=transforms.InterpolationMode.BILINEAR
+                )(tensor_image)
+                # Convert back to PIL Image
+                augmented_image = transforms.ToPILImage()(augmented_tensor)
+                return augmented_image
+            except Exception as e:
+                print(f"Error applying augmentation, using original image: {str(e)}")
+                # Fallback to basic resize if augmentation fails
+                return image.resize((224, 224)) if image.size != (224, 224) else image
+        else:
+            # Just resize if no augmentation
+            return image.resize((224, 224)) if image.size != (224, 224) else image
     
     def __getitem__(self, idx):
         sample = self.samples[idx]
@@ -682,9 +694,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             # Create placeholder image
             image = Image.new('RGB', (224, 224), color=(128, 128, 128))
         
-        # Apply augmentation
-        if self.augmentation and self.use_augmentation:
-            image = self.augmentation(image)
+        # Apply transforms (augmentation or just resize)
+        image = self._apply_transforms(image)
         
         # Get label
         label = self.class_to_idx.get(sample['label'], 0)

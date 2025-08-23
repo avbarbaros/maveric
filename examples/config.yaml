@@ -42,8 +42,8 @@ default_thresholds:
   color_score: 0.768
 
 # Dataset balancing
+balance_strategy: "median"  # Balancing strategy: median, mean, min, max, none
 balance_min_samples: 15
-balance_max_samples: 200
 balance_enable_oversampling: false
 
 # Logging

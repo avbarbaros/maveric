@@ -142,8 +142,8 @@ elevater:
   quality_control:
     enable_filtering: true
     balance_classes: true     # Balance classes after filtering
+    balance_strategy: "median"  # Balancing strategy: median, mean, min, max, none
     min_samples_per_class: 1 # Minimum samples to keep per class
-    max_samples_per_class: 200 # Maximum samples to keep per class
     enable_oversampling: false # Enable oversampling for small classes
 
 # Performance optimization

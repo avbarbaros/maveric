@@ -323,13 +323,6 @@ class QualityDashboard(BaseComponent):
                 style={'description_width': '100px'}
             )
             
-            max_samples = widgets.IntSlider(
-                value=200,
-                min=50,
-                max=1000,
-                description='Max samples:',
-                style={'description_width': '100px'}
-            )
             
             enable_oversampling = widgets.Checkbox(
                 value=False,
@@ -346,7 +339,6 @@ class QualityDashboard(BaseComponent):
                         balanced = self.qc.balance_dataset(
                             strategy=strategy.value,
                             min_samples=min_samples.value,
-                            max_samples=max_samples.value,
                             enable_oversampling=enable_oversampling.value
                         )
                         
@@ -368,7 +360,6 @@ class QualityDashboard(BaseComponent):
             balance_section.children = balance_section.children + (
                 strategy,
                 min_samples,
-                max_samples,
                 enable_oversampling,
                 balance_button,
                 balance_output

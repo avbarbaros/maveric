@@ -89,6 +89,13 @@ class MAVERICInteractiveQualityControl:
             'consistency': 0.780
         }
         
+        # Default balance settings
+        self.balance_settings = {
+            'balance_strategy': 'median',
+            'balance_min_samples': 15,
+            'balance_enable_oversampling': False
+        }
+        
         # Auto-detect data path if not provided
         if self.data_path is None:
             self.data_path = self._detect_data_path()
@@ -146,6 +153,26 @@ class MAVERICInteractiveQualityControl:
             
             # Get results_dir from config
             results_dir = config.get('results_dir', '/content/drive/MyDrive/MAVERIC/maveric_experiments')
+            
+            # Load balance settings from config
+            elevater_config = config.get('elevater', {})
+            quality_control_config = elevater_config.get('quality_control', {})
+            
+            if quality_control_config:
+                self.balance_settings.update({
+                    'balance_strategy': quality_control_config.get('balance_strategy', 'median'),
+                    'balance_min_samples': quality_control_config.get('min_samples_per_class', 15),
+                    'balance_enable_oversampling': quality_control_config.get('enable_oversampling', False)
+                })
+                print(f"⚖️ Loaded balance settings: {self.balance_settings}")
+            
+            # Also check top-level config for balance settings
+            if 'balance_strategy' in config:
+                self.balance_settings['balance_strategy'] = config['balance_strategy']
+            if 'balance_min_samples' in config:
+                self.balance_settings['balance_min_samples'] = config['balance_min_samples']
+            if 'balance_enable_oversampling' in config:
+                self.balance_settings['balance_enable_oversampling'] = config['balance_enable_oversampling']
             
             # Construct the correct data path: results_dir/dataset_name/raw
             config_data_path = os.path.join(results_dir, self.dataset_name, 'raw')
@@ -354,6 +381,122 @@ class MAVERICInteractiveQualityControl:
         self._show_class_distribution()
         
         return final_count
+    
+    def apply_balance(self):
+        """Apply balancing strategy to the filtered data"""
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("❌ No filtered data available for balancing")
+            return 0
+        
+        if 'label' not in self.filtered_data.columns:
+            print("❌ No 'label' column found, cannot balance")
+            return len(self.filtered_data)
+        
+        strategy = self.balance_settings['balance_strategy']
+        min_samples = self.balance_settings['balance_min_samples']
+        enable_oversampling = self.balance_settings['balance_enable_oversampling']
+        
+        if strategy == 'none':
+            print("ℹ️  No balancing applied (strategy='none')")
+            return len(self.filtered_data)
+        
+        print(f"\n⚖️  Applying Balance Strategy: {strategy}")
+        print("=" * 60)
+        
+        # Get class distribution before balancing
+        class_counts = self.filtered_data['label'].value_counts()
+        print("Before balancing:")
+        for class_name, count in class_counts.items():
+            print(f"  {class_name}: {count:,} samples")
+        
+        # Filter out classes below minimum threshold
+        sufficient_classes = class_counts[class_counts >= min_samples]
+        removed_classes = set(class_counts.index) - set(sufficient_classes.index)
+        
+        if removed_classes:
+            print(f"\nRemoving {len(removed_classes)} classes with < {min_samples} samples:")
+            for cls in removed_classes:
+                print(f"  {cls}: {class_counts[cls]} samples")
+            
+            # Keep only sufficient classes
+            self.filtered_data = self.filtered_data[
+                self.filtered_data['label'].isin(sufficient_classes.index)
+            ]
+        
+        if len(sufficient_classes) == 0:
+            print("❌ No classes meet minimum threshold")
+            self.filtered_data = pd.DataFrame()
+            return 0
+        
+        # Calculate target samples per class
+        remaining_sizes = sufficient_classes.values
+        
+        if strategy == 'median':
+            target_samples = int(np.median(remaining_sizes))
+        elif strategy == 'mean':
+            target_samples = int(np.mean(remaining_sizes))
+        elif strategy == 'min':
+            target_samples = min(remaining_sizes)
+        elif strategy == 'max':
+            target_samples = max(remaining_sizes)
+        else:
+            raise ValueError(f"Unknown strategy: {strategy}")
+        
+        # Apply minimum threshold constraint
+        target_samples = max(target_samples, min_samples)
+        print(f"\nTarget samples per class: {target_samples:,}")
+        
+        # Balance each class
+        balanced_data = []
+        
+        for class_name in sufficient_classes.index:
+            class_data = self.filtered_data[self.filtered_data['label'] == class_name].copy()
+            
+            # Sort by consistency score for best sample selection
+            if 'consistency' in class_data.columns:
+                class_data = class_data.sort_values('consistency', ascending=False)
+            
+            current_size = len(class_data)
+            
+            if current_size > target_samples:
+                # Undersample: take top samples
+                selected_data = class_data.head(target_samples)
+            elif current_size == target_samples:
+                # Perfect size
+                selected_data = class_data
+            else:
+                # Smaller than target
+                if enable_oversampling:
+                    # Oversample by duplicating high-quality samples
+                    selected_data = class_data.copy()
+                    needed = target_samples - current_size
+                    
+                    # Duplicate samples cyclically
+                    for i in range(needed):
+                        duplicate_idx = i % current_size
+                        selected_data = pd.concat([selected_data, class_data.iloc[duplicate_idx:duplicate_idx+1]], ignore_index=True)
+                else:
+                    # Keep original size
+                    selected_data = class_data
+            
+            balanced_data.append(selected_data)
+        
+        # Combine balanced data
+        self.filtered_data = pd.concat(balanced_data, ignore_index=True)
+        
+        # Shuffle the data
+        self.filtered_data = self.filtered_data.sample(frac=1, random_state=42).reset_index(drop=True)
+        
+        # Show final distribution
+        final_counts = self.filtered_data['label'].value_counts()
+        print("\nAfter balancing:")
+        for class_name, count in final_counts.items():
+            print(f"  {class_name}: {count:,} samples")
+        
+        print("=" * 60)
+        print(f"📊 Balanced dataset: {len(self.filtered_data):,} samples, {len(final_counts)} classes")
+        
+        return len(self.filtered_data)
     
     def _show_class_distribution(self):
         """Display class distribution of filtered data"""
@@ -776,14 +919,56 @@ class MAVERICInteractiveQualityControl:
                 style={'description_width': '180px'}
             )
         
+        # Create balance settings widgets
+        balance_strategy_widget = widgets.Dropdown(
+            options=['none', 'median', 'mean', 'min', 'max'],
+            value=self.balance_settings['balance_strategy'],
+            description='Strategy:',
+            style={'description_width': '180px'}
+        )
+        
+        balance_min_samples_widget = widgets.IntSlider(
+            value=self.balance_settings['balance_min_samples'],
+            min=1,
+            max=100,
+            step=1,
+            description='Min Samples:',
+            continuous_update=False,
+            layout=widgets.Layout(width='500px'),
+            style={'description_width': '180px'}
+        )
+        
+        balance_oversampling_widget = widgets.Checkbox(
+            value=self.balance_settings['balance_enable_oversampling'],
+            description='Enable Oversampling',
+            style={'description_width': '180px'}
+        )
+        
+        balance_button = widgets.Button(
+            description='Apply Balance',
+            button_style='warning',
+            icon='balance-scale',
+            layout=widgets.Layout(width='200px')
+        )
+        
+        # Create balance tab content
+        balance_tab_content = widgets.VBox([
+            balance_strategy_widget,
+            balance_min_samples_widget,
+            balance_oversampling_widget,
+            balance_button
+        ])
+        
         # Create tabs
         tab = widgets.Tab()
         tab.children = [
             widgets.VBox(list(threshold_widgets.values())),
-            widgets.VBox(list(weight_widgets.values()))
+            widgets.VBox(list(weight_widgets.values())),
+            balance_tab_content
         ]
         tab.set_title(0, 'Quality Thresholds')
         tab.set_title(1, 'Class Weights')
+        tab.set_title(2, 'Balance Settings')
         
         # Create buttons
         apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
@@ -808,6 +993,13 @@ class MAVERICInteractiveQualityControl:
                 # Update weights (batch update to recalculate scores only once)
                 weight_updates = {metric: widget.value for metric, widget in weight_widgets.items()}
                 self.set_class_weights(weight_updates)
+                
+                # Update balance settings
+                self.balance_settings.update({
+                    'balance_strategy': balance_strategy_widget.value,
+                    'balance_min_samples': balance_min_samples_widget.value,
+                    'balance_enable_oversampling': balance_oversampling_widget.value
+                })
                 
                 # Apply filters
                 count = self.apply_thresholds()
@@ -848,12 +1040,28 @@ class MAVERICInteractiveQualityControl:
                 else:
                     print(f"❌ Failed to save configuration")
         
+        def on_balance_clicked(b):
+            with output:
+                clear_output()
+                
+                # Update balance settings
+                self.balance_settings.update({
+                    'balance_strategy': balance_strategy_widget.value,
+                    'balance_min_samples': balance_min_samples_widget.value,
+                    'balance_enable_oversampling': balance_oversampling_widget.value
+                })
+                
+                # Apply balance
+                count = self.apply_balance()
+                filtered_count.value = f"<h4>Balanced data: {count:,} items</h4>"
+        
         # Connect callbacks
         apply_button.on_click(on_apply_clicked)
         visualize_button.on_click(on_visualize_clicked)
         compare_button.on_click(on_compare_clicked)
         save_data_button.on_click(on_save_data_clicked)
         save_config_button.on_click(on_save_config_clicked)
+        balance_button.on_click(on_balance_clicked)
         
         # Layout
         button_box = widgets.HBox([apply_button, visualize_button, compare_button, save_data_button, save_config_button])
