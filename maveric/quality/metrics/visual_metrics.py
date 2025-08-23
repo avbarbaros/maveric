@@ -20,17 +20,13 @@ class ResolutionMetric(BaseQualityMetric):
     and provide better training signals.
     """
     
-    def __init__(self, target_size: int = 224, min_size: int = 32):
+    def __init__(self):
         """
         Initialize resolution metric.
         
-        Args:
-            target_size: Target resolution for vision models
-            min_size: Minimum acceptable resolution
+        Uses fixed 224px target size to match original MAVERIC implementation.
         """
         super().__init__("resolution")
-        self.target_size = target_size
-        self.min_size = min_size
     
     @property
     def metric_name(self) -> str:
@@ -40,31 +36,21 @@ class ResolutionMetric(BaseQualityMetric):
         """
         Compute resolution score.
         
-        The score is based on the smallest dimension relative to the target size,
-        ensuring that both width and height meet quality standards.
+        Simple resolution score matching the original MAVERIC implementation:
+        min(width, height) / 224.0
         
         Args:
             image: PIL Image
             metadata: Image metadata
             
         Returns:
-            Resolution score (0-1, can exceed 1 for high-res images)
+            Resolution score (can exceed 1 for high-res images)
         """
+        # Resolution quality: 224x224 is the input size of CLIP
         width, height = image.size
-        min_dimension = min(width, height)
+        resolution_score = min(width, height) / 224.0
         
-        # Penalize very small images
-        if min_dimension < self.min_size:
-            return 0.0
-        
-        # Score based on ratio to target size
-        score = min_dimension / self.target_size
-        
-        # Apply soft cap to prevent extremely high scores
-        if score > 2.0:
-            score = 2.0 + np.log(score - 1.0)
-        
-        return float(score)
+        return float(resolution_score)
 
 
 class SharpnessMetric(BaseQualityMetric):

@@ -35,10 +35,10 @@ class TestVisualMetrics:
     
     def test_resolution_metric(self, sample_image, metadata):
         """Test resolution metric."""
-        metric = ResolutionMetric(target_size=224)
+        metric = ResolutionMetric()
         score = metric.compute(sample_image, metadata)
         
-        assert 0 <= score <= 2.0
+        assert score >= 0
         assert score == 1.0  # 224/224 = 1.0
         
         # Test with smaller image
