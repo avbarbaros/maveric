@@ -324,27 +324,37 @@ class ELEVATERDataset(BaseDataset):
         """Load datasets using torchvision."""
         try:
             import torchvision
+            from PIL import Image
+            
+            # Custom transform to convert dataset images to PIL (matching original code)
+            class ConvertToPIL:
+                def __call__(self, img):
+                    if not isinstance(img, Image.Image):
+                        return Image.fromarray(img)
+                    return img
+            
+            convert_transform = ConvertToPIL()
             
             # Define dataset constructors
             dataset_loaders = {
                 'cifar10': lambda: torchvision.datasets.CIFAR10(
-                    root=self.root, train=self.train, download=self.download, transform=None),
+                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
                 'cifar100': lambda: torchvision.datasets.CIFAR100(
-                    root=self.root, train=self.train, download=self.download, transform=None),
+                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
                 'caltech101': lambda: torchvision.datasets.Caltech101(
-                    root=self.root, download=self.download, transform=None),
+                    root=self.root, download=self.download, transform=convert_transform),
                 'country211': lambda: torchvision.datasets.Country211(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'eurosat': lambda: torchvision.datasets.EuroSAT(
-                    root=self.root, download=self.download, transform=None),
+                    root=self.root, download=self.download, transform=convert_transform),
                 'food101': lambda: torchvision.datasets.Food101(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'gtsrb': lambda: torchvision.datasets.GTSRB(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'oxford_flowers102': lambda: torchvision.datasets.Flowers102(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'oxford_pets': lambda: torchvision.datasets.OxfordIIITPet(
-                    root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=convert_transform),
             }
             
             if self.dataset_name not in dataset_loaders:

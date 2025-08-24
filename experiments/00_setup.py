@@ -120,14 +120,11 @@ def create_directories(config):
     
     directories = [
         base_cache_dir,
-        f"{base_cache_dir}/images",
+        f"{base_cache_dir}/image_cache",
         f"{base_cache_dir}/embeddings",
         f"{base_cache_dir}/models",
         f"{base_cache_dir}/datasets",
         results_dir,
-        f"{results_dir}/experiments",
-        f"{results_dir}/visualizations",
-        f"{results_dir}/quality_reports",
         f"{maveric_base_dir}/huggingface_cache"
     ]
     

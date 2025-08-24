@@ -43,8 +43,11 @@ class Evaluator(BaseComponent):
         
         # Create text features
         class_prompts = [f"a photo of a {name}." for name in class_names]
+        text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+        
         with torch.no_grad():
-            class_text_features = model.encode_text(class_prompts)
+            class_text_features = model.clip_model.get_text_features(**text_inputs)
+            class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
         
         correct = 0
         total = 0
@@ -83,8 +86,11 @@ class Evaluator(BaseComponent):
         
         # Create text features
         class_prompts = [f"a photo of a {name}." for name in class_names]
+        text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+        
         with torch.no_grad():
-            class_text_features = model.encode_text(class_prompts)
+            class_text_features = model.clip_model.get_text_features(**text_inputs)
+            class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
         
         all_predictions = []
         all_labels = []
@@ -136,8 +142,12 @@ class Evaluator(BaseComponent):
         
         # Create text features
         class_prompts = [f"a photo of a {name}." for name in class_names]
+        text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+        
         with torch.no_grad():
-            class_text_features = model.encode_text(class_prompts)
+            class_text_features = model.clip_model.get_text_features(**text_inputs)
+            class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+        
         
         all_predictions = []
         all_labels = []
