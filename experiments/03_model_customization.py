@@ -254,7 +254,6 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
         warmup_steps=training_cfg.get('warmup_steps', 0),
         use_regularization=training_cfg.get('use_regularization', True),
         regularization_weight=training_cfg.get('regularization_weight', 0.5),
-        dropout_rate=training_cfg.get('dropout_rate', 0.1),
         use_augmentation=training_cfg.get('use_augmentation', True),
         augmentation_strength=training_cfg.get('augmentation_strength', 2),
         augmentation_magnitude=training_cfg.get('augmentation_magnitude', 9),

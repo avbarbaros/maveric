@@ -227,7 +227,6 @@ class TrainingConfig:
     # Regularization
     use_regularization: bool = True
     regularization_weight: float = 0.5
-    dropout_rate: float = 0.1
     
     # Data augmentation
     use_augmentation: bool = True
