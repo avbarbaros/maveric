@@ -533,34 +533,39 @@ class CustomizedCLIP(nn.Module):
             pixel_values = torch.stack(images).to(self.device)
         else:
             # Verify and process PIL images with robust handling
-            verified_images = []
-            for img in images:
-                try:
-                    if isinstance(img, Image.Image):
-                        # Force load to verify integrity and ensure RGB
-                        img.load()
-                        if img.mode != 'RGB':
-                            img = img.convert('RGB')
-                        verified_images.append(img)
-                    else:
-                        verified_images.append(img)
-                except Exception:
-                    # Replace corrupted image with placeholder
-                    from PIL import Image
-                    placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
-                    verified_images.append(placeholder)
+            # verified_images = []
+            # for img in images:
+            #     try:
+            #         if isinstance(img, Image.Image):
+            #             # Force load to verify integrity and ensure RGB
+            #             img.load()
+            #             if img.mode != 'RGB':
+            #                 img = img.convert('RGB')
+            #             verified_images.append(img)
+            #         else:
+            #             verified_images.append(img)
+            #     except Exception:
+            #         # Replace corrupted image with placeholder
+            #         from PIL import Image
+            #         placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
+            #         verified_images.append(placeholder)
             
             # Process with standard parameters (like original code)
             inputs = self.processor(
-                images=verified_images,
+                # images=verified_images,
+                images=images,
                 return_tensors="pt",
                 padding=True
             ).to(self.device)
             pixel_values = inputs.pixel_values
         
+        # Get image features
+        image_outputs = self.clip_model.vision_model(pixel_values=pixel_values)
+        image_embeds = image_outputs[1]  # pooled output
+        image_embeds = self.clip_model.visual_projection(image_embeds)
         # Get image features using the same method as original code
-        inputs = {"pixel_values": pixel_values}
-        image_embeds = self.clip_model.get_image_features(**inputs)
+        # inputs = {"pixel_values": pixel_values}
+        # image_embeds = self.clip_model.get_image_features(**inputs)
         
         # Normalize
         image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
@@ -597,8 +602,12 @@ class CustomizedCLIP(nn.Module):
         ).to(self.device)
         
         with torch.no_grad():
-            text_embeds = self.clip_model.get_text_features(**tokens)
-            text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
+            # text_embeds = self.clip_model.get_text_features(**tokens)
+            # text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
+            text_outputs = self.clip_model.text_model(**tokens)
+            text_embeds = text_outputs[1]  # pooled output
+            text_embeds = self.clip_model.text_projection(text_embeds)
+
         
         return text_embeds
 

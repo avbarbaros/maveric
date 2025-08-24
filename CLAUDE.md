@@ -207,7 +207,7 @@ Torchvision datasets benefit from automatic downloading, standardized interfaces
 ## Important Development Notes
 
 ### CLI Entry Point Discrepancy
-The CLI entry point is defined in `setup.py:49` as `maveric=maveric.cli:main`, but the actual CLI implementation is in `maveric/utils/cli.py`. Be aware of this path when working with CLI-related code.
+The CLI entry point is defined in `setup.py:49` as `maveric=maveric.cli:main`, but the actual CLI implementation is in `maveric/utils/cli.py`. This creates a mismatch where the entry point references a non-existent `maveric/cli.py` file. Be aware of this discrepancy when working with CLI-related code.
 
 ### Testing Environment Setup
 - All tests automatically force CPU device via `conftest.py` device fixture
