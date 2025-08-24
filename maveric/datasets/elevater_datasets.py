@@ -324,13 +324,23 @@ class ELEVATERDataset(BaseDataset):
         """Load datasets using torchvision."""
         try:
             import torchvision
+            from PIL import Image
+            
+            # Custom transform to convert dataset images to PIL (matching original code)
+            class ConvertToPIL:
+                def __call__(self, img):
+                    if not isinstance(img, Image.Image):
+                        return Image.fromarray(img)
+                    return img
+            
+            convert_transform = ConvertToPIL()
             
             # Define dataset constructors
             dataset_loaders = {
                 'cifar10': lambda: torchvision.datasets.CIFAR10(
-                    root=self.root, train=self.train, download=self.download, transform=None),
+                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
                 'cifar100': lambda: torchvision.datasets.CIFAR100(
-                    root=self.root, train=self.train, download=self.download, transform=None),
+                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
                 'caltech101': lambda: torchvision.datasets.Caltech101(
                     root=self.root, download=self.download, transform=None),
                 'country211': lambda: torchvision.datasets.Country211(
