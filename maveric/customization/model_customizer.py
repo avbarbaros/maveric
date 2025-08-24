@@ -550,16 +550,11 @@ class CustomizedCLIP(nn.Module):
                     placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
                     verified_images.append(placeholder)
             
-            # Process with explicit parameters like original code
+            # Process with standard parameters (like original code)
             inputs = self.processor(
                 images=verified_images,
                 return_tensors="pt",
-                do_resize=True,
-                size={"height": 224, "width": 224},
-                do_center_crop=True,
-                crop_size={"height": 224, "width": 224}, 
-                do_normalize=True,
-                do_convert_rgb=True
+                padding=True
             ).to(self.device)
             pixel_values = inputs.pixel_values
         
