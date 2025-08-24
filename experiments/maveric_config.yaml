@@ -72,7 +72,11 @@ processing:
 # Training configuration (for model customization)
 training:
   epochs: 10
+<<<<<<< HEAD
   learning_rate: 0.000001  # Reduced from 1e-5 to 1e-6 to match original
+=======
+  learning_rate: 0.000001
+>>>>>>> backToTheWorkingVersion
   weight_decay: 0.01
   optimizer: "adamw"  # adamw, adam, sgd
   scheduler: "cosine"  # cosine, linear, constant
@@ -144,7 +148,11 @@ elevater:
   quality_control:
     enable_filtering: true
     balance_classes: true     # Balance classes after filtering
+<<<<<<< HEAD
     balance_strategy: "min"  # Balancing strategy: median, mean, min, max, none (min matches original conservative approach)
+=======
+    balance_strategy: "min"  # Balancing strategy: median, mean, min, max, none
+>>>>>>> backToTheWorkingVersion
     min_samples_per_class: 1 # Minimum samples to keep per class
     enable_oversampling: false # Enable oversampling for small classes
 

@@ -342,19 +342,19 @@ class ELEVATERDataset(BaseDataset):
                 'cifar100': lambda: torchvision.datasets.CIFAR100(
                     root=self.root, train=self.train, download=self.download, transform=convert_transform),
                 'caltech101': lambda: torchvision.datasets.Caltech101(
-                    root=self.root, download=self.download, transform=None),
+                    root=self.root, download=self.download, transform=convert_transform),
                 'country211': lambda: torchvision.datasets.Country211(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'eurosat': lambda: torchvision.datasets.EuroSAT(
-                    root=self.root, download=self.download, transform=None),
+                    root=self.root, download=self.download, transform=convert_transform),
                 'food101': lambda: torchvision.datasets.Food101(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'gtsrb': lambda: torchvision.datasets.GTSRB(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'oxford_flowers102': lambda: torchvision.datasets.Flowers102(
-                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'oxford_pets': lambda: torchvision.datasets.OxfordIIITPet(
-                    root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=None),
+                    root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=convert_transform),
             }
             
             if self.dataset_name not in dataset_loaders:

@@ -65,7 +65,10 @@ class Trainer(BaseComponent):
         # Create text features for all classes (using same method as original code)
         class_prompts = [f"a photo of a {name}." for name in class_names]
         text_inputs = self.model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+<<<<<<< HEAD
         
+=======
+>>>>>>> backToTheWorkingVersion
         with torch.no_grad():
             class_text_features = self.model.clip_model.get_text_features(**text_inputs)
             class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
