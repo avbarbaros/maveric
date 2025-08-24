@@ -72,12 +72,14 @@ processing:
 # Training configuration (for model customization)
 training:
   epochs: 10
-  learning_rate: 0.00001
+  learning_rate: 0.000001  # Reduced from 1e-5 to 1e-6 to match original
   weight_decay: 0.01
   optimizer: "adamw"  # adamw, adam, sgd
   scheduler: "cosine"  # cosine, linear, constant
   use_regularization: true
   use_augmentation: true
+  augmentation_strength: 2  # RandAugment num_ops
+  augmentation_magnitude: 9  # RandAugment magnitude
   
   # Validation settings
   use_validation: true  # Set to false to disable validation and use all data for training
@@ -142,7 +144,7 @@ elevater:
   quality_control:
     enable_filtering: true
     balance_classes: true     # Balance classes after filtering
-    balance_strategy: "median"  # Balancing strategy: median, mean, min, max, none
+    balance_strategy: "min"  # Balancing strategy: median, mean, min, max, none (min matches original conservative approach)
     min_samples_per_class: 1 # Minimum samples to keep per class
     enable_oversampling: false # Enable oversampling for small classes
 
