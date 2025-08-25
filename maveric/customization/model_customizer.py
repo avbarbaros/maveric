@@ -533,27 +533,27 @@ class CustomizedCLIP(nn.Module):
             pixel_values = torch.stack(images).to(self.device)
         else:
             # Verify and process PIL images with robust handling
-            verified_images = []
-            for img in images:
-                try:
-                    if isinstance(img, Image.Image):
-                        # Force load to verify integrity and ensure RGB
-                        img.load()
-                        if img.mode != 'RGB':
-                            img = img.convert('RGB')
-                        verified_images.append(img)
-                    else:
-                        verified_images.append(img)
-                except Exception:
-                    # Replace corrupted image with placeholder
-                    from PIL import Image
-                    placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
-                    verified_images.append(placeholder)
+            # verified_images = []
+            # for img in images:
+            #     try:
+            #         if isinstance(img, Image.Image):
+            #             # Force load to verify integrity and ensure RGB
+            #             img.load()
+            #             if img.mode != 'RGB':
+            #                 img = img.convert('RGB')
+            #             verified_images.append(img)
+            #         else:
+            #             verified_images.append(img)
+            #     except Exception:
+            #         # Replace corrupted image with placeholder
+            #         from PIL import Image
+            #         placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
+            #         verified_images.append(placeholder)
             
             # Process with standard parameters (like original code)
             inputs = self.processor(
-                images=verified_images,
-                # images=images,
+                # images=verified_images,
+                images=images,
                 return_tensors="pt",
                 padding=True
             ).to(self.device)
