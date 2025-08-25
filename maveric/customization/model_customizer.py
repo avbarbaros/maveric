@@ -371,7 +371,7 @@ class ModelCustomizer(BaseComponent):
         if hasattr(val_dataset, 'dataset') and hasattr(val_dataset.dataset, 'use_augmentation'):
             # Create a copy of the dataset for validation without augmentation
             val_dataset_copy = LAIONCustomDataset(
-                [dataset.samples[i] for i in val_idx],
+                [dataset.valid_samples[i] for i in val_idx],
                 dataset.class_names,
                 dataset.processor,
                 use_augmentation=False,
@@ -685,20 +685,81 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         self.cache_dir = cache_dir or './cache'
         self.image_cache_dir = os.path.join(self.cache_dir, 'image_cache')
         os.makedirs(self.image_cache_dir, exist_ok=True)
+        
+        # Pre-filter samples to only include those with cached images or that can be downloaded
+        # This prevents training on placeholder images which can hurt performance
+        self.valid_samples = []
+        self._filter_valid_samples()
     
     def __len__(self):
-        return len(self.samples)
+        return len(self.valid_samples)
+    
+    def _filter_valid_samples(self):
+        """Filter samples to only include those with cached images or that can be downloaded.
+        This prevents training on placeholder images which can hurt performance."""
+        from PIL import Image
+        import requests
+        from io import BytesIO
+        from tqdm import tqdm
+        
+        print(f"Filtering {len(self.samples)} samples to find valid images...")
+        
+        for sample in tqdm(self.samples, desc="Validating samples"):
+            url = sample.get('url')
+            if not url:
+                continue
+                
+            # Create cache path
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            cache_path = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
+            
+            # Check if image is already cached and valid
+            if os.path.exists(cache_path):
+                try:
+                    # Test if cached image can be loaded
+                    image = Image.open(cache_path)
+                    image.load()
+                    # If we get here, image is valid
+                    self.valid_samples.append(sample)
+                    continue
+                except Exception:
+                    # Remove corrupt cache file
+                    try:
+                        os.remove(cache_path)
+                    except:
+                        pass
+            
+            # Try to download and cache the image
+            try:
+                response = requests.get(url, timeout=5)
+                response.raise_for_status()
+                
+                # Test if image can be loaded
+                image = Image.open(BytesIO(response.content)).convert('RGB')
+                
+                # Save to cache
+                try:
+                    image.save(cache_path, 'JPEG', quality=95)
+                except Exception:
+                    pass  # Cache save failed, but image is valid
+                
+                # Image is valid, add to valid samples
+                self.valid_samples.append(sample)
+                
+            except Exception:
+                # Skip invalid samples
+                continue
+        
+        print(f"Filtered dataset: {len(self.valid_samples)}/{len(self.samples)} valid samples ({len(self.valid_samples)/len(self.samples)*100:.1f}%)")
     
     def _create_placeholder_image(self):
         """Create a placeholder image when download fails"""
         from PIL import Image
         return Image.new('RGB', (224, 224), color=(128, 128, 128))
 
-    def _safe_get_image(self, url, max_retries=1):
-        """Safely download an image with retries, caching, and error handling"""
+    def _safe_get_image(self, url):
+        """Load image from cache (simplified since we pre-filtered valid images)"""
         from PIL import Image
-        import requests
-        from io import BytesIO
         
         if not url:
             return self._create_placeholder_image()
@@ -707,48 +768,17 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         url_hash = hashlib.md5(url.encode()).hexdigest()
         cache_path = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
 
-        # Check if image is already cached
+        # Since we pre-filtered, image should be cached and valid
         if os.path.exists(cache_path):
             try:
-                # Load from cache and verify integrity
                 image = Image.open(cache_path)
-                # This will force the image to load completely, testing for corruption
                 image.load()
                 return image.convert('RGB')
-            except Exception as e:
-                # print(f"Error loading cached image, will re-download: {str(e)}")
-                # Remove corrupt cache file
-                try:
-                    os.remove(cache_path)
-                except:
-                    pass
+            except Exception:
+                # Fallback to placeholder if something went wrong
+                pass
 
-        # Try to download and cache the image
-        for attempt in range(max_retries + 1):
-            try:
-                response = requests.get(url, timeout=5)
-                response.raise_for_status()
-                
-                # Load image
-                image = Image.open(BytesIO(response.content)).convert('RGB')
-                
-                # Save to cache
-                try:
-                    image.save(cache_path, 'JPEG', quality=95)
-                except Exception as cache_error:
-                    print(f"Warning: Could not cache image: {cache_error}")
-                
-                return image
-                
-            except Exception as e:
-                if attempt == max_retries:
-                    # print(f"Failed to download image after {max_retries + 1} attempts: {url} - {str(e)}")
-                    break
-                # Wait a bit before retrying
-                import time
-                time.sleep(0.1)
-
-        # If all retries failed, return a placeholder
+        # Fallback - this should rarely happen since we pre-filtered
         return self._create_placeholder_image()
     
     def _apply_transforms(self, image):
@@ -777,9 +807,9 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             return image.resize((224, 224)) if image.size != (224, 224) else image
     
     def __getitem__(self, idx):
-        sample = self.samples[idx]
+        sample = self.valid_samples[idx]  # Use pre-filtered valid samples
         
-        # Get image using cached approach (like original code)
+        # Get image using cached approach - since we pre-filtered, this should always work
         url = sample.get('url')
         image = self._safe_get_image(url)
         
