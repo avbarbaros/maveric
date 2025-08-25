@@ -5,6 +5,8 @@ import torch.nn as nn
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import numpy as np
+import hashlib
+import os
 from transformers import CLIPModel, CLIPProcessor
 
 from ..core.base import BaseComponent
@@ -227,7 +229,8 @@ class ModelCustomizer(BaseComponent):
             augmentation_config={
                 'num_ops': training_config.augmentation_strength,
                 'magnitude': training_config.augmentation_magnitude
-            }
+            },
+            cache_dir=self.cache_base_dir
         )
         
         # Prepare validation based on configuration
@@ -371,7 +374,8 @@ class ModelCustomizer(BaseComponent):
                 [dataset.samples[i] for i in val_idx],
                 dataset.class_names,
                 dataset.processor,
-                use_augmentation=False
+                use_augmentation=False,
+                cache_dir=dataset.cache_dir
             )
             val_dataset = val_dataset_copy
         
@@ -655,7 +659,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                  class_names: List[str],
                  processor: CLIPProcessor,
                  use_augmentation: bool = True,
-                 augmentation_config: Optional[Dict] = None):
+                 augmentation_config: Optional[Dict] = None,
+                 cache_dir: Optional[str] = None):
         """
         Initialize dataset.
         
@@ -665,6 +670,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             processor: CLIP processor
             use_augmentation: Whether to use data augmentation
             augmentation_config: Augmentation configuration
+            cache_dir: Directory for caching images
         """
         self.samples = samples
         self.class_names = class_names
@@ -674,9 +680,76 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         # Setup augmentation configuration
         self.use_augmentation = use_augmentation
         self.augmentation_config = augmentation_config or {}
+        
+        # Setup image caching
+        self.cache_dir = cache_dir or './cache'
+        self.image_cache_dir = os.path.join(self.cache_dir, 'image_cache')
+        os.makedirs(self.image_cache_dir, exist_ok=True)
     
     def __len__(self):
         return len(self.samples)
+    
+    def _create_placeholder_image(self):
+        """Create a placeholder image when download fails"""
+        from PIL import Image
+        return Image.new('RGB', (224, 224), color=(128, 128, 128))
+
+    def _safe_get_image(self, url, max_retries=1):
+        """Safely download an image with retries, caching, and error handling"""
+        from PIL import Image
+        import requests
+        from io import BytesIO
+        
+        if not url:
+            return self._create_placeholder_image()
+
+        # Create a hash of the URL for caching
+        url_hash = hashlib.md5(url.encode()).hexdigest()
+        cache_path = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
+
+        # Check if image is already cached
+        if os.path.exists(cache_path):
+            try:
+                # Load from cache and verify integrity
+                image = Image.open(cache_path)
+                # This will force the image to load completely, testing for corruption
+                image.load()
+                return image.convert('RGB')
+            except Exception as e:
+                print(f"Error loading cached image, will re-download: {str(e)}")
+                # Remove corrupt cache file
+                try:
+                    os.remove(cache_path)
+                except:
+                    pass
+
+        # Try to download and cache the image
+        for attempt in range(max_retries + 1):
+            try:
+                response = requests.get(url, timeout=5)
+                response.raise_for_status()
+                
+                # Load image
+                image = Image.open(BytesIO(response.content)).convert('RGB')
+                
+                # Save to cache
+                try:
+                    image.save(cache_path, 'JPEG', quality=95)
+                except Exception as cache_error:
+                    print(f"Warning: Could not cache image: {cache_error}")
+                
+                return image
+                
+            except Exception as e:
+                if attempt == max_retries:
+                    print(f"Failed to download image after {max_retries + 1} attempts: {url} - {str(e)}")
+                    break
+                # Wait a bit before retrying
+                import time
+                time.sleep(0.1)
+
+        # If all retries failed, return a placeholder
+        return self._create_placeholder_image()
     
     def _apply_transforms(self, image):
         """Apply appropriate transforms based on augmentation settings"""
@@ -706,18 +779,9 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
         
-        # Get image from URL (should be cached)
-        from PIL import Image
-        import requests
-        from io import BytesIO
-        
-        try:
-            response = requests.get(sample['url'], timeout=5)
-            image = Image.open(BytesIO(response.content)).convert('RGB')
-        except:
-            # Create placeholder image
-            self.log_info(f"Image at {sample['url']} could not be loaded, using placeholder.")
-            image = Image.new('RGB', (224, 224), color=(128, 128, 128))
+        # Get image using cached approach (like original code)
+        url = sample.get('url')
+        image = self._safe_get_image(url)
         
         # Apply transforms (augmentation or just resize)
         image = self._apply_transforms(image)
