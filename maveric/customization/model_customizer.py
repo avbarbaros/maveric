@@ -716,6 +716,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             image = Image.open(BytesIO(response.content)).convert('RGB')
         except:
             # Create placeholder image
+            self.log_info(f"Image at {sample['url']} could not be loaded, using placeholder.")
             image = Image.new('RGB', (224, 224), color=(128, 128, 128))
         
         # Apply transforms (augmentation or just resize)
