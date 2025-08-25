@@ -602,11 +602,11 @@ class CustomizedCLIP(nn.Module):
         ).to(self.device)
         
         with torch.no_grad():
-            # text_embeds = self.clip_model.get_text_features(**tokens)
-            # text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
-            text_outputs = self.clip_model.text_model(**tokens)
-            text_embeds = text_outputs[1]  # pooled output
-            text_embeds = self.clip_model.text_projection(text_embeds)
+            text_embeds = self.clip_model.get_text_features(**tokens)
+            text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
+            # text_outputs = self.clip_model.text_model(**tokens)
+            # text_embeds = text_outputs[1]  # pooled output
+            # text_embeds = self.clip_model.text_projection(text_embeds)
 
         
         return text_embeds
