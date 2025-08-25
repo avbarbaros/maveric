@@ -716,7 +716,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                 image.load()
                 return image.convert('RGB')
             except Exception as e:
-                print(f"Error loading cached image, will re-download: {str(e)}")
+                # print(f"Error loading cached image, will re-download: {str(e)}")
                 # Remove corrupt cache file
                 try:
                     os.remove(cache_path)
@@ -742,7 +742,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                 
             except Exception as e:
                 if attempt == max_retries:
-                    print(f"Failed to download image after {max_retries + 1} attempts: {url} - {str(e)}")
+                    # print(f"Failed to download image after {max_retries + 1} attempts: {url} - {str(e)}")
                     break
                 # Wait a bit before retrying
                 import time
