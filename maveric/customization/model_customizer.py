@@ -560,12 +560,12 @@ class CustomizedCLIP(nn.Module):
             pixel_values = inputs.pixel_values
         
         # Get image features
-        image_outputs = self.clip_model.vision_model(pixel_values=pixel_values)
-        image_embeds = image_outputs[1]  # pooled output
-        image_embeds = self.clip_model.visual_projection(image_embeds)
+        # image_outputs = self.clip_model.vision_model(pixel_values=pixel_values)
+        # image_embeds = image_outputs[1]  # pooled output
+        # image_embeds = self.clip_model.visual_projection(image_embeds)
         # Get image features using the same method as original code
-        # inputs = {"pixel_values": pixel_values}
-        # image_embeds = self.clip_model.get_image_features(**inputs)
+        inputs = {"pixel_values": pixel_values}
+        image_embeds = self.clip_model.get_image_features(**inputs)
         
         # Normalize
         image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
