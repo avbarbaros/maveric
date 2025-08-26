@@ -207,22 +207,25 @@ class Trainer(BaseComponent):
             loss = criterion(logits, labels)
             
             # Add regularization
-            if hasattr(self.model, 'get_regularization_loss'):
-                reg_loss = self.model.get_regularization_loss()
-                total_loss_value = loss + config.regularization_weight * reg_loss
-            else:
-                total_loss_value = loss
+            # if hasattr(self.model, 'get_regularization_loss'):
+            #     reg_loss = self.model.get_regularization_loss()
+            #     total_loss_value = loss + config.regularization_weight * reg_loss
+            # else:
+            #     total_loss_value = loss
             
+            reg_loss = self.model.get_regularization_loss()
+            total_loss_value = loss + config.regularization_weight * reg_loss
+
             # Backward pass
             optimizer.zero_grad()
             total_loss_value.backward()
             
             # Gradient clipping
-            if config.gradient_clip_value > 0:
-                nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    config.gradient_clip_value
-                )
+            # if config.gradient_clip_value > 0:
+            #     nn.utils.clip_grad_norm_(
+            #         self.model.parameters(),
+            #         config.gradient_clip_value
+            #     )
             
             optimizer.step()
             

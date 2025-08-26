@@ -220,7 +220,7 @@ class TrainingConfig:
     
     # Basic training parameters
     epochs: int = 10
-    learning_rate: float = 1e-5
+    learning_rate: float = 1e-6
     weight_decay: float = 0.01
     warmup_steps: int = 0
     
