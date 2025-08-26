@@ -563,10 +563,6 @@ class CustomizedCLIP(nn.Module):
             ).to(self.device)
             pixel_values = inputs.pixel_values
         
-        # Get image features
-        # image_outputs = self.clip_model.vision_model(pixel_values=pixel_values)
-        # image_embeds = image_outputs[1]  # pooled output
-        # image_embeds = self.clip_model.visual_projection(image_embeds)
         # Get image features using the same method as original code
         inputs = {"pixel_values": pixel_values}
         image_embeds = self.clip_model.get_image_features(**inputs)
@@ -608,10 +604,6 @@ class CustomizedCLIP(nn.Module):
         with torch.no_grad():
             text_embeds = self.clip_model.get_text_features(**tokens)
             text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
-            # text_outputs = self.clip_model.text_model(**tokens)
-            # text_embeds = text_outputs[1]  # pooled output
-            # text_embeds = self.clip_model.text_projection(text_embeds)
-
         
         return text_embeds
 
@@ -717,19 +709,6 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             if os.path.exists(cache_path):
                 self.valid_samples.append(sample)
                 continue
-                # try:
-                #     # Test if cached image can be loaded
-                #     image = Image.open(cache_path)
-                #     image.load()
-                #     # If we get here, image is valid
-                #     self.valid_samples.append(sample)
-                #     continue
-                # except Exception:
-                #     # Remove corrupt cache file
-                #     try:
-                #         os.remove(cache_path)
-                #     except:
-                #         pass
             
             # Try to download and cache the image
             try:

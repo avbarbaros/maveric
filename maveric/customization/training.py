@@ -206,13 +206,6 @@ class Trainer(BaseComponent):
             logits = self.model(images, class_text_features)
             loss = criterion(logits, labels)
             
-            # Add regularization
-            # if hasattr(self.model, 'get_regularization_loss'):
-            #     reg_loss = self.model.get_regularization_loss()
-            #     total_loss_value = loss + config.regularization_weight * reg_loss
-            # else:
-            #     total_loss_value = loss
-            
             reg_loss = self.model.get_regularization_loss()
             total_loss_value = loss + config.regularization_weight * reg_loss
 
@@ -220,18 +213,7 @@ class Trainer(BaseComponent):
             optimizer.zero_grad()
             total_loss_value.backward()
             
-            # Gradient clipping
-            # if config.gradient_clip_value > 0:
-            #     nn.utils.clip_grad_norm_(
-            #         self.model.parameters(),
-            #         config.gradient_clip_value
-            #     )
-            
             optimizer.step()
-            
-            # Update scheduler
-            # if scheduler and hasattr(scheduler, 'step'):
-            #     scheduler.step()
             
             # Track metrics
             total_loss += loss.item()
