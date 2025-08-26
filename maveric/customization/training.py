@@ -227,8 +227,8 @@ class Trainer(BaseComponent):
             optimizer.step()
             
             # Update scheduler
-            if scheduler and hasattr(scheduler, 'step'):
-                scheduler.step()
+            # if scheduler and hasattr(scheduler, 'step'):
+            #     scheduler.step()
             
             # Track metrics
             total_loss += loss.item()
