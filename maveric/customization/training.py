@@ -72,9 +72,6 @@ class Trainer(BaseComponent):
         # Setup optimizer
         optimizer = self._create_optimizer(training_config)
         
-        # Setup scheduler
-        scheduler = self._create_scheduler(optimizer, training_config, len(train_loader))
-        
         # Setup loss
         criterion = nn.CrossEntropyLoss()
         
@@ -103,7 +100,6 @@ class Trainer(BaseComponent):
                 class_text_features,
                 optimizer,
                 criterion,
-                scheduler,
                 training_config
             )
             
@@ -188,7 +184,6 @@ class Trainer(BaseComponent):
                      class_text_features: torch.Tensor,
                      optimizer: optim.Optimizer,
                      criterion: nn.Module,
-                     scheduler: Any,
                      config: TrainingConfig) -> Tuple[float, float]:
         """Train for one epoch."""
         self.model.train()

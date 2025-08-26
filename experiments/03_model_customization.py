@@ -245,7 +245,7 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
     
     # Override with command line arguments if provided
     epochs = args.epochs if args.epochs is not None else training_cfg.get('epochs', 10)
-    learning_rate = args.learning_rate if args.learning_rate is not None else training_cfg.get('learning_rate', 1e-5)
+    learning_rate = args.learning_rate if args.learning_rate is not None else training_cfg.get('learning_rate', 1e-6)
     
     return TrainingConfig(
         epochs=epochs,
