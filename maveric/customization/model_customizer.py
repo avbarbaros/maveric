@@ -533,16 +533,18 @@ class CustomizedCLIP(nn.Module):
             Logits or image features
         """
         # Process images with robust error handling like original code
-        if isinstance(images[0], torch.Tensor):
-            # Already preprocessed
-            pixel_values = torch.stack(images).to(self.device)
-        else:
-            # Use safe processing method identical to original code
-            inputs = self._safe_process_images(self.processor, images, self.device)
-            pixel_values = inputs["pixel_values"]
+        # if isinstance(images[0], torch.Tensor):
+        #     # Already preprocessed
+        #     pixel_values = torch.stack(images).to(self.device)
+        # else:
+        #     # Use safe processing method identical to original code
+        #     inputs = self._safe_process_images(self.processor, images, self.device)
+        #     pixel_values = inputs["pixel_values"]
         
-        # Get image features using the same method as original code
-        inputs = {"pixel_values": pixel_values}
+        # # Get image features using the same method as original code
+        # inputs = {"pixel_values": pixel_values}
+        
+        inputs = self._safe_process_images(self.processor, images, self.device)
         image_embeds = self.clip_model.get_image_features(**inputs)
         
         # Normalize
