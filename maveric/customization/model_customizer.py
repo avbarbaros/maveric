@@ -715,19 +715,21 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             
             # Check if image is already cached and valid
             if os.path.exists(cache_path):
-                try:
-                    # Test if cached image can be loaded
-                    image = Image.open(cache_path)
-                    image.load()
-                    # If we get here, image is valid
-                    self.valid_samples.append(sample)
-                    continue
-                except Exception:
-                    # Remove corrupt cache file
-                    try:
-                        os.remove(cache_path)
-                    except:
-                        pass
+                self.valid_samples.append(sample)
+                continue
+                # try:
+                #     # Test if cached image can be loaded
+                #     image = Image.open(cache_path)
+                #     image.load()
+                #     # If we get here, image is valid
+                #     self.valid_samples.append(sample)
+                #     continue
+                # except Exception:
+                #     # Remove corrupt cache file
+                #     try:
+                #         os.remove(cache_path)
+                #     except:
+                #         pass
             
             # Try to download and cache the image
             try:
