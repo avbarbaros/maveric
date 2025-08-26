@@ -8,6 +8,7 @@ import numpy as np
 import hashlib
 import os
 from transformers import CLIPModel, CLIPProcessor
+from PIL import Image
 
 from ..core.base import BaseComponent
 from ..core.interfaces import CustomizationResult, QualityResult
@@ -536,32 +537,9 @@ class CustomizedCLIP(nn.Module):
             # Already preprocessed
             pixel_values = torch.stack(images).to(self.device)
         else:
-            # Verify and process PIL images with robust handling
-            # verified_images = []
-            # for img in images:
-            #     try:
-            #         if isinstance(img, Image.Image):
-            #             # Force load to verify integrity and ensure RGB
-            #             img.load()
-            #             if img.mode != 'RGB':
-            #                 img = img.convert('RGB')
-            #             verified_images.append(img)
-            #         else:
-            #             verified_images.append(img)
-            #     except Exception:
-            #         # Replace corrupted image with placeholder
-            #         from PIL import Image
-            #         placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
-            #         verified_images.append(placeholder)
-            
-            # Process with standard parameters (like original code)
-            inputs = self.processor(
-                # images=verified_images,
-                images=images,
-                return_tensors="pt",
-                padding=True
-            ).to(self.device)
-            pixel_values = inputs.pixel_values
+            # Use safe processing method identical to original code
+            inputs = self._safe_process_images(self.processor, images, self.device)
+            pixel_values = inputs["pixel_values"]
         
         # Get image features using the same method as original code
         inputs = {"pixel_values": pixel_values}
@@ -578,6 +556,103 @@ class CustomizedCLIP(nn.Module):
         logits = logit_scale * (image_embeds @ text_features.T)
         
         return logits
+    
+    def _safe_process_images(self, processor, images, device):
+        """
+        Safely process images for CLIP model, handling different formats and ensuring channel compatibility.
+        This is identical to the safe_process_images method from the original working code.
+        
+        Args:
+            processor: The CLIP processor
+            images: List of PIL images or tensor
+            device: The device to put the processed images on
+
+        Returns:
+            Dictionary with properly processed image tensors
+        """
+        # Step 1: Ensure all images are RGB mode PIL images
+        preprocessed_images = []
+        valid_images = True
+
+        for i, img in enumerate(images):
+            try:
+                if isinstance(img, Image.Image):
+                    # Ensure image is RGB
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    # Test image integrity
+                    img.load()
+                    preprocessed_images.append(img)
+                else:
+                    # If it's already a tensor or array, we'll handle it differently
+                    preprocessed_images.append(img)
+            except Exception as e:
+                print(f"Image at index {i} is corrupted, replacing with placeholder: {str(e)}")
+                # Replace corrupted image with placeholder instead of failing
+                placeholder = Image.new('RGB', (224, 224), color=(128, 128, 128))
+                preprocessed_images.append(placeholder)
+                valid_images = False
+
+        # Step 2: Try to process with appropriate parameters
+        try:
+            # For PIL images, use the processor with explicit parameters
+            if isinstance(preprocessed_images[0], Image.Image):
+                inputs = processor(
+                    images=preprocessed_images,
+                    return_tensors="pt",
+                    do_resize=True,
+                    size={"height": 224, "width": 224},
+                    do_center_crop=True,
+                    crop_size={"height": 224, "width": 224},
+                    do_normalize=True,
+                    do_convert_rgb=True,  # Ensure RGB conversion
+                    return_pixels_as_is=False,
+                )
+                inputs = {k: v.to(device) for k, v in inputs.items()}
+                return inputs
+            else:
+                # For tensors, just move to device
+                return {"pixel_values": torch.stack(preprocessed_images).to(device)}
+        except Exception as e:
+            print(f"Error in standard processing: {str(e)}")
+
+            # Step 3: Manual fallback processing if the processor fails
+            try:
+                print("Attempting manual image processing...")
+
+                # Convert PIL images to normalized tensors manually
+                tensor_images = []
+                for img in preprocessed_images:
+                    if isinstance(img, Image.Image):
+                        # Resize if needed
+                        if img.size != (224, 224):
+                            img = img.resize((224, 224), Image.LANCZOS)
+
+                        # Convert to numpy array
+                        img_array = np.array(img).astype(np.float32) / 255.0
+
+                        # Normalize with CLIP's normalization values
+                        mean = [0.48145466, 0.4578275, 0.40821073]
+                        std = [0.26862954, 0.26130258, 0.27577711]
+
+                        # Apply normalization (adjust for RGB channels)
+                        img_array = (img_array - np.array(mean)) / np.array(std)
+
+                        # Convert to tensor and add batch dimension
+                        img_tensor = torch.from_numpy(img_array).permute(2, 0, 1)  # HWC -> CHW
+                        tensor_images.append(img_tensor)
+                    else:
+                        # If already a tensor
+                        tensor_images.append(img)
+
+                # Stack into a batch
+                batch_tensor = torch.stack(tensor_images).to(device)
+                return {"pixel_values": batch_tensor}
+
+            except Exception as e2:
+                # Log the detailed error and raise
+                print(f"Manual processing also failed: {str(e2)}")
+                raise ValueError(f"Failed to process images: original error '{str(e)}', fallback error '{str(e2)}'")
     
     def get_regularization_loss(self) -> torch.Tensor:
         """Calculate regularization loss to prevent catastrophic forgetting."""
