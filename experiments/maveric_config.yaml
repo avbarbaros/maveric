@@ -76,7 +76,7 @@ training:
   weight_decay: 0.01
   optimizer: "adamw"  # adamw, adam, sgd
   scheduler: "cosine"  # cosine, linear, constant
-  use_regularization: true
+  use_regularization: false
   use_augmentation: true
   augmentation_strength: 2  # RandAugment num_ops
   augmentation_magnitude: 9  # RandAugment magnitude
