@@ -425,7 +425,8 @@ class CustomizationResult:
     improvement: float = field(init=False)  # Calculated automatically as difference
     
     # Detailed evaluation metrics
-    class_accuracies: Dict[str, float] = field(default_factory=dict)  # Per-class accuracy scores
+    class_accuracies: Dict[str, float] = field(default_factory=dict)  # Per-class accuracy scores for fine-tuned model
+    zero_shot_class_accuracies: Dict[str, float] = field(default_factory=dict)  # Per-class accuracy scores for base model
     
     # Training progress tracking
     training_history: Dict[str, List[float]] = field(default_factory=dict)  # Loss/accuracy curves over epochs

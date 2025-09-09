@@ -138,6 +138,16 @@ def get_class_names_from_data(data: List[Dict]) -> List[str]:
     return sorted(list(labels))
 
 
+def get_training_class_sizes(data: List[Dict]) -> Dict[str, int]:
+    """Calculate class distribution (number of samples per class) in training data."""
+    class_counts = {}
+    for sample in data:
+        if 'label' in sample:
+            label = sample['label']
+            class_counts[label] = class_counts.get(label, 0) + 1
+    return class_counts
+
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -322,6 +332,12 @@ def main():
         print(f"📊 Number of classes: {len(class_names)}")
         print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
         
+        # Calculate training dataset class sizes
+        training_class_sizes = get_training_class_sizes(training_data)
+        print(f"📈 Training class distribution:")
+        for class_name, count in sorted(training_class_sizes.items()):
+            print(f"   {class_name}: {count} samples")
+        
         # Setup output directory from config with dataset name
         if args.output_dir is None:
             # Use results_dir from config + dataset + models subdirectory
@@ -387,10 +403,18 @@ def main():
         
         # Display top-performing classes
         if customization_result.class_accuracies:
-            print(f"\n🏆 Top 5 performing classes:")
+            print(f"\n🏆 Top 5 performing classes (customized model):")
             sorted_classes = sorted(customization_result.class_accuracies.items(), 
                                   key=lambda x: x[1], reverse=True)[:5]
             for i, (class_name, accuracy) in enumerate(sorted_classes, 1):
+                print(f"   {i}. {class_name}: {accuracy:.1f}%")
+        
+        # Display baseline per-class performance
+        if customization_result.zero_shot_class_accuracies:
+            print(f"\n📊 Top 5 baseline classes (zero-shot model):")
+            sorted_baseline = sorted(customization_result.zero_shot_class_accuracies.items(), 
+                                   key=lambda x: x[1], reverse=True)[:5]
+            for i, (class_name, accuracy) in enumerate(sorted_baseline, 1):
                 print(f"   {i}. {class_name}: {accuracy:.1f}%")
         
         # Save detailed results in dataset-specific results directory
@@ -408,6 +432,8 @@ def main():
                 'zero_shot_baseline': customization_result.zero_shot_baseline,
                 'improvement': customization_result.improvement,
                 'class_accuracies': customization_result.class_accuracies,
+                'zero_shot_class_accuracies': customization_result.zero_shot_class_accuracies,
+                'training_class_sizes': training_class_sizes,
                 'training_config': customization_result.training_config,
                 'checkpoint_path': customization_result.checkpoint_path
             }, f, indent=2)

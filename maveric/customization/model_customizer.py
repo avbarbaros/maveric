@@ -139,7 +139,7 @@ class ModelCustomizer(BaseComponent):
         self.log_info("Evaluating baseline model")
         if not test_loader:
             raise ValueError(f"Test data is required for evaluation but could not load test set for {target_dataset_name}")
-        baseline_accuracy = self._evaluate_baseline(test_loader, class_names)
+        baseline_accuracy, baseline_class_accuracies = self._evaluate_baseline(test_loader, class_names)
         
         # Train model (test data is mandatory)
         self.log_info("Training customized model")
@@ -201,6 +201,7 @@ class ModelCustomizer(BaseComponent):
             test_accuracy=final_accuracy,
             zero_shot_baseline=baseline_accuracy,
             class_accuracies=class_accuracies,
+            zero_shot_class_accuracies=baseline_class_accuracies,
             training_history=training_history,
             checkpoint_path=str(best_checkpoint) if best_checkpoint else None
         )
@@ -439,7 +440,7 @@ class ModelCustomizer(BaseComponent):
         self.log_info(f"Using simple split validation: {train_size} train, {val_size} validation samples")
         return train_loader, val_loader
     
-    def _evaluate_baseline(self, val_loader: Any, class_names: List[str]) -> float:
+    def _evaluate_baseline(self, val_loader: Any, class_names: List[str]) -> Tuple[float, Dict[str, float]]:
         """Evaluate baseline model performance."""
         baseline_model = CustomizedCLIP(
             self.model,
@@ -447,14 +448,14 @@ class ModelCustomizer(BaseComponent):
             regularize=False
         ).to(self.device)
         
-        accuracy = self.evaluator.evaluate(
+        accuracy, class_accuracies = self.evaluator.evaluate_detailed(
             baseline_model,
             val_loader,
             class_names
         )
         
         self.log_info(f"Baseline model accuracy: {accuracy:.2f}%")
-        return accuracy
+        return accuracy, class_accuracies
     
     def load_checkpoint(self, checkpoint_path: str) -> 'CustomizedCLIP':
         """
