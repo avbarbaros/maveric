@@ -46,9 +46,6 @@ quality_thresholds:
   resolution_score: 0.1     # Minimum resolution quality
   color_score: 0.1          # Color distribution diversity
   
-  # Semantic caption-guided quality metric
-  composite_quality: 0.3    # Universal quality threshold for semantic caption-guided metric
-  
   # Multimodal metrics
   consistency: 0.1          # Text-image consistency
   cross_modal_alignment: 0.1 # Cross-modal feature alignment

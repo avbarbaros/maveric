@@ -50,8 +50,7 @@ class QualityController(BaseComponent):
             'consistency': 0.796,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
-            'color_score': 0.768,
-            'composite_quality': 0.3
+            'color_score': 0.768
         }
         
         self.class_weights = {
@@ -141,11 +140,6 @@ class QualityController(BaseComponent):
         for _, row in self.data.iterrows():
             class_scores = {}
             
-            # Get quality score for this sample
-            composite_quality = row.get('composite_quality', 0.0)
-            if pd.isna(composite_quality):
-                composite_quality = 0.0
-            
             for class_name in class_names:
                 similarity_score = 0.0
                 valid_weights_sum = 0.0
@@ -158,11 +152,17 @@ class QualityController(BaseComponent):
                         similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
                 
+                # Get class-specific composite quality score
+                composite_quality_col = f"Class_{class_name}_composite_quality"
+                composite_quality = row.get(composite_quality_col, 0.0)
+                if pd.isna(composite_quality):
+                    composite_quality = 0.0
+                
                 # Normalize similarity score
                 if valid_weights_sum > 0:
                     similarity_score /= valid_weights_sum
                     
-                    # Combine similarity score with quality score
+                    # Combine similarity score with class-specific quality score
                     combined_score = (
                         self.class_selection_weights['similarity_weight'] * similarity_score +
                         self.class_selection_weights['quality_weight'] * composite_quality

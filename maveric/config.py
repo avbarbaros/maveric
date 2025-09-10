@@ -60,8 +60,7 @@ class MAVERICConfig:
         'consistency': 0.796,
         'resolution_score': 0.370,
         'sharpness_score': 0.880,
-        'color_score': 0.768,
-        'composite_quality': 0.3  # Universal quality threshold for semantic caption-guided metric
+        'color_score': 0.768
     })
     
     # Dataset balancing configuration

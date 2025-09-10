@@ -523,8 +523,7 @@ class InteractiveThresholdSelector(BaseComponent):
             'consistency': 0.796,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
-            'color_score': 0.768,
-            'composite_quality': 0.3
+            'color_score': 0.768
         }
         
         default_weights = {
@@ -626,7 +625,7 @@ class InteractiveThresholdSelector(BaseComponent):
             
             # Select key metrics to visualize
             metrics_to_show = []
-            for metric in ['weighted_class_score', 'consistency', 'sharpness_score', 'composite_quality']:
+            for metric in ['weighted_class_score', 'consistency', 'sharpness_score']:
                 if metric in self.qc.data.columns:
                     metrics_to_show.append(metric)
             
