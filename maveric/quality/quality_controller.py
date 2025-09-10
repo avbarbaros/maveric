@@ -50,7 +50,8 @@ class QualityController(BaseComponent):
             'consistency': 0.796,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
-            'color_score': 0.768
+            'color_score': 0.768,
+            'composite_quality': 0.3
         }
         
         self.class_weights = {
@@ -58,6 +59,12 @@ class QualityController(BaseComponent):
             'txt2txt': 0.20,
             'img2txt': 0.20,
             'txt2img': 0.20
+        }
+        
+        # Class selection weights: balance between similarity and quality
+        self.class_selection_weights = {
+            'similarity_weight': 0.7,  # Weight for similarity-based scoring
+            'quality_weight': 0.3      # Weight for semantic quality scoring
         }
         
         # Filters
@@ -99,10 +106,13 @@ class QualityController(BaseComponent):
     
     def _calculate_best_class(self):
         """
-        Calculate the best class for each item using weighted scores.
+        Calculate the best class for each item using both similarity and quality scores.
         
-        This method identifies the most likely class for each sample based on
-        multiple similarity metrics, combining them with configurable weights.
+        This method identifies the most likely class for each sample by combining:
+        1. Similarity-based scores (img2img, txt2txt, img2txt, txt2img)
+        2. Semantic quality score (composite_quality) for universal quality assessment
+        
+        The final score is a weighted combination of both factors for better class selection.
         """
         if self.data is None:
             return
@@ -131,22 +141,34 @@ class QualityController(BaseComponent):
         for _, row in self.data.iterrows():
             class_scores = {}
             
+            # Get quality score for this sample
+            composite_quality = row.get('composite_quality', 0.0)
+            if pd.isna(composite_quality):
+                composite_quality = 0.0
+            
             for class_name in class_names:
-                weighted_score = 0.0
+                similarity_score = 0.0
                 valid_weights_sum = 0.0
                 
-                # Calculate weighted score
+                # Calculate weighted similarity score
                 for metric, weight in self.class_weights.items():
                     col_name = f"Class_{class_name}_{metric}"
                     
                     if col_name in row and not pd.isna(row[col_name]):
-                        weighted_score += row[col_name] * weight
+                        similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
                 
-                # Normalize
+                # Normalize similarity score
                 if valid_weights_sum > 0:
-                    weighted_score /= valid_weights_sum
-                    class_scores[class_name] = weighted_score
+                    similarity_score /= valid_weights_sum
+                    
+                    # Combine similarity score with quality score
+                    combined_score = (
+                        self.class_selection_weights['similarity_weight'] * similarity_score +
+                        self.class_selection_weights['quality_weight'] * composite_quality
+                    )
+                    
+                    class_scores[class_name] = combined_score
             
             # Find best class
             if class_scores:
@@ -195,6 +217,38 @@ class QualityController(BaseComponent):
         # Recalculate best class with new weights
         self._calculate_best_class()
         self.log_debug(f"Set {metric} weight to {value}")
+    
+    def set_class_selection_weight(self, weight_type: str, value: float):
+        """
+        Set class selection weight for balancing similarity vs quality.
+        
+        Args:
+            weight_type: Either 'similarity_weight' or 'quality_weight'
+            value: Weight value (should sum to 1.0 with the other weight)
+        """
+        if weight_type not in self.class_selection_weights:
+            raise ValueError(f"Invalid weight type: {weight_type}")
+        
+        self.class_selection_weights[weight_type] = value
+        
+        # Normalize weights to sum to 1.0
+        total = sum(self.class_selection_weights.values())
+        if total > 0:
+            for key in self.class_selection_weights:
+                self.class_selection_weights[key] /= total
+        
+        # Recalculate best class with new weights
+        self._calculate_best_class()
+        self.log_info(f"Set {weight_type} to {value:.3f} (normalized to {self.class_selection_weights[weight_type]:.3f})")
+    
+    def get_class_selection_weights(self) -> Dict[str, float]:
+        """
+        Get current class selection weights.
+        
+        Returns:
+            Dictionary of class selection weights
+        """
+        return self.class_selection_weights.copy()
     
     def add_filter(self, filter_instance):
         """
@@ -376,7 +430,7 @@ class QualityController(BaseComponent):
                 }
                 
                 # Add quality scores
-                for metric in ['resolution_score', 'sharpness_score', 'color_score', 'feature_resnet_mean', 'feature_resnet_std']:
+                for metric in ['resolution_score', 'sharpness_score', 'color_score', 'composite_quality']:
                     if metric in row:
                         item[metric] = round(float(row[metric]), 5)
                 

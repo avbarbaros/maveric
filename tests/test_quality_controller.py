@@ -27,8 +27,7 @@ class TestQualityController:
             'sharpness_score': np.random.uniform(0.6, 1.0, n_samples),
             'resolution_score': np.random.uniform(0.2, 1.5, n_samples),
             'color_score': np.random.uniform(0.4, 1.0, n_samples),
-            'feature_resnet_mean': np.random.uniform(0.1, 2.0, n_samples),
-            'feature_resnet_std': np.random.uniform(0.05, 1.0, n_samples)
+            'composite_quality': np.random.uniform(0.2, 0.8, n_samples)
         }
         
         return pd.DataFrame(data)

@@ -5,7 +5,6 @@ import numpy as np
 from PIL import Image
 import torch
 import torchvision.transforms as transforms
-from torchvision.models import resnet50
 from typing import Any, Dict, Optional
 
 from .base_metric import BaseQualityMetric
@@ -166,145 +165,166 @@ class ColorDiversityMetric(BaseQualityMetric):
         return round(float(score), 5)
 
 
-class FeatureResNetMeanMetric(BaseQualityMetric):
+class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
     """
-    ResNet feature mean metric.
+    Semantic caption-guided quality metric using EfficientNet-B0.
     
-    This metric uses a pre-trained ResNet to extract features and computes
-    their absolute mean activation. Matches the original MAVERIC implementation.
+    Uses semantic similarity between image captions and ImageNet class names
+    to identify relevant classes, then focuses EfficientNet quality assessment
+    on those classes only. Works universally across all datasets with captions.
     """
     
-    def __init__(self, device: str = "cuda"):
-        """
-        Initialize ResNet feature mean metric.
+    def __init__(self):
+        """Initialize semantic caption-guided quality metric."""
+        super().__init__("semantic_caption_guided_quality")
         
-        Args:
-            device: Device for computation
-        """
-        super().__init__("feature_resnet_mean")
+        # Force CPU usage for data retrieval performance
+        self.device = "cpu"
         
-        # Set device
-        self.device = device if torch.cuda.is_available() else "cpu"
+        # Load EfficientNet-B0 for image classification (CPU)
+        try:
+            from torchvision.models import efficientnet_b0
+            self.efficientnet = efficientnet_b0(pretrained=True)
+            self.efficientnet.eval()
+        except ImportError:
+            raise ImportError("torchvision is required for EfficientNet model")
         
-        # Load pre-trained model
-        self.model = resnet50(pretrained=True).to(self.device)
-        self.model.eval()
+        # Load sentence transformer for semantic similarity (lightweight)
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2')  # 22MB, fast
+        except ImportError:
+            raise ImportError("sentence-transformers is required for semantic similarity")
         
-        # Image preprocessing to match original code
+        # Load ImageNet class names
+        try:
+            from .imagenet_classes import IMAGENET_CLASSES
+            self.imagenet_classes = IMAGENET_CLASSES
+        except ImportError:
+            raise ImportError("ImageNet classes not found")
+        
+        # Pre-compute embeddings for all ImageNet classes (one-time cost at init)
+        self.log_info("Computing ImageNet class embeddings for semantic similarity...")
+        self.class_embeddings = self.sentence_model.encode(self.imagenet_classes, show_progress_bar=False)
+        
+        # Image preprocessing (EfficientNet standard)
         self.transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                              std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     
     @property
     def metric_name(self) -> str:
-        return "feature_resnet_mean"
+        return "composite_quality"
     
     @property
     def requires_reference(self) -> bool:
         return False
     
-    def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
+    def _find_relevant_imagenet_classes(self, caption: str, top_k: int = 15, similarity_threshold: float = 0.25):
         """
-        Compute ResNet feature mean matching original code.
+        Find ImageNet classes most semantically similar to the caption.
         
         Args:
-            image: PIL Image
-            metadata: Image metadata
+            caption: Image caption text
+            top_k: Maximum number of classes to consider
+            similarity_threshold: Minimum similarity score to include class
             
         Returns:
-            Feature mean value
+            tuple: (class_indices, similarity_scores)
         """
         try:
-            # Ensure RGB
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            
-            # Preprocess image
-            image_tensor = self.transform(image).unsqueeze(0).to(self.device)
-            
-            # Extract features using ResNet
-            with torch.no_grad():
-                features = self.model(image_tensor)
-                feature_resnet_mean = features.abs().mean().item()
-            
-            return round(float(feature_resnet_mean), 5)
-            
-        except Exception as e:
-            self.log_warning(f"Error computing feature resnet mean: {e}")
-            return 0.0
-
-
-class FeatureResNetStdMetric(BaseQualityMetric):
-    """
-    ResNet feature standard deviation metric.
-    
-    This metric uses a pre-trained ResNet to extract features and computes
-    their standard deviation. Matches the original MAVERIC implementation.
-    """
-    
-    def __init__(self, device: str = "cuda"):
-        """
-        Initialize ResNet feature std metric.
+            from sklearn.metrics.pairwise import cosine_similarity
+        except ImportError:
+            raise ImportError("scikit-learn is required for cosine similarity")
         
-        Args:
-            device: Device for computation
-        """
-        super().__init__("feature_resnet_std")
+        # Encode caption
+        caption_embedding = self.sentence_model.encode([caption])
         
-        # Set device
-        self.device = device if torch.cuda.is_available() else "cpu"
+        # Compute cosine similarities with all ImageNet class names
+        similarities = cosine_similarity(caption_embedding, self.class_embeddings)[0]
         
-        # Load pre-trained model
-        self.model = resnet50(pretrained=True).to(self.device)
-        self.model.eval()
+        # Get top-K most similar classes above threshold
+        top_indices = np.argsort(similarities)[::-1][:top_k]
         
-        # Image preprocessing to match original code
-        self.transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                              std=[0.229, 0.224, 0.225])
-        ])
-    
-    @property
-    def metric_name(self) -> str:
-        return "feature_resnet_std"
-    
-    @property
-    def requires_reference(self) -> bool:
-        return False
+        # Filter by threshold
+        relevant_indices = []
+        relevant_similarities = []
+        for idx in top_indices:
+            if similarities[idx] >= similarity_threshold:
+                relevant_indices.append(idx)
+                relevant_similarities.append(similarities[idx])
+        
+        return relevant_indices, relevant_similarities
     
     def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
         """
-        Compute ResNet feature std matching original code.
+        Compute caption-guided image quality using semantic similarity.
         
         Args:
             image: PIL Image
-            metadata: Image metadata
+            metadata: Must contain 'text' or 'caption' field for optimal results
             
         Returns:
-            Feature standard deviation value
+            Composite quality score (0-1)
         """
         try:
-            # Ensure RGB
+            # Get caption
+            caption = metadata.get('text', metadata.get('caption', ''))
+            
+            # Process image with EfficientNet
             if image.mode != 'RGB':
                 image = image.convert('RGB')
+            image_tensor = self.transform(image).unsqueeze(0)
             
-            # Preprocess image
-            image_tensor = self.transform(image).unsqueeze(0).to(self.device)
-            
-            # Extract features using ResNet
             with torch.no_grad():
-                features = self.model(image_tensor)
-                feature_resnet_std = features.std().item()
+                logits = self.efficientnet(image_tensor)
+                probabilities = torch.softmax(logits, dim=1).squeeze()
             
-            return round(float(feature_resnet_std), 5)
+            # Standard quality metrics
+            max_confidence = probabilities.max().item()
+            entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-8))
+            clarity_score = 1.0 - (entropy / torch.log(torch.tensor(1000.0))).item()
+            
+            # Confidence gap (distinctiveness)
+            sorted_probs = torch.sort(probabilities, descending=True)[0]
+            confidence_gap = (sorted_probs[0] - sorted_probs[1]).item()
+            
+            if caption and len(caption.strip()) >= 5:  # Valid caption exists
+                # Find semantically relevant ImageNet classes
+                relevant_classes, similarities = self._find_relevant_imagenet_classes(caption)
+                
+                if relevant_classes:
+                    # Focus on caption-relevant classes
+                    relevant_probs = probabilities[relevant_classes]
+                    similarity_weights = torch.tensor(similarities, dtype=torch.float32)
+                    
+                    # Semantic-weighted confidence
+                    semantic_weighted_confidence = (relevant_probs * similarity_weights).sum() / similarity_weights.sum()
+                    max_relevant_confidence = relevant_probs.max().item()
+                    
+                    # Caption-image alignment score (best semantic match)
+                    alignment_score = similarities[0] if similarities else 0.0
+                    
+                    # Composite quality emphasizing caption alignment
+                    composite_quality = (
+                        semantic_weighted_confidence.item() * 0.4 +  # Semantic-weighted EfficientNet confidence
+                        max_relevant_confidence * 0.3 +              # Best relevant class confidence
+                        clarity_score * 0.2 +                       # General image clarity
+                        alignment_score * 0.1                       # Caption-ImageNet semantic alignment
+                    )
+                    
+                    return round(composite_quality, 5)
+            
+            # Fallback for missing/poor captions - general quality assessment
+            composite_quality = max_confidence * 0.5 + clarity_score * 0.3 + confidence_gap * 0.2
+            
+            return round(composite_quality, 5)
             
         except Exception as e:
-            self.log_warning(f"Error computing feature resnet std: {e}")
+            self.log_warning(f"Error computing semantic caption-guided quality: {e}")
             return 0.0
+
+

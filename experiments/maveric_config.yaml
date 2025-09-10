@@ -23,8 +23,7 @@ quality_metrics:
   - "resolution"
   - "sharpness" 
   - "color_diversity"
-  - "feature_resnet_mean"
-  - "feature_resnet_std"
+  - "semantic_caption_guided_quality"
   - "multimodal_consistency"
 
 # Metric weights for composite scoring
@@ -34,23 +33,24 @@ metric_weights:
   img2txt: 0.20    # Image-to-text consistency weight
   txt2img: 0.20    # Text-to-image consistency weight
 
+# Class selection weights: balance between similarity and quality
+class_selection_weights:
+  similarity_weight: 0.5  # Weight for similarity-based class scoring
+  quality_weight: 0.5     # Weight for semantic quality in class selection
+
 # Quality thresholds for ELEVATER experiments
 # These can be adjusted based on your requirements
 quality_thresholds:
   # Visual quality metrics
   sharpness_score: 0.1      # Image sharpness (0-1)
   resolution_score: 0.1     # Minimum resolution quality
-  color_score: 0.1      # Color distribution diversity
-  brightness_score: 0.1     # Brightness quality
-  contrast_score: 0.1       # Contrast quality
+  color_score: 0.1          # Color distribution diversity
   
-  # Semantic quality metrics  
-  consistency: 0.1          # Text-image consistency
-  text_quality: 0.1         # Text readability/quality
-  semantic_richness: 0.1    # Semantic feature richness
+  # Semantic caption-guided quality metric
+  composite_quality: 0.3    # Universal quality threshold for semantic caption-guided metric
   
   # Multimodal metrics
-  clip_similarity: 0.1      # CLIP text-image similarity
+  consistency: 0.1          # Text-image consistency
   cross_modal_alignment: 0.1 # Cross-modal feature alignment
 
 # Caching settings for efficiency

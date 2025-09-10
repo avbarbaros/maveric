@@ -5,8 +5,7 @@ from .visual_metrics import (
     ResolutionMetric,
     SharpnessMetric,
     ColorDiversityMetric,
-    FeatureResNetMeanMetric,
-    FeatureResNetStdMetric
+    SemanticCaptionGuidedQualityMetric
 )
 from .semantic_metrics import (
     TextQualityMetric,
@@ -23,8 +22,7 @@ __all__ = [
     "ResolutionMetric",
     "SharpnessMetric",
     "ColorDiversityMetric",
-    "FeatureResNetMeanMetric",
-    "FeatureResNetStdMetric",
+    "SemanticCaptionGuidedQualityMetric",
     "TextQualityMetric",
     "CaptionLengthMetric",
     "MultimodalConsistencyMetric",

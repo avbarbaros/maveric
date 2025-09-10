@@ -186,8 +186,7 @@ class RetrievalResult:
             formatted_sample['resolution_score'] = round(float(sample.get('resolution_score', 0.0)), 5)
             formatted_sample['sharpness_score'] = round(float(sample.get('sharpness_score', 0.0)), 5)
             formatted_sample['color_score'] = round(float(sample.get('color_score', 0.0)), 5)
-            formatted_sample['feature_resnet_mean'] = round(float(sample.get('feature_resnet_mean', 0.0)), 5)
-            formatted_sample['feature_resnet_std'] = round(float(sample.get('feature_resnet_std', 0.0)), 5)
+            formatted_sample['composite_quality'] = round(float(sample.get('composite_quality', 0.0)), 5)
             
             formatted_samples.append(formatted_sample)
         

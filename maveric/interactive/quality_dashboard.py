@@ -1,8 +1,9 @@
 """Comprehensive quality control dashboard."""
 
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import display, clear_output
 import pandas as pd
+import matplotlib.pyplot as plt
 from typing import Union, Optional
 from pathlib import Path
 
@@ -130,7 +131,7 @@ class QualityDashboard(BaseComponent):
         """Create data exploration tab."""
         # Metric selector
         available_metrics = [col for col in self.qc.data.columns 
-                           if 'score' in col or 'consistency' in col]
+                           if 'score' in col or 'consistency' in col or 'quality' in col]
         
         metric_selector = widgets.SelectMultiple(
             options=available_metrics,

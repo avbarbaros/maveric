@@ -37,15 +37,21 @@ class MAVERICConfig:
     # Quality metrics configuration
     quality_metrics: List[str] = field(default_factory=lambda: [
         'resolution', 'sharpness', 'color_diversity', 
-        'feature_resnet_mean', 'feature_resnet_std', 'multimodal_consistency'
+        'semantic_caption_guided_quality', 'multimodal_consistency'
     ])
     
-    # Metric weights for composite scoring
+    # Metric weights for composite scoring  
     metric_weights: Dict[str, float] = field(default_factory=lambda: {
         'img2img': 0.40,
         'txt2txt': 0.20,
         'img2txt': 0.20,
         'txt2img': 0.20
+    })
+    
+    # Class selection weights: balance between similarity and quality
+    class_selection_weights: Dict[str, float] = field(default_factory=lambda: {
+        'similarity_weight': 0.7,  # Weight for similarity-based scoring
+        'quality_weight': 0.3      # Weight for semantic quality scoring  
     })
     
     # Default quality thresholds
@@ -54,7 +60,8 @@ class MAVERICConfig:
         'consistency': 0.796,
         'resolution_score': 0.370,
         'sharpness_score': 0.880,
-        'color_score': 0.768
+        'color_score': 0.768,
+        'composite_quality': 0.3  # Universal quality threshold for semantic caption-guided metric
     })
     
     # Dataset balancing configuration
