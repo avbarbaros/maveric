@@ -61,6 +61,9 @@ pytest
 **Import Errors:**
 - Missing `openai-clip`: `pip install openai-clip`
 - Missing `torch`/`torchvision`: Install appropriate version for your system
+- Missing `sentence-transformers`: `pip install sentence-transformers` (required for semantic caption-guided quality)
+- Missing `scikit-learn`: `pip install scikit-learn` (required for cosine similarity calculations)
+- Missing `langdetect`: `pip install langdetect` (required for text quality metrics)
 - `libGL.so.1` errors: Use `opencv-python-headless` instead of `opencv-python`
 
 **Matplotlib/Visualization Issues:**
@@ -115,11 +118,14 @@ MAVERIC uses dataclass-based configuration in `config.py`:
 
 Key configuration options:
 - `enable_real_time_stats`: Show live download/cache statistics during retrieval (default: true)
+- `disable_progress_bars`: Disable verbose tqdm progress bars for cleaner output (default: true)
 - `clip_model`: CLIP model to use (default: "ViT-B/32")
 - `cache_base_dir`: Directory for caching downloaded images and results
 - `batch_size`: Processing batch size
 - `retrieval_rotation_size`: Samples per file when saving results and training data (default: 1000)
-- `quality_metrics`: List of quality metrics to compute
+- `quality_metrics`: List of quality metrics to compute (default: resolution, sharpness, color_diversity, semantic_caption_guided_quality, multimodal_consistency)
+- `metric_weights`: Weights for composite scoring across modalities (img2img: 0.4, txt2txt/img2txt/txt2img: 0.2 each)
+- `class_selection_weights`: Balance between similarity and quality (similarity_weight: 0.7, quality_weight: 0.3)
 - `seed`: Random seed for reproducible sampling (default: 42)
 
 Configuration can be loaded from YAML/JSON files:
@@ -131,9 +137,10 @@ maveric = MAVERIC.from_config_file('config.yaml')
 ## Key Components
 
 ### Quality Metrics (`maveric/quality/metrics/`)
-- Visual metrics: resolution, sharpness, color diversity
-- Semantic metrics: text-image consistency, feature richness
-- Multimodal metrics: cross-modal alignment scores
+- **Visual metrics**: resolution, sharpness, color diversity
+- **Semantic metrics**: text quality, caption length, semantic caption-guided quality (EfficientNet-B0 + miniLM)
+- **Multimodal metrics**: multimodal consistency, cross-modal alignment scores
+- **Composite metric**: Semantic caption-guided quality combining EfficientNet classification with semantic text similarity
 
 ### Retrieval System (`maveric/retrieval/`)
 - CLIP-based embedding similarity matching
@@ -148,9 +155,19 @@ maveric = MAVERIC.from_config_file('config.yaml')
 ## Data Flow
 
 1. **Retrieval**: Load source dataset → Generate CLIP embeddings → Match against target dataset embeddings
-2. **Quality Assessment**: Apply visual/semantic metrics → Score each sample
+2. **Quality Assessment**: Apply visual/semantic metrics → Score each sample → Calculate composite quality scores per class
 3. **Filtering**: Apply thresholds → Balance dataset → Export filtered results
 4. **Customization**: Fine-tune model on filtered data → Evaluate performance
+
+### Advanced Quality Assessment
+
+**Semantic Caption-Guided Quality Metric**: Uses EfficientNet-B0 for image classification and miniLM sentence transformers for semantic similarity between captions and ImageNet classes. This composite metric:
+- Identifies relevant ImageNet classes based on caption semantic similarity
+- Focuses quality assessment on caption-relevant classes only  
+- Provides universal quality scoring across datasets with captions
+- Combines semantic-weighted confidence, clarity, and alignment scores
+
+**Composite Quality Scoring**: Quality scores are computed per dataset class using configurable weights that balance similarity-based matching (default: 70%) with semantic quality assessment (default: 30%).
 
 ## Testing Strategy
 

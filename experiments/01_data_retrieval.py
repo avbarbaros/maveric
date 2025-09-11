@@ -19,15 +19,47 @@ from maveric import MAVERIC
 from maveric.config import MAVERICConfig
         
 
-def configure_logging():
-    """Configure logging to suppress download warnings."""
+def configure_logging(disable_progress_bars: bool = True):
+    """Configure logging to suppress download warnings and optionally disable progress bars."""
     # Set CacheManager warnings to ERROR level to suppress them
     cache_logger = logging.getLogger('maveric.CacheManager')
     cache_logger.setLevel(logging.ERROR)
     
+    # Set quality metrics to INFO level to suppress debug messages but keep warnings
+    quality_logger = logging.getLogger('maveric.semantic_caption_guided_quality')
+    quality_logger.setLevel(logging.INFO)
+    
     # Keep other maveric loggers at INFO level for important messages
     maveric_logger = logging.getLogger('maveric')
     maveric_logger.setLevel(logging.INFO)
+    
+    # Disable tqdm progress bars if requested
+    if disable_progress_bars:
+        import os
+        import sys
+        
+        # Set environment variable to disable tqdm globally
+        os.environ['TQDM_DISABLE'] = '1'
+        
+        # Also suppress transformers progress bars
+        os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
+        
+        # Try to configure tqdm directly
+        try:
+            from tqdm import tqdm
+            # Set global tqdm defaults to disable
+            tqdm.disable = True
+        except ImportError:
+            pass
+        
+        # Also try to silence sentence-transformers progress bars
+        try:
+            import transformers
+            transformers.logging.set_verbosity_error()
+        except ImportError:
+            pass
+        
+        print("🔇 Progress bars disabled for cleaner output")
 
 
 def load_config_file(config_path: str) -> Dict:
@@ -221,8 +253,15 @@ def main():
     """Main data retrieval function."""
     args = parse_arguments()
     
-    # Configure logging to suppress download warnings
-    configure_logging()
+    # Load configuration first to check progress bar settings
+    config = load_config_file(args.config)
+    if not config:
+        print("❌ Failed to load configuration")
+        return False
+    
+    # Configure logging and progress bars based on config
+    disable_progress_bars = config.get('disable_progress_bars', True)
+    configure_logging(disable_progress_bars)
     
     print("🚀 Starting MAVERIC Data Retrieval...")
     print(f"📋 Configuration file: {args.config}")
@@ -230,12 +269,6 @@ def main():
     # Validate config file exists
     if not os.path.exists(args.config):
         print(f"❌ Configuration file not found: {args.config}")
-        return False
-    
-    # Load configuration
-    config = load_config_file(args.config)
-    if not config:
-        print("❌ Failed to load configuration")
         return False
     
     # Get number of samples from config

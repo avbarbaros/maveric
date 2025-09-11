@@ -241,7 +241,7 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
             raise ImportError("scikit-learn is required for cosine similarity")
         
         # Encode caption
-        caption_embedding = self.sentence_model.encode([caption])
+        caption_embedding = self.sentence_model.encode([caption], show_progress_bar=False)
         
         # Compute cosine similarities with all ImageNet class names
         similarities = cosine_similarity(caption_embedding, self.class_embeddings)[0]
@@ -297,26 +297,43 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
                 relevant_classes, similarities = self._find_relevant_imagenet_classes(caption)
                 
                 if relevant_classes:
-                    # Focus on caption-relevant classes
-                    relevant_probs = probabilities[relevant_classes]
-                    similarity_weights = torch.tensor(similarities, dtype=torch.float32)
+                    # Filter relevant classes to only include valid EfficientNet indices (0-999)
+                    valid_classes = []
+                    valid_similarities = []
+                    filtered_count = 0
                     
-                    # Semantic-weighted confidence
-                    semantic_weighted_confidence = (relevant_probs * similarity_weights).sum() / similarity_weights.sum()
-                    max_relevant_confidence = relevant_probs.max().item()
+                    for i, class_idx in enumerate(relevant_classes):
+                        if 0 <= class_idx < len(probabilities):  # EfficientNet has 1000 classes (0-999)
+                            valid_classes.append(class_idx)
+                            valid_similarities.append(similarities[i])
+                        else:
+                            filtered_count += 1
                     
-                    # Caption-image alignment score (best semantic match)
-                    alignment_score = similarities[0] if similarities else 0.0
+                    # Log debug info if classes were filtered out
+                    if filtered_count > 0:
+                        self.log_debug(f"Filtered out {filtered_count} classes beyond EfficientNet bounds (≥1000)")  
                     
-                    # Composite quality emphasizing caption alignment
-                    composite_quality = (
-                        semantic_weighted_confidence.item() * 0.4 +  # Semantic-weighted EfficientNet confidence
-                        max_relevant_confidence * 0.3 +              # Best relevant class confidence
-                        clarity_score * 0.2 +                       # General image clarity
-                        alignment_score * 0.1                       # Caption-ImageNet semantic alignment
-                    )
-                    
-                    return round(composite_quality, 5)
+                    if valid_classes:
+                        # Focus on caption-relevant classes within EfficientNet bounds
+                        relevant_probs = probabilities[valid_classes]
+                        similarity_weights = torch.tensor(valid_similarities, dtype=torch.float32)
+                        
+                        # Semantic-weighted confidence
+                        semantic_weighted_confidence = (relevant_probs * similarity_weights).sum() / similarity_weights.sum()
+                        max_relevant_confidence = relevant_probs.max().item()
+                        
+                        # Caption-image alignment score (best semantic match from valid classes)
+                        alignment_score = valid_similarities[0] if valid_similarities else 0.0
+                        
+                        # Composite quality emphasizing caption alignment
+                        composite_quality = (
+                            semantic_weighted_confidence.item() * 0.4 +  # Semantic-weighted EfficientNet confidence
+                            max_relevant_confidence * 0.3 +              # Best relevant class confidence
+                            clarity_score * 0.2 +                       # General image clarity
+                            alignment_score * 0.1                       # Caption-ImageNet semantic alignment
+                        )
+                        
+                        return round(composite_quality, 5)
             
             # Fallback for missing/poor captions - general quality assessment
             composite_quality = max_confidence * 0.5 + clarity_score * 0.3 + confidence_gap * 0.2
@@ -324,7 +341,11 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
             return round(composite_quality, 5)
             
         except Exception as e:
-            self.log_warning(f"Error computing semantic caption-guided quality: {e}")
+            # Log more specific error information for debugging
+            self.log_debug(f"Error computing semantic caption-guided quality: {e}")
+            # Only log as warning if it's an unexpected error type
+            if not isinstance(e, (IndexError, ValueError)):
+                self.log_warning(f"Unexpected error in semantic caption-guided quality: {type(e).__name__}: {e}")
             return 0.0
 
 

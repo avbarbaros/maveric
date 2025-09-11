@@ -96,7 +96,8 @@ logging:
   save_logs: true  # Legacy setting, use log_to_file instead
 
 # Progress display settings
-enable_real_time_stats: true  # Show real-time download/cache statistics during retrieval
+enable_real_time_stats: true   # Show real-time download/cache statistics during retrieval
+disable_progress_bars: true    # Disable verbose tqdm progress bars for cleaner output
   
 # Experiment settings
 experiment:
