@@ -13,7 +13,7 @@ device: "cuda"
 max_memory_gb: 14       # Leave 2GB for system
 
 # Retrieval settings
-retrieval_rotation_size: 500   # Samples per file when saving intermediate results
+retrieval_rotation_size: 100   # Samples per file when saving intermediate results
 n_reference_images: 10         # Number of reference images for similarity matching
 max_retries: 3                 # Maximum download retry attempts
 request_timeout: 5             # Request timeout in seconds
