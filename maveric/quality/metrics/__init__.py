@@ -4,8 +4,7 @@ from .base_metric import BaseQualityMetric, CompositeMetric
 from .visual_metrics import (
     ResolutionMetric,
     SharpnessMetric,
-    ColorDiversityMetric,
-    SemanticCaptionGuidedQualityMetric
+    ColorDiversityMetric
 )
 from .semantic_metrics import (
     TextQualityMetric,
@@ -13,7 +12,8 @@ from .semantic_metrics import (
 )
 from .multimodal_metrics import (
     MultimodalConsistencyMetric,
-    CrossModalAlignmentMetric
+    CrossModalAlignmentMetric,
+    SemanticCaptionGuidedQualityMetric
 )
 
 __all__ = [

@@ -4,8 +4,7 @@ from .quality_controller import QualityController
 from .metrics.visual_metrics import (
     ResolutionMetric,
     SharpnessMetric,
-    ColorDiversityMetric,
-    SemanticCaptionGuidedQualityMetric
+    ColorDiversityMetric
 )
 from .metrics.semantic_metrics import (
     TextQualityMetric,
@@ -13,7 +12,8 @@ from .metrics.semantic_metrics import (
 )
 from .metrics.multimodal_metrics import (
     MultimodalConsistencyMetric,
-    CrossModalAlignmentMetric
+    CrossModalAlignmentMetric,
+    SemanticCaptionGuidedQualityMetric
 )
 from .filters import QualityFilter, ThresholdFilter, BalancedFilter
 

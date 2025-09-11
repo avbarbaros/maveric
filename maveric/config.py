@@ -34,9 +34,13 @@ class MAVERICConfig:
     max_retries: int = 3
     request_timeout: int = 5
     
-    # Quality metrics configuration
+    # Quality metrics configuration - organized by category
     quality_metrics: List[str] = field(default_factory=lambda: [
-        'resolution', 'sharpness', 'color_diversity', 
+        # Visual metrics (image-only)
+        'resolution', 'sharpness', 'color_diversity',
+        # Semantic metrics (text-only) 
+        'text_quality', 'caption_length',
+        # Multimodal metrics (cross-modal)
         'semantic_caption_guided_quality', 'multimodal_consistency'
     ])
     
@@ -54,13 +58,20 @@ class MAVERICConfig:
         'quality_weight': 0.3      # Weight for semantic quality scoring  
     })
     
-    # Default quality thresholds
+    # Default quality thresholds - organized by metric category
     default_thresholds: Dict[str, float] = field(default_factory=lambda: {
-        'weighted_class_score': 0.493,
-        'consistency': 0.796,
+        # Visual metrics
         'resolution_score': 0.370,
         'sharpness_score': 0.880,
-        'color_score': 0.768
+        'color_score': 0.768,
+        # Semantic metrics  
+        'text_quality_score': 0.600,      # Text quality threshold
+        'caption_length_score': 0.700,    # Caption length threshold
+        # Multimodal metrics
+        'composite_quality': 0.493,       # Semantic caption-guided quality
+        'consistency': 0.796,             # Multimodal consistency
+        # Legacy
+        'weighted_class_score': 0.493     # Kept for backwards compatibility
     })
     
     # Dataset balancing configuration

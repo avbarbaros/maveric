@@ -18,11 +18,16 @@ n_reference_images: 10         # Number of reference images for similarity match
 max_retries: 3                 # Maximum download retry attempts
 request_timeout: 5             # Request timeout in seconds
 
-# Quality metrics to compute
+# Quality metrics to compute - organized by category
 quality_metrics:
+  # Visual metrics (image-only)
   - "resolution"
   - "sharpness" 
   - "color_diversity"
+  # Semantic metrics (text-only)
+  - "text_quality"
+  - "caption_length"
+  # Multimodal metrics (cross-modal)
   - "semantic_caption_guided_quality"
   - "multimodal_consistency"
 
@@ -38,7 +43,7 @@ class_selection_weights:
   similarity_weight: 0.5  # Weight for similarity-based class scoring
   quality_weight: 0.5     # Weight for semantic quality in class selection
 
-# Quality thresholds for ELEVATER experiments
+# Quality thresholds for ELEVATER experiments - organized by category
 # These can be adjusted based on your requirements
 quality_thresholds:
   # Visual quality metrics
@@ -46,7 +51,12 @@ quality_thresholds:
   resolution_score: 0.1     # Minimum resolution quality
   color_score: 0.1          # Color distribution diversity
   
+  # Semantic quality metrics (NEW - now enabled!)
+  text_quality_score: 0.1   # Text quality (vocabulary, length, language)
+  caption_length_score: 0.1 # Caption length appropriateness
+  
   # Multimodal metrics
+  composite_quality: 0.1    # Semantic caption-guided quality (moved from visual)
   consistency: 0.1          # Text-image consistency
   cross_modal_alignment: 0.1 # Cross-modal feature alignment
 

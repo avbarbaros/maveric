@@ -123,7 +123,7 @@ Key configuration options:
 - `cache_base_dir`: Directory for caching downloaded images and results
 - `batch_size`: Processing batch size
 - `retrieval_rotation_size`: Samples per file when saving results and training data (default: 1000)
-- `quality_metrics`: List of quality metrics to compute (default: resolution, sharpness, color_diversity, semantic_caption_guided_quality, multimodal_consistency)
+- `quality_metrics`: List of quality metrics to compute (default: visual: resolution, sharpness, color_diversity; semantic: text_quality, caption_length; multimodal: semantic_caption_guided_quality, multimodal_consistency)
 - `metric_weights`: Weights for composite scoring across modalities (img2img: 0.4, txt2txt/img2txt/txt2img: 0.2 each)
 - `class_selection_weights`: Balance between similarity and quality (similarity_weight: 0.7, quality_weight: 0.3)
 - `seed`: Random seed for reproducible sampling (default: 42)
@@ -137,10 +137,21 @@ maveric = MAVERIC.from_config_file('config.yaml')
 ## Key Components
 
 ### Quality Metrics (`maveric/quality/metrics/`)
-- **Visual metrics**: resolution, sharpness, color diversity
-- **Semantic metrics**: text quality, caption length, semantic caption-guided quality (EfficientNet-B0 + miniLM)
-- **Multimodal metrics**: multimodal consistency, cross-modal alignment scores
-- **Composite metric**: Semantic caption-guided quality combining EfficientNet classification with semantic text similarity
+**MAVERIC now properly implements all three metric categories:**
+
+- **Visual metrics** (`visual_metrics.py`): Image-only quality assessment
+  - `ResolutionMetric`: Image resolution evaluation  
+  - `SharpnessMetric`: Laplacian variance-based sharpness
+  - `ColorDiversityMetric`: Color channel standard deviation
+
+- **Semantic metrics** (`semantic_metrics.py`): Text-only quality assessment ✅ **NOW ENABLED**
+  - `TextQualityMetric`: Caption quality (length, vocabulary, language detection)
+  - `CaptionLengthMetric`: Caption length appropriateness
+
+- **Multimodal metrics** (`multimodal_metrics.py`): Cross-modal quality assessment
+  - `MultimodalConsistencyMetric`: CLIP-based cross-modal alignment
+  - `CrossModalAlignmentMetric`: Direct image-text similarity  
+  - `SemanticCaptionGuidedQualityMetric`: **Moved here** - EfficientNet + miniLM composite quality
 
 ### Retrieval System (`maveric/retrieval/`)
 - CLIP-based embedding similarity matching
@@ -161,11 +172,16 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ### Advanced Quality Assessment
 
-**Semantic Caption-Guided Quality Metric**: Uses EfficientNet-B0 for image classification and miniLM sentence transformers for semantic similarity between captions and ImageNet classes. This composite metric:
+**Semantic Caption-Guided Quality Metric**: **Now properly categorized as multimodal** - Uses EfficientNet-B0 for image classification and miniLM sentence transformers for semantic similarity between captions and ImageNet classes. This multimodal metric:
 - Identifies relevant ImageNet classes based on caption semantic similarity
 - Focuses quality assessment on caption-relevant classes only  
 - Provides universal quality scoring across datasets with captions
 - Combines semantic-weighted confidence, clarity, and alignment scores
+
+**Semantic Quality Filtering**: **NEW** - Pure text quality assessment now enabled by default:
+- Text quality metrics filter poor captions (wrong language, too short/long, low vocabulary diversity)
+- Caption length metrics ensure appropriate caption sizes
+- Semantic filtering works alongside visual and multimodal quality assessment
 
 **Composite Quality Scoring**: Quality scores are computed per dataset class using configurable weights that balance similarity-based matching (default: 70%) with semantic quality assessment (default: 30%).
 
