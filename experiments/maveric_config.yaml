@@ -28,7 +28,7 @@ quality_metrics:
   - "text_quality"
   - "caption_length"
   # Multimodal metrics (cross-modal)
-  - "semantic_caption_guided_quality"
+  - "target_class_quality"
   - "multimodal_consistency"
 
 # Metric weights for composite scoring

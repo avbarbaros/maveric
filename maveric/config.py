@@ -41,7 +41,7 @@ class MAVERICConfig:
         # Semantic metrics (text-only) 
         'text_quality', 'caption_length',
         # Multimodal metrics (cross-modal)
-        'semantic_caption_guided_quality', 'multimodal_consistency'
+        'target_class_quality', 'multimodal_consistency'
     ])
     
     # Metric weights for composite scoring  

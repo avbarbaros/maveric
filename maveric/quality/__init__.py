@@ -13,7 +13,7 @@ from .metrics.semantic_metrics import (
 from .metrics.multimodal_metrics import (
     MultimodalConsistencyMetric,
     CrossModalAlignmentMetric,
-    SemanticCaptionGuidedQualityMetric
+    TargetClassQualityMetric
 )
 from .filters import QualityFilter, ThresholdFilter, BalancedFilter
 
@@ -22,7 +22,7 @@ __all__ = [
     "ResolutionMetric",
     "SharpnessMetric",
     "ColorDiversityMetric",
-    "SemanticCaptionGuidedQualityMetric",
+    "TargetClassQualityMetric",
     "TextQualityMetric",
     "CaptionLengthMetric",
     "MultimodalConsistencyMetric",

@@ -64,6 +64,7 @@ pytest
 - Missing `sentence-transformers`: `pip install sentence-transformers` (required for semantic caption-guided quality)
 - Missing `scikit-learn`: `pip install scikit-learn` (required for cosine similarity calculations)
 - Missing `langdetect`: `pip install langdetect` (required for text quality metrics)
+- Missing `torchvision`: Required for EfficientNet-B0 in semantic quality assessment
 - `libGL.so.1` errors: Use `opencv-python-headless` instead of `opencv-python`
 
 **Matplotlib/Visualization Issues:**
@@ -151,17 +152,21 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - **Multimodal metrics** (`multimodal_metrics.py`): Cross-modal quality assessment
   - `MultimodalConsistencyMetric`: CLIP-based cross-modal alignment
   - `CrossModalAlignmentMetric`: Direct image-text similarity  
-  - `SemanticCaptionGuidedQualityMetric`: **Moved here** - EfficientNet + miniLM composite quality
+  - `SemanticCaptionGuidedQualityMetric`: **Moved here** - EfficientNet + miniLM for per-class quality
 
 ### Retrieval System (`maveric/retrieval/`)
-- CLIP-based embedding similarity matching
+- CLIP-based embedding similarity matching with per-class quality assessment
 - Smart caching system for images and embeddings
 - Dataset handlers for different source formats
+- **NEW**: Class mapping visualization showing target dataset classes → ImageNet-1K mappings
+- **NEW**: Progress bar suppression for cleaner console output
 
 ### Interactive Dashboard (`maveric/interactive/`)
-- Jupyter widget for real-time threshold tuning
-- Quality distribution visualization
+- Jupyter widget for real-time threshold tuning with **NEW** class selection weight controls
+- Quality distribution visualization (updated to exclude global composite_quality)
 - Sample gallery with filtering
+- **NEW**: Interactive controls for similarity vs quality balance in class selection
+- **NEW**: Auto-normalizing weight sliders that maintain 1.0 sum
 
 ## Data Flow
 
@@ -172,18 +177,30 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ### Advanced Quality Assessment
 
-**Semantic Caption-Guided Quality Metric**: **Now properly categorized as multimodal and simplified** - Uses EfficientNet-B0 for image classification and miniLM sentence transformers for semantic similarity between captions and ImageNet classes. This streamlined multimodal metric:
-- Identifies relevant ImageNet classes based on caption semantic similarity
-- Returns max EfficientNet probability among relevant classes only  
-- Simple interpretation: "How confident is the model that this image contains what the caption describes?"
-- No arbitrary hyperparameters - just pure semantic-guided probability
+**Per-Class Composite Quality Scoring**: **MAJOR UPDATE** - Composite quality is now calculated per-class instead of globally, following the same pattern as `hybrid_score` and `consistency`:
+- For each target dataset class (e.g., CIFAR-10's 10 classes), a class-specific composite quality score is computed
+- Uses EfficientNet-B0 + sentence transformers with class-enhanced captions (`{original_text} {class_name}`)
+- Results in `Class_{class_name}_composite_quality` columns (e.g., `Class_airplane_composite_quality`)
+- Enables class-aware quality assessment - images are evaluated specifically for how well they represent each class
+- Class selection combines similarity score with class-specific quality score using configurable weights
+
+**Semantic Caption-Guided Quality Metric**: **Now properly categorized as multimodal** - Located in `multimodal_metrics.py` and used for per-class quality assessment:
+- Uses EfficientNet-B0 (CPU-only) for universal image classification
+- Employs sentence transformers ('all-MiniLM-L6-v2') for semantic similarity with ImageNet classes
+- Focuses on semantically relevant ImageNet classes based on caption content
+- Works universally across all ELEVATER datasets without manual class mappings
+- Provides comprehensive quality scores considering both visual quality and semantic relevance
 
 **Semantic Quality Filtering**: **NEW** - Pure text quality assessment now enabled by default:
 - Text quality metrics filter poor captions (wrong language, too short/long, low vocabulary diversity)
 - Caption length metrics ensure appropriate caption sizes
 - Semantic filtering works alongside visual and multimodal quality assessment
 
-**Composite Quality Scoring**: Quality scores are computed per dataset class using configurable weights that balance similarity-based matching (default: 70%) with semantic quality assessment (default: 30%).
+**Class Selection Architecture**: Enhanced class selection logic that integrates both similarity and quality:
+- Similarity-based scoring: Traditional img2img, txt2txt, img2txt, txt2img metrics
+- Quality-enhanced scoring: Per-class composite quality scores
+- Configurable weighting: Balance between similarity (default: 70%) and quality (default: 30%)
+- Interactive controls: Real-time adjustment via Jupyter widgets
 
 ## Testing Strategy
 
@@ -263,3 +280,26 @@ Key config features:
 - YAML/JSON loading support
 - Auto device detection when set to "auto"
 - Automatic directory creation in `__post_init__`
+
+## Performance & Architecture Improvements
+
+### CPU-Only Data Retrieval
+- **SemanticCaptionGuidedQualityMetric** now uses EfficientNet-B0 on CPU during data retrieval
+- Eliminates GPU memory usage during the data collection phase
+- Maintains high-quality assessment while reducing hardware requirements
+
+### Progress Bar Management  
+- **Configurable progress bars**: Set `disable_progress_bars: true` in config for cleaner output
+- **Smart suppression**: Automatically disables tqdm, transformers, and sentence-transformers progress bars
+- **Console-friendly**: Reduces log noise for production environments
+
+### Per-Class Quality Architecture
+- **Eliminated global quality scores**: No more single `composite_quality` per sample
+- **Class-specific assessment**: Quality evaluated relative to each target class
+- **Consistent data structure**: Follows same pattern as similarity metrics (`Class_{name}_{metric}`)
+- **Enhanced class selection**: Combines similarity and quality at the class level
+
+### Memory Optimization
+- **Efficient caching**: Smart image and embedding cache management
+- **Rotation files**: Large datasets automatically split into manageable chunks
+- **Resource management**: Better GPU/CPU resource allocation during different phases

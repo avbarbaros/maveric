@@ -17,7 +17,7 @@ from ..quality.metrics import (
     ResolutionMetric,
     SharpnessMetric,
     ColorDiversityMetric,
-    SemanticCaptionGuidedQualityMetric
+    TargetClassQualityMetric
 )
 from .cache_manager import CacheManager
 from .dataset_handlers import DatasetHandler
@@ -87,7 +87,7 @@ class Retriever(BaseComponent):
             'resolution': ResolutionMetric(),
             'sharpness': SharpnessMetric(),
             'color_diversity': ColorDiversityMetric(),
-            'semantic_caption_guided_quality': SemanticCaptionGuidedQualityMetric()  # Used for per-class composite_quality
+            'target_class_quality': TargetClassQualityMetric()  # Used for per-class composite_quality
         }
     
     def prepare_reference_embeddings(self, 
@@ -590,12 +590,12 @@ class Retriever(BaseComponent):
         self.log_info(f"\n🎯 TARGET DATASET CLASS MAPPINGS FOR {target_dataset.upper()}")
         self.log_info("=" * 80)
         
-        # Initialize SemanticCaptionGuidedQualityMetric to access dynamic mapping functionality
-        if 'semantic_caption_guided_quality' not in self.quality_metrics:
-            from ..quality.metrics.multimodal_metrics import SemanticCaptionGuidedQualityMetric
-            temp_metric = SemanticCaptionGuidedQualityMetric(target_dataset=target_dataset)
+        # Initialize TargetClassQualityMetric to access dynamic mapping functionality
+        if 'target_class_quality' not in self.quality_metrics:
+            from ..quality.metrics.multimodal_metrics import TargetClassQualityMetric
+            temp_metric = TargetClassQualityMetric(target_dataset=target_dataset)
         else:
-            temp_metric = self.quality_metrics['semantic_caption_guided_quality']
+            temp_metric = self.quality_metrics['target_class_quality']
         
         # Generate mappings for each target class
         for i, class_name in enumerate(class_names, 1):

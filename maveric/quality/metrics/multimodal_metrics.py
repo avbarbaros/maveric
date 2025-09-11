@@ -218,25 +218,25 @@ class CrossModalAlignmentMetric(BaseQualityMetric):
             return 0.0
 
 
-class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
+class TargetClassQualityMetric(BaseQualityMetric):
     """
-    Simplified semantic caption-guided quality metric using EfficientNet-B0.
+    Target class quality metric using CLIP-based class mapping and EfficientNet.
     
-    This multimodal metric uses semantic similarity to find ImageNet classes
-    relevant to the caption, then returns the maximum EfficientNet probability
-    among those relevant classes. Simple and interpretable: "How confident is
-    the model that this image contains what the caption describes?"
+    This metric pre-computes mappings between target dataset classes and ImageNet
+    classes using CLIP semantic similarity, then evaluates image quality by
+    measuring EfficientNet confidence on the most relevant ImageNet classes.
     
-    Works universally across all datasets with captions.
+    Simple and efficient: "How confident is EfficientNet that this image contains
+    objects from the target class?"
     """
     
     def __init__(self, target_dataset: str = None):
-        """Initialize semantic caption-guided quality metric.
+        """Initialize target class quality metric.
         
         Args:
             target_dataset: Target dataset name (e.g., 'cifar10', 'cifar100') for class-specific mapping
         """
-        super().__init__("semantic_caption_guided_quality")
+        super().__init__("target_class_quality")
         
         # Force CPU usage for data retrieval performance
         self.device = "cpu"
@@ -251,12 +251,13 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
         except ImportError:
             raise ImportError("torchvision is required for EfficientNet model")
         
-        # Load sentence transformer for semantic similarity (lightweight)
+        # Load CLIP for semantic similarity (more robust than sentence transformers)
         try:
-            from sentence_transformers import SentenceTransformer
-            self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2')  # 22MB, fast
+            import clip
+            self.clip_model, _ = clip.load("ViT-B/32", device=self.device)
+            self.clip_model.eval()
         except ImportError:
-            raise ImportError("sentence-transformers is required for semantic similarity")
+            raise ImportError("openai-clip is required for semantic similarity")
         
         # Load ImageNet class names
         try:
@@ -265,11 +266,11 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
         except ImportError:
             raise ImportError("ImageNet classes not found")
         
-        # Pre-compute embeddings for all ImageNet classes (one-time cost at init)
-        self.log_info("Computing ImageNet class embeddings for semantic similarity...")
-        self.class_embeddings = self.sentence_model.encode(self.imagenet_classes, show_progress_bar=False)
+        # Pre-compute CLIP embeddings for all ImageNet classes (one-time cost at init)
+        self.log_info("Computing ImageNet class embeddings using CLIP...")
+        self.class_embeddings = self._compute_imagenet_embeddings()
         
-        # Cache for dynamic class mappings (computed on first use)
+        # Cache for target class mappings (computed on first use)
         self.class_mappings_cache = {}
         
         # Image preprocessing (EfficientNet standard)
@@ -289,9 +290,25 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
     def requires_reference(self) -> bool:
         return False
     
+    def _compute_imagenet_embeddings(self):
+        """Compute CLIP text embeddings for all ImageNet classes."""
+        import clip
+        
+        # Prepare text prompts for ImageNet classes
+        text_prompts = [f"a photo of a {class_name}" for class_name in self.imagenet_classes]
+        
+        # Tokenize and encode
+        text_tokens = clip.tokenize(text_prompts, truncate=True).to(self.device)
+        
+        with torch.no_grad():
+            text_embeddings = self.clip_model.encode_text(text_tokens)
+            text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
+        
+        return text_embeddings.cpu().numpy()
+    
     def _find_relevant_imagenet_classes_for_target_class(self, target_class: str, top_k: int = 20, similarity_threshold: float = 0.3):
         """
-        Dynamically find ImageNet classes relevant to a target dataset class.
+        Find ImageNet classes relevant to a target dataset class using CLIP.
         
         Args:
             target_class: Target class name (e.g., 'dog', 'automobile', 'bird')
@@ -308,11 +325,19 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
         
         try:
             from sklearn.metrics.pairwise import cosine_similarity
+            import clip
         except ImportError:
-            raise ImportError("scikit-learn is required for cosine similarity")
+            raise ImportError("scikit-learn and openai-clip are required")
         
-        # Encode target class name
-        target_embedding = self.sentence_model.encode([target_class], show_progress_bar=False)
+        # Encode target class using CLIP
+        target_prompt = f"a photo of a {target_class}"
+        target_tokens = clip.tokenize([target_prompt], truncate=True).to(self.device)
+        
+        with torch.no_grad():
+            target_embedding = self.clip_model.encode_text(target_tokens)
+            target_embedding = target_embedding / target_embedding.norm(dim=-1, keepdim=True)
+        
+        target_embedding = target_embedding.cpu().numpy()
         
         # Compute similarities with all ImageNet classes
         similarities = cosine_similarity(target_embedding, self.class_embeddings)[0]
@@ -332,68 +357,35 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
         # Log the discovered mapping for transparency
         if relevant_indices:
             class_names = [self.imagenet_classes[i] for i in relevant_indices[:5]]  # Show top 5
-            self.log_info(f"Target class '{target_class}' mapped to ImageNet classes: {class_names}...")
+            self.log_info(f"Target class '{target_class}' → ImageNet classes: {class_names}... (CLIP)")
         
         return relevant_indices
     
-    def _find_relevant_imagenet_classes(self, caption: str, top_k: int = 15, similarity_threshold: float = 0.25):
-        """
-        Find ImageNet classes most semantically similar to the caption.
-        
-        Args:
-            caption: Image caption text
-            top_k: Maximum number of classes to consider
-            similarity_threshold: Minimum similarity score to include class
-            
-        Returns:
-            tuple: (class_indices, similarity_scores)
-        """
-        try:
-            from sklearn.metrics.pairwise import cosine_similarity
-        except ImportError:
-            raise ImportError("scikit-learn is required for cosine similarity")
-        
-        # Encode caption
-        caption_embedding = self.sentence_model.encode([caption], show_progress_bar=False)
-        
-        # Compute cosine similarities with all ImageNet class names
-        similarities = cosine_similarity(caption_embedding, self.class_embeddings)[0]
-        
-        # Get top-K most similar classes above threshold
-        top_indices = np.argsort(similarities)[::-1][:top_k]
-        
-        # Filter by threshold
-        relevant_indices = []
-        relevant_similarities = []
-        for idx in top_indices:
-            if similarities[idx] >= similarity_threshold:
-                relevant_indices.append(idx)
-                relevant_similarities.append(similarities[idx])
-        
-        return relevant_indices, relevant_similarities
     
     def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
         """
-        Compute class-centric caption-guided image quality.
+        Compute target class quality using pre-computed CLIP mappings.
         
         Algorithm:
-        1. If target_class is provided in metadata, use class-centric approach:
-           - Find ImageNet classes relevant to target class
-           - Calculate caption similarity with relevant classes
-           - Return max probability among most similar classes
-        2. Otherwise, fall back to caption-centric approach
+        1. Get target class from metadata 
+        2. Find relevant ImageNet classes using pre-computed CLIP mapping
+        3. Run EfficientNet on image
+        4. Return max probability among relevant ImageNet classes
         
         Args:
             image: PIL Image
-            metadata: Must contain 'text'/'caption' and optionally 'label'/'target_class'
+            metadata: Must contain 'label' or 'target_class'
             
         Returns:
-            Quality score (0-1): Max probability of relevant classes
+            Quality score (0-1): Max EfficientNet probability of relevant classes
         """
         try:
-            # Get caption and target class
-            caption = metadata.get('text', metadata.get('caption', ''))
+            # Get target class
             target_class = metadata.get('label', metadata.get('target_class', ''))
+            
+            if not target_class or len(target_class.strip()) == 0:
+                self.log_debug("No target class provided, returning 0.0")
+                return 0.0
             
             # Process image with EfficientNet
             if image.mode != 'RGB':
@@ -404,64 +396,26 @@ class SemanticCaptionGuidedQualityMetric(BaseQualityMetric):
                 logits = self.efficientnet(image_tensor)
                 probabilities = torch.softmax(logits, dim=1).squeeze()
             
-            # Get max confidence for fallback case
-            max_confidence = probabilities.max().item()
+            # Find ImageNet classes relevant to target class using CLIP
+            relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
             
-            # CLASS-CENTRIC APPROACH (Your improved idea!)
-            if target_class and len(target_class.strip()) > 0:
-                # Step 1: Find ImageNet classes relevant to target class
-                target_relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
-                
-                if target_relevant_classes and caption and len(caption.strip()) >= 5:
-                    # Step 2: Calculate similarity between caption and target-relevant ImageNet classes
-                    target_class_names = [self.imagenet_classes[i] for i in target_relevant_classes]
-                    target_embeddings = self.sentence_model.encode(target_class_names, show_progress_bar=False)
-                    caption_embedding = self.sentence_model.encode([caption], show_progress_bar=False)
-                    
-                    # Calculate similarities
-                    from sklearn.metrics.pairwise import cosine_similarity
-                    similarities = cosine_similarity(caption_embedding, target_embeddings)[0]
-                    
-                    # Step 3: Select most similar classes (top 5)
-                    top_similarity_indices = np.argsort(similarities)[::-1][:5]
-                    most_relevant_classes = [target_relevant_classes[i] for i in top_similarity_indices]
-                    
-                    # Step 4: Return max probability among most relevant classes
-                    if most_relevant_classes:
-                        relevant_probs = probabilities[most_relevant_classes]
-                        quality_score = relevant_probs.max().item()
-                        
-                        # Log for transparency
-                        best_class_idx = most_relevant_classes[np.argmax(relevant_probs.cpu().numpy())]
-                        best_class_name = self.imagenet_classes[best_class_idx]
-                        self.log_debug(f"Target '{target_class}' → Best match: '{best_class_name}' (prob: {quality_score:.3f})")
-                        
-                        return round(quality_score, 5)
-                
-                # Fallback: use all target-relevant classes without caption filtering
-                elif target_relevant_classes:
-                    relevant_probs = probabilities[target_relevant_classes]
-                    quality_score = relevant_probs.max().item()
-                    return round(quality_score, 5)
+            if not relevant_classes:
+                self.log_debug(f"No relevant ImageNet classes found for '{target_class}'")
+                return 0.0
             
-            # CAPTION-CENTRIC FALLBACK (original approach)
-            elif caption and len(caption.strip()) >= 5:
-                relevant_classes, _ = self._find_relevant_imagenet_classes(caption)
-                
-                if relevant_classes:
-                    # Filter valid classes
-                    valid_classes = [idx for idx in relevant_classes if 0 <= idx < len(probabilities)]
-                    
-                    if valid_classes:
-                        relevant_probs = probabilities[valid_classes]
-                        quality_score = relevant_probs.max().item()
-                        return round(quality_score, 5)
+            # Get max probability among relevant classes
+            relevant_probs = probabilities[relevant_classes]
+            quality_score = relevant_probs.max().item()
             
-            # Final fallback - general image quality
-            return round(max_confidence, 5)
+            # Log for transparency
+            best_idx = relevant_classes[np.argmax(relevant_probs.cpu().numpy())]
+            best_class_name = self.imagenet_classes[best_idx]
+            self.log_debug(f"Target '{target_class}' → Best: '{best_class_name}' (prob: {quality_score:.3f})")
+            
+            return round(quality_score, 5)
             
         except Exception as e:
-            self.log_debug(f"Error computing semantic caption-guided quality: {e}")
+            self.log_debug(f"Error computing target class quality: {e}")
             if not isinstance(e, (IndexError, ValueError)):
-                self.log_warning(f"Unexpected error in semantic caption-guided quality: {type(e).__name__}: {e}")
+                self.log_warning(f"Unexpected error in target class quality: {type(e).__name__}: {e}")
             return 0.0
