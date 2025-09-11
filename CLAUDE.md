@@ -172,11 +172,11 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ### Advanced Quality Assessment
 
-**Semantic Caption-Guided Quality Metric**: **Now properly categorized as multimodal** - Uses EfficientNet-B0 for image classification and miniLM sentence transformers for semantic similarity between captions and ImageNet classes. This multimodal metric:
+**Semantic Caption-Guided Quality Metric**: **Now properly categorized as multimodal and simplified** - Uses EfficientNet-B0 for image classification and miniLM sentence transformers for semantic similarity between captions and ImageNet classes. This streamlined multimodal metric:
 - Identifies relevant ImageNet classes based on caption semantic similarity
-- Focuses quality assessment on caption-relevant classes only  
-- Provides universal quality scoring across datasets with captions
-- Combines semantic-weighted confidence, clarity, and alignment scores
+- Returns max EfficientNet probability among relevant classes only  
+- Simple interpretation: "How confident is the model that this image contains what the caption describes?"
+- No arbitrary hyperparameters - just pure semantic-guided probability
 
 **Semantic Quality Filtering**: **NEW** - Pure text quality assessment now enabled by default:
 - Text quality metrics filter poor captions (wrong language, too short/long, low vocabulary diversity)
