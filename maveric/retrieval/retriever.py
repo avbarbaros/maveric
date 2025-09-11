@@ -162,6 +162,9 @@ class Retriever(BaseComponent):
         # Create text embeddings
         self.text_embeddings = {}
         
+        # Log target class to ImageNet class mappings at the beginning
+        self._log_class_mappings(target_dataset, dataset.class_names)
+        
         for class_name in tqdm(dataset.class_names, desc="Encoding text templates"):
             prompts = [template.format(class_name) for template in text_templates]
             
@@ -575,3 +578,44 @@ class Retriever(BaseComponent):
                 'rotation_size': rotation_size
             }
         )
+    
+    def _log_class_mappings(self, target_dataset: str, class_names: list):
+        """
+        Log target dataset class to ImageNet class mappings at the start of retrieval.
+        
+        Args:
+            target_dataset: Name of target dataset
+            class_names: List of class names from target dataset
+        """
+        self.log_info(f"\n🎯 TARGET DATASET CLASS MAPPINGS FOR {target_dataset.upper()}")
+        self.log_info("=" * 80)
+        
+        # Initialize SemanticCaptionGuidedQualityMetric to access dynamic mapping functionality
+        if 'semantic_caption_guided_quality' not in self.quality_metrics:
+            from ..quality.metrics.multimodal_metrics import SemanticCaptionGuidedQualityMetric
+            temp_metric = SemanticCaptionGuidedQualityMetric(target_dataset=target_dataset)
+        else:
+            temp_metric = self.quality_metrics['semantic_caption_guided_quality']
+        
+        # Generate mappings for each target class
+        for i, class_name in enumerate(class_names, 1):
+            try:
+                # Get relevant ImageNet classes for this target class
+                relevant_indices = temp_metric._find_relevant_imagenet_classes_for_target_class(
+                    class_name, top_k=10, similarity_threshold=0.25
+                )
+                
+                if relevant_indices:
+                    # Get the mapped ImageNet class names
+                    mapped_classes = [temp_metric.imagenet_classes[idx] for idx in relevant_indices[:10]]
+                    self.log_info(f"{i:2d}. '{class_name}' → {mapped_classes}")
+                else:
+                    self.log_info(f"{i:2d}. '{class_name}' → [No similar ImageNet classes found]")
+                    
+            except Exception as e:
+                self.log_warning(f"Failed to map class '{class_name}': {e}")
+                
+        self.log_info("=" * 80)
+        self.log_info(f"📊 Total target classes: {len(class_names)}")
+        self.log_info("💡 These mappings show how each target class relates to ImageNet-1K classes")
+        self.log_info("🔄 Starting retrieval process...\n")
