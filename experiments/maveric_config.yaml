@@ -56,7 +56,7 @@ quality_thresholds:
   caption_length_score: 0.1 # Caption length appropriateness
   
   # Multimodal metrics
-  composite_quality: 0.1    # Semantic caption-guided quality (moved from visual)
+  target_class_quality: 0.1    # Target class quality using CLIP mappings
   consistency: 0.1          # Text-image consistency
   cross_modal_alignment: 0.1 # Cross-modal feature alignment
 

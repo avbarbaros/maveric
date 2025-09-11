@@ -68,7 +68,7 @@ class MAVERICConfig:
         'text_quality_score': 0.600,      # Text quality threshold
         'caption_length_score': 0.700,    # Caption length threshold
         # Multimodal metrics
-        'composite_quality': 0.493,       # Semantic caption-guided quality
+        'target_class_quality': 0.493,    # Target class quality using CLIP mappings
         'consistency': 0.796,             # Multimodal consistency
         # Legacy
         'weighted_class_score': 0.493     # Kept for backwards compatibility

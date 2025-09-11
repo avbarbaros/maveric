@@ -284,7 +284,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
     
     @property
     def metric_name(self) -> str:
-        return "composite_quality"
+        return "target_class_quality"
     
     @property
     def requires_reference(self) -> bool:

@@ -109,7 +109,7 @@ class QualityController(BaseComponent):
         
         This method identifies the most likely class for each sample by combining:
         1. Similarity-based scores (img2img, txt2txt, img2txt, txt2img)
-        2. Semantic quality score (composite_quality) for universal quality assessment
+        2. Target class quality score (target_class_quality) for universal quality assessment
         
         The final score is a weighted combination of both factors for better class selection.
         """
@@ -152,11 +152,11 @@ class QualityController(BaseComponent):
                         similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
                 
-                # Get class-specific composite quality score
-                composite_quality_col = f"Class_{class_name}_composite_quality"
-                composite_quality = row.get(composite_quality_col, 0.0)
-                if pd.isna(composite_quality):
-                    composite_quality = 0.0
+                # Get class-specific target class quality score
+                target_class_quality_col = f"Class_{class_name}_target_class_quality"
+                target_class_quality = row.get(target_class_quality_col, 0.0)
+                if pd.isna(target_class_quality):
+                    target_class_quality = 0.0
                 
                 # Normalize similarity score
                 if valid_weights_sum > 0:
@@ -165,7 +165,7 @@ class QualityController(BaseComponent):
                     # Combine similarity score with class-specific quality score
                     combined_score = (
                         self.class_selection_weights['similarity_weight'] * similarity_score +
-                        self.class_selection_weights['quality_weight'] * composite_quality
+                        self.class_selection_weights['quality_weight'] * target_class_quality
                     )
                     
                     class_scores[class_name] = combined_score
@@ -430,7 +430,7 @@ class QualityController(BaseComponent):
                 }
                 
                 # Add quality scores
-                for metric in ['resolution_score', 'sharpness_score', 'color_score', 'composite_quality']:
+                for metric in ['resolution_score', 'sharpness_score', 'color_score', 'target_class_quality']:
                     if metric in row:
                         item[metric] = round(float(row[metric]), 5)
                 

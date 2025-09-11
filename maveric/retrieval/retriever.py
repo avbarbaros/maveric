@@ -87,7 +87,7 @@ class Retriever(BaseComponent):
             'resolution': ResolutionMetric(),
             'sharpness': SharpnessMetric(),
             'color_diversity': ColorDiversityMetric(),
-            'target_class_quality': TargetClassQualityMetric()  # Used for per-class composite_quality
+            'target_class_quality': TargetClassQualityMetric()  # Used for per-class target_class_quality
         }
     
     def prepare_reference_embeddings(self, 
@@ -232,13 +232,13 @@ class Retriever(BaseComponent):
             print(f"❌ Failed to export rotation file: {e}")
             self.log_warning(f"Failed to export rotation file: {e}")
     
-    def _compute_class_composite_quality(self, image, text: str, class_name: str) -> float:
+    def _compute_target_class_quality(self, image, text: str, class_name: str) -> float:
         """
-        Compute class-specific composite quality score.
+        Compute target class quality score.
         
         This method computes a quality score for the image-text pair specifically
-        in relation to the given class, similar to how hybrid_score and consistency
-        work per-class.
+        in relation to the given target class, using CLIP-based class mappings
+        and EfficientNet confidence.
         
         Args:
             image: PIL Image object
@@ -246,21 +246,22 @@ class Retriever(BaseComponent):
             class_name: Target class name (e.g., 'airplane', 'bird')
             
         Returns:
-            Class-specific composite quality score (0-1)
+            Target class quality score (0-1)
         """
         try:
-            # Get the semantic caption-guided quality metric
-            if 'semantic_caption_guided_quality' not in self.quality_metrics:
+            # Get the target class quality metric
+            if 'target_class_quality' not in self.quality_metrics:
                 return 0.0
                 
-            metric = self.quality_metrics['semantic_caption_guided_quality']
+            metric = self.quality_metrics['target_class_quality']
             
-            # Create class-specific caption by combining original text with class name
-            # This helps the semantic similarity focus on the target class
-            class_specific_text = f"{text} {class_name}"
-            
-            # Create metadata with class-specific text
-            metadata = {'text': class_specific_text, 'class': class_name}
+            # Create metadata with target class information
+            # The TargetClassQualityMetric expects 'label' or 'target_class' in metadata
+            metadata = {
+                'text': text, 
+                'label': class_name,  # This is what TargetClassQualityMetric looks for
+                'target_class': class_name  # Alternative key
+            }
             
             # Compute the score
             score = metric.compute(image, metadata)
@@ -268,7 +269,7 @@ class Retriever(BaseComponent):
             return max(0.0, min(1.0, float(score)))  # Ensure 0-1 range
             
         except Exception as e:
-            self.log_warning(f"Error computing class composite quality for {class_name}: {e}")
+            self.log_warning(f"Error computing target class quality for {class_name}: {e}")
             return 0.0
     
     def compute_sample_scores(self, 
@@ -352,8 +353,8 @@ class Retriever(BaseComponent):
                 similarities = [img2img, txt2txt, img2txt, txt2img]
                 consistency = 1.0 - np.std(similarities)
                 
-                # Calculate class-specific composite quality
-                composite_quality = self._compute_class_composite_quality(image, text, class_name)
+                # Calculate target class quality
+                target_class_quality = self._compute_target_class_quality(image, text, class_name)
                 
                 class_scores[class_name] = {
                     'hybrid_score': round(float(hybrid_score), 5),
@@ -362,7 +363,7 @@ class Retriever(BaseComponent):
                     'img2txt': round(float(img2txt), 5),
                     'txt2img': round(float(txt2img), 5),
                     'consistency': round(float(consistency), 5),
-                    'composite_quality': round(float(composite_quality), 5)
+                    'target_class_quality': round(float(target_class_quality), 5)
                 }
             
             # Compute quality scores (exclude semantic_caption_guided_quality as it's now per-class)
