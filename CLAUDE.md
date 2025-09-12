@@ -119,7 +119,6 @@ MAVERIC uses dataclass-based configuration in `config.py`:
 
 Key configuration options:
 - `enable_real_time_stats`: Show live download/cache statistics during retrieval (default: true)
-- `disable_progress_bars`: Disable verbose tqdm progress bars for cleaner output (default: true)
 - `clip_model`: CLIP model to use (default: "ViT-B/32")
 - `cache_base_dir`: Directory for caching downloaded images and results
 - `batch_size`: Processing batch size
@@ -298,9 +297,8 @@ Key config features:
 - **Memory Efficiency**: Computes all ImageNet mappings from a single probability tensor
 
 ### Progress Bar Management  
-- **Configurable progress bars**: Set `disable_progress_bars: true` in config for cleaner output
-- **Smart suppression**: Automatically disables tqdm, transformers, and sentence-transformers progress bars
-- **Console-friendly**: Reduces log noise for production environments
+- **Real-time statistics**: Set `enable_real_time_stats: false` in config to disable live download/cache statistics
+- **Console-friendly**: Configurable progress display for production environments
 
 ### Per-Class Quality Architecture
 - **Eliminated global quality scores**: No more single `composite_quality` per sample - now using `imagenet_probability`

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import clip
 from PIL import Image
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from sklearn.metrics.pairwise import cosine_similarity
 
 from .base_metric import BaseQualityMetric
