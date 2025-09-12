@@ -87,7 +87,7 @@ class Retriever(BaseComponent):
             'resolution': ResolutionMetric(),
             'sharpness': SharpnessMetric(),
             'color_diversity': ColorDiversityMetric(),
-            'target_class_quality': TargetClassQualityMetric()  # Used for per-class target_class_quality
+            'target_class_quality': TargetClassQualityMetric()  # Used for per-class efficientNet_score calculation
         }
     
     def prepare_reference_embeddings(self, 
@@ -245,7 +245,7 @@ class Retriever(BaseComponent):
             target_classes: List of target class names to compute mappings for
             
         Returns:
-            Dictionary mapping target_class_name -> (best_imagenet_class_name, imagenet_probability)
+            Dictionary mapping target_class_name -> (predicted_imagenet_class_name, efficientNet_score)
         """
         try:
             # Get the target class quality metric
@@ -320,6 +320,16 @@ class Retriever(BaseComponent):
             target_classes = list(self.reference_embeddings.keys())
             imagenet_mappings = self._compute_all_imagenet_mappings(image, text, target_classes)
             
+            # Get global ImageNet prediction for this image
+            global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+            if 'target_class_quality' in self.quality_metrics:
+                metric = self.quality_metrics['target_class_quality']
+                try:
+                    global_imagenet_pred, global_imagenet_prob = metric.compute_single_imagenet_prediction(image)
+                except Exception as e:
+                    self.log_debug(f"Error getting global ImageNet prediction: {e}")
+                    global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+            
             for class_name in target_classes:
                 # Similarity computations
                 from sklearn.metrics.pairwise import cosine_similarity
@@ -351,8 +361,8 @@ class Retriever(BaseComponent):
                 similarities = [img2img, txt2txt, img2txt, txt2img]
                 consistency = 1.0 - np.std(similarities)
                 
-                # Get pre-computed ImageNet mapping (no additional EfficientNet calls!)
-                best_imagenet_class, imagenet_probability = imagenet_mappings.get(class_name, ("", 0.0))
+                # Get pre-computed EfficientNet score (no additional EfficientNet calls!)
+                predicted_imagenet_class, efficientNet_score = imagenet_mappings.get(class_name, ("", 0.0))
                 
                 class_scores[class_name] = {
                     'hybrid_score': round(float(hybrid_score), 5),
@@ -361,17 +371,16 @@ class Retriever(BaseComponent):
                     'img2txt': round(float(img2txt), 5),
                     'txt2img': round(float(txt2img), 5),
                     'consistency': round(float(consistency), 5),
-                    'best_imagenet_class': best_imagenet_class,
-                    'imagenet_probability': round(float(imagenet_probability), 5)
+                    'efficientNet_score': round(float(efficientNet_score), 5)
                 }
             
-            # Compute quality scores (exclude semantic_caption_guided_quality as it's now per-class)
+            # Compute quality scores (exclude target_class_quality as it's now per-class)
             quality_scores = {}
             metadata = {'url': image_url, 'text': text}
             
             for metric_name, metric in self.quality_metrics.items():
-                # Skip semantic_caption_guided_quality as it's now calculated per-class
-                if metric_name == 'semantic_caption_guided_quality':
+                # Skip target_class_quality as it's now calculated per-class as efficientNet_score
+                if metric_name == 'target_class_quality':
                     continue
                     
                 try:
@@ -380,6 +389,10 @@ class Retriever(BaseComponent):
                 except Exception as e:
                     self.log_warning(f"Error computing {metric_name}: {e}")
                     quality_scores[metric.metric_name] = 0.0
+            
+            # Add global ImageNet prediction fields
+            quality_scores['imagenet_predicted_class'] = global_imagenet_pred
+            quality_scores['imagenet_probability'] = round(float(global_imagenet_prob), 5)
             
             return class_scores, quality_scores
             

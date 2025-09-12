@@ -152,11 +152,11 @@ class QualityController(BaseComponent):
                         similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
                 
-                # Get class-specific target class quality score
-                target_class_quality_col = f"Class_{class_name}_target_class_quality"
-                target_class_quality = row.get(target_class_quality_col, 0.0)
-                if pd.isna(target_class_quality):
-                    target_class_quality = 0.0
+                # Get class-specific EfficientNet quality score
+                efficientNet_score_col = f"Class_{class_name}_efficientNet_score"
+                efficientNet_score = row.get(efficientNet_score_col, 0.0)
+                if pd.isna(efficientNet_score):
+                    efficientNet_score = 0.0
                 
                 # Normalize similarity score
                 if valid_weights_sum > 0:
@@ -165,7 +165,7 @@ class QualityController(BaseComponent):
                     # Combine similarity score with class-specific quality score
                     combined_score = (
                         self.class_selection_weights['similarity_weight'] * similarity_score +
-                        self.class_selection_weights['quality_weight'] * target_class_quality
+                        self.class_selection_weights['quality_weight'] * efficientNet_score
                     )
                     
                     class_scores[class_name] = combined_score

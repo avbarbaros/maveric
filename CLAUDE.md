@@ -178,8 +178,8 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 **Per-Class Target Quality Scoring**: **MAJOR UPDATE** - Target class quality is now calculated per-class instead of globally, following the same pattern as `hybrid_score` and `consistency`:
 - For each target dataset class (e.g., CIFAR-10's 10 classes), a class-specific composite quality score is computed
-- Uses EfficientNet-B0 + sentence transformers with class-enhanced captions (`{original_text} {class_name}`)
-- Results in `Class_{class_name}_imagenet_probability` columns (e.g., `Class_airplane_imagenet_probability`) with corresponding `Class_{class_name}_best_imagenet_class` mappings
+- Uses EfficientNet-B0 + CLIP for semantic similarity with ImageNet classes (no longer using sentence transformers)
+- Results in `Class_{class_name}_efficientNet_score` columns (e.g., `Class_airplane_efficientNet_score`) based on CLIP similarity with predicted ImageNet class
 - Enables class-aware quality assessment - images are evaluated specifically for how well they represent each class
 - Class selection combines similarity score with class-specific quality score using configurable weights
 
@@ -187,9 +187,9 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - Uses EfficientNet-B0 (CPU-only) for universal image classification
 - Employs CLIP for semantic similarity with ImageNet classes (more robust than sentence transformers)
 - Pre-computes CLIP embeddings for all ImageNet classes for efficiency
-- Focuses on semantically relevant ImageNet classes based on caption content
+- Focuses on semantically relevant ImageNet classes based on caption content  
 - Works universally across all ELEVATER datasets without manual class mappings
-- **NEW**: Returns the best matching ImageNet class name and its probability (replaces target_class_quality score)
+- **Current implementation**: Returns ImageNet probability and best matching ImageNet class name per target class
 - **OPTIMIZED**: Batch processing computes mappings for all target classes using single EfficientNet inference
 - Provides comprehensive quality scores considering both visual quality and semantic relevance
 
@@ -245,12 +245,12 @@ MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified h
 ### Torchvision-based Datasets (11):
 - CIFAR-10, CIFAR-100
 - Caltech101, Country211, EuroSAT
-- Food101, GTSRB
+- Food101, GTSRB, MNIST
 - Oxford Flowers102, Oxford Pets
 
 ### File-based Datasets (9):
 - DTD, FER2013, FGVCAircraft
-- Hateful Memes, KITTI Distance, MNIST
+- Hateful Memes, KITTI Distance
 - PatchCamelyon, RenderedSST2, RESISC45
 - Stanford Cars, VOC2007
 
@@ -301,10 +301,10 @@ Key config features:
 - **Console-friendly**: Configurable progress display for production environments
 
 ### Per-Class Quality Architecture
-- **Eliminated global quality scores**: No more single `composite_quality` per sample - now using `imagenet_probability`
-- **Class-specific assessment**: Quality evaluated relative to each target class
+- **Eliminated global quality scores**: No more single `composite_quality` per sample - now using per-class `imagenet_probability`
+- **Class-specific assessment**: Quality evaluated relative to each target class using CLIP-ImageNet mappings
 - **Consistent data structure**: Follows same pattern as similarity metrics (`Class_{name}_{metric}`)
-- **Enhanced class selection**: Combines similarity and quality at the class level
+- **Enhanced class selection**: Combines similarity and quality at the class level with configurable weighting
 
 ### Memory Optimization
 - **Efficient caching**: Smart image and embedding cache management

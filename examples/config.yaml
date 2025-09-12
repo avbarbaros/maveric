@@ -23,7 +23,7 @@ quality_metrics:
   - resolution
   - sharpness
   - color_diversity
-  - semantic_caption_guided_quality
+  - target_class_quality
   - multimodal_consistency
 
 # Metric weights for composite scoring

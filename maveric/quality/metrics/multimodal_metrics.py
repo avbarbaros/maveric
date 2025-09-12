@@ -478,44 +478,66 @@ class TargetClassQualityMetric(BaseQualityMetric):
     
     def compute_all_mappings_from_probabilities(self, probabilities: torch.Tensor, target_classes: List[str]) -> Dict[str, Tuple[str, float]]:
         """
-        Efficiently compute ImageNet mappings for all target classes using pre-computed probabilities.
+        Efficiently compute EfficientNet scores for all target classes using pre-computed probabilities.
         
-        This method takes EfficientNet probabilities (computed once) and finds the best ImageNet
-        class mapping for each target class, avoiding redundant EfficientNet inference.
+        NEW ALGORITHM:
+        1. Get the single highest-probability ImageNet class from EfficientNet
+        2. Calculate CLIP similarity between each target class and the predicted ImageNet class
+        3. Multiply CLIP similarity by ImageNet probability to get className_efficientNet_score
         
         Args:
             probabilities: Pre-computed EfficientNet probabilities tensor (1000 ImageNet classes)
-            target_classes: List of target class names to compute mappings for
+            target_classes: List of target class names to compute scores for
             
         Returns:
-            Dictionary mapping target_class_name -> (best_imagenet_class, probability)
+            Dictionary mapping target_class_name -> (predicted_imagenet_class, efficientNet_score)
         """
         try:
             results = {}
             
+            # Step 1: Get single highest-probability ImageNet class
+            best_imagenet_idx = torch.argmax(probabilities).item()
+            predicted_class = self.imagenet_classes[best_imagenet_idx]
+            imagenet_probability = probabilities[best_imagenet_idx].item()
+            
+            # Step 2: Calculate CLIP similarities between target classes and predicted ImageNet class
+            import clip
+            
+            # Encode the predicted ImageNet class
+            imagenet_prompt = f"a photo of a {predicted_class}"
+            imagenet_tokens = clip.tokenize([imagenet_prompt], truncate=True).to(self.device)
+            
+            with torch.no_grad():
+                imagenet_embedding = self.clip_model.encode_text(imagenet_tokens)
+                imagenet_embedding = imagenet_embedding / imagenet_embedding.norm(dim=-1, keepdim=True)
+            
+            imagenet_embedding = imagenet_embedding.cpu().numpy()
+            
+            # Step 3: Calculate similarity and score for each target class
             for target_class in target_classes:
                 if not target_class or len(target_class.strip()) == 0:
-                    results[target_class] = ("", 0.0)
+                    results[target_class] = (predicted_class, 0.0)
                     continue
                 
-                # Find ImageNet classes relevant to this target class using CLIP
-                relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
+                # Encode target class
+                target_prompt = f"a photo of a {target_class}"
+                target_tokens = clip.tokenize([target_prompt], truncate=True).to(self.device)
                 
-                if not relevant_classes:
-                    self.log_debug(f"No relevant ImageNet classes found for '{target_class}'")
-                    results[target_class] = ("", 0.0)
-                    continue
+                with torch.no_grad():
+                    target_embedding = self.clip_model.encode_text(target_tokens)
+                    target_embedding = target_embedding / target_embedding.norm(dim=-1, keepdim=True)
                 
-                # Get probabilities for relevant classes (no EfficientNet inference needed!)
-                relevant_probs = probabilities[relevant_classes]
+                target_embedding = target_embedding.cpu().numpy()
                 
-                # Get the best ImageNet class (the one with highest probability)
-                best_idx = np.argmax(relevant_probs.cpu().numpy())
-                best_imagenet_idx = relevant_classes[best_idx]
-                best_class_name = self.imagenet_classes[best_imagenet_idx]
-                best_probability = relevant_probs[best_idx].item()
+                # Calculate CLIP similarity
+                from sklearn.metrics.pairwise import cosine_similarity
+                similarity = cosine_similarity(target_embedding, imagenet_embedding)[0][0]
                 
-                results[target_class] = (best_class_name, round(best_probability, 5))
+                # Convert similarity from [-1, 1] to [0, 1] range and multiply by ImageNet probability
+                normalized_similarity = (similarity + 1.0) / 2.0
+                efficientNet_score = normalized_similarity * imagenet_probability
+                
+                results[target_class] = (predicted_class, round(efficientNet_score, 5))
             
             return results
             
@@ -524,6 +546,30 @@ class TargetClassQualityMetric(BaseQualityMetric):
             if not isinstance(e, (IndexError, ValueError)):
                 self.log_warning(f"Unexpected error in batch mapping computation: {type(e).__name__}: {e}")
             return {target_class: ("", 0.0) for target_class in target_classes}
+    
+    def compute_single_imagenet_prediction(self, image: Image.Image) -> Tuple[str, float]:
+        """
+        Get the single highest-probability ImageNet class prediction from EfficientNet.
+        
+        Args:
+            image: PIL Image
+            
+        Returns:
+            Tuple of (predicted_imagenet_class, imagenet_probability)
+        """
+        try:
+            probabilities = self.compute_image_probabilities_only(image)
+            
+            # Get single highest-probability ImageNet class
+            best_imagenet_idx = torch.argmax(probabilities).item()
+            predicted_class = self.imagenet_classes[best_imagenet_idx]
+            imagenet_probability = probabilities[best_imagenet_idx].item()
+            
+            return predicted_class, round(imagenet_probability, 5)
+            
+        except Exception as e:
+            self.log_debug(f"Error computing single ImageNet prediction: {e}")
+            return "", 0.0
     
     def compute_image_probabilities_only(self, image: Image.Image) -> torch.Tensor:
         """
