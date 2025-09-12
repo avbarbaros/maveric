@@ -319,7 +319,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
             results = self.compute_all_mappings_from_probabilities(probabilities, [target_class])
             
             # Extract the score for the target class
-            predicted_imagenet_class, efficientNet_score = results.get(target_class, ("", 0.0))
+            predicted_imagenet_class, clip_similarity, efficientNet_score = results.get(target_class, ("", 0.0, 0.0))
             
             return efficientNet_score
             
@@ -361,7 +361,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
             results = self.compute_all_mappings_from_probabilities(probabilities, [target_class])
             
             # Extract the score for the target class
-            _, efficientNet_score = results.get(target_class, ("", 0.0))
+            _, clip_similarity, efficientNet_score = results.get(target_class, ("", 0.0, 0.0))
             
             return efficientNet_score, predicted_imagenet_class, imagenet_probability
             
@@ -371,7 +371,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
                 self.log_warning(f"Unexpected error in target class quality with best mapping: {type(e).__name__}: {e}")
             return 0.0, "", 0.0
     
-    def compute_all_mappings_from_probabilities(self, probabilities: torch.Tensor, target_classes: List[str]) -> Dict[str, Tuple[str, float]]:
+    def compute_all_mappings_from_probabilities(self, probabilities: torch.Tensor, target_classes: List[str]) -> Dict[str, Tuple[str, float, float]]:
         """
         Compute EfficientNet scores for all target classes using CORRECTED algorithm.
         
@@ -385,7 +385,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
             target_classes: List of target class names to compute scores for
             
         Returns:
-            Dictionary mapping target_class_name -> (predicted_imagenet_class, efficientNet_score)
+            Dictionary mapping target_class_name -> (predicted_imagenet_class, clip_similarity, efficientNet_score)
         """
         try:
             results = {}
@@ -412,7 +412,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
             # Calculate score for each target class
             for target_class in target_classes:
                 if not target_class or len(target_class.strip()) == 0:
-                    results[target_class] = (predicted_imagenet_class, 0.0)
+                    results[target_class] = (predicted_imagenet_class, 0.0, 0.0)
                     continue
                 
                 # Encode target class
@@ -428,13 +428,11 @@ class TargetClassQualityMetric(BaseQualityMetric):
                 # Calculate CLIP similarity between target class and predicted ImageNet class
                 clip_similarity = cosine_similarity(target_embedding, imagenet_embedding)[0][0]
                 
-                # Final score: CLIP_similarity × imagenet_probability
-                # Note: CLIP similarity is already in [-1, 1] range, we can use it directly
-                # or normalize to [0, 1] if preferred
-                normalized_similarity = (clip_similarity + 1.0) / 2.0  # Convert [-1,1] to [0,1]
-                efficientNet_score = normalized_similarity * imagenet_probability
+                # Final score: Raw CLIP_similarity × imagenet_probability (no normalization)
+                # Keep raw similarity [-1,1] for data curation flexibility
+                efficientNet_score = clip_similarity * imagenet_probability
                 
-                results[target_class] = (predicted_imagenet_class, round(efficientNet_score, 5))
+                results[target_class] = (predicted_imagenet_class, round(clip_similarity, 5), round(efficientNet_score, 5))
             
             return results
             
@@ -442,7 +440,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
             self.log_debug(f"Error computing all mappings from probabilities: {e}")
             if not isinstance(e, (IndexError, ValueError)):
                 self.log_warning(f"Unexpected error in batch mapping computation: {type(e).__name__}: {e}")
-            return {target_class: ("", 0.0) for target_class in target_classes}
+            return {target_class: ("", 0.0, 0.0) for target_class in target_classes}
     
     def compute_single_imagenet_prediction(self, image: Image.Image) -> Tuple[str, float]:
         """

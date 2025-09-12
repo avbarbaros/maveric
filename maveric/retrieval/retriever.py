@@ -361,8 +361,8 @@ class Retriever(BaseComponent):
                 similarities = [img2img, txt2txt, img2txt, txt2img]
                 consistency = 1.0 - np.std(similarities)
                 
-                # Get pre-computed EfficientNet score (no additional EfficientNet calls!)
-                predicted_imagenet_class, efficientNet_score = imagenet_mappings.get(class_name, ("", 0.0))
+                # Get pre-computed EfficientNet score and CLIP similarity (no additional EfficientNet calls!)
+                predicted_imagenet_class, clip_similarity, efficientNet_score = imagenet_mappings.get(class_name, ("", 0.0, 0.0))
                 
                 class_scores[class_name] = {
                     'hybrid_score': round(float(hybrid_score), 5),
@@ -371,6 +371,7 @@ class Retriever(BaseComponent):
                     'img2txt': round(float(img2txt), 5),
                     'txt2img': round(float(txt2img), 5),
                     'consistency': round(float(consistency), 5),
+                    'clip_similarity_to_imagenet': round(float(clip_similarity), 5),
                     'efficientNet_score': round(float(efficientNet_score), 5)
                 }
             
