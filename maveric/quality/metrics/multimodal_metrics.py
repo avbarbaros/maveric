@@ -419,3 +419,140 @@ class TargetClassQualityMetric(BaseQualityMetric):
             if not isinstance(e, (IndexError, ValueError)):
                 self.log_warning(f"Unexpected error in target class quality: {type(e).__name__}: {e}")
             return 0.0
+    
+    def compute_with_best_mapping(self, image: Image.Image, metadata: Dict[str, Any]) -> Tuple[float, str, float]:
+        """
+        Compute target class quality and return the best matching ImageNet class name and its probability.
+        
+        This method returns only the single ImageNet class that achieved the highest probability
+        (which corresponds to the target_class_quality score).
+        
+        Args:
+            image: PIL Image
+            metadata: Must contain 'label' or 'target_class'
+            
+        Returns:
+            Tuple of (quality_score, best_imagenet_class_name, class_probability)
+        """
+        try:
+            # Get target class
+            target_class = metadata.get('label', metadata.get('target_class', ''))
+            
+            if not target_class or len(target_class.strip()) == 0:
+                self.log_debug("No target class provided, returning 0.0 and empty string")
+                return 0.0, "", 0.0
+            
+            # Process image with EfficientNet
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            image_tensor = self.transform(image).unsqueeze(0)
+            
+            with torch.no_grad():
+                logits = self.efficientnet(image_tensor)
+                probabilities = torch.softmax(logits, dim=1).squeeze()
+            
+            # Find ImageNet classes relevant to target class using CLIP
+            relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
+            
+            if not relevant_classes:
+                self.log_debug(f"No relevant ImageNet classes found for '{target_class}'")
+                return 0.0, "", 0.0
+            
+            # Get max probability among relevant classes
+            relevant_probs = probabilities[relevant_classes]
+            quality_score = relevant_probs.max().item()
+            
+            # Get the best ImageNet class (the one with highest probability)
+            best_idx = np.argmax(relevant_probs.cpu().numpy())
+            best_imagenet_idx = relevant_classes[best_idx]
+            best_class_name = self.imagenet_classes[best_imagenet_idx]
+            best_probability = relevant_probs[best_idx].item()
+            
+            return round(quality_score, 5), best_class_name, round(best_probability, 5)
+            
+        except Exception as e:
+            self.log_debug(f"Error computing target class quality with best mapping: {e}")
+            if not isinstance(e, (IndexError, ValueError)):
+                self.log_warning(f"Unexpected error in target class quality with best mapping: {type(e).__name__}: {e}")
+            return 0.0, "", 0.0
+    
+    def compute_all_mappings_from_probabilities(self, probabilities: torch.Tensor, target_classes: List[str]) -> Dict[str, Tuple[str, float]]:
+        """
+        Efficiently compute ImageNet mappings for all target classes using pre-computed probabilities.
+        
+        This method takes EfficientNet probabilities (computed once) and finds the best ImageNet
+        class mapping for each target class, avoiding redundant EfficientNet inference.
+        
+        Args:
+            probabilities: Pre-computed EfficientNet probabilities tensor (1000 ImageNet classes)
+            target_classes: List of target class names to compute mappings for
+            
+        Returns:
+            Dictionary mapping target_class_name -> (best_imagenet_class, probability)
+        """
+        try:
+            results = {}
+            
+            for target_class in target_classes:
+                if not target_class or len(target_class.strip()) == 0:
+                    results[target_class] = ("", 0.0)
+                    continue
+                
+                # Find ImageNet classes relevant to this target class using CLIP
+                relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
+                
+                if not relevant_classes:
+                    self.log_debug(f"No relevant ImageNet classes found for '{target_class}'")
+                    results[target_class] = ("", 0.0)
+                    continue
+                
+                # Get probabilities for relevant classes (no EfficientNet inference needed!)
+                relevant_probs = probabilities[relevant_classes]
+                
+                # Get the best ImageNet class (the one with highest probability)
+                best_idx = np.argmax(relevant_probs.cpu().numpy())
+                best_imagenet_idx = relevant_classes[best_idx]
+                best_class_name = self.imagenet_classes[best_imagenet_idx]
+                best_probability = relevant_probs[best_idx].item()
+                
+                results[target_class] = (best_class_name, round(best_probability, 5))
+            
+            return results
+            
+        except Exception as e:
+            self.log_debug(f"Error computing all mappings from probabilities: {e}")
+            if not isinstance(e, (IndexError, ValueError)):
+                self.log_warning(f"Unexpected error in batch mapping computation: {type(e).__name__}: {e}")
+            return {target_class: ("", 0.0) for target_class in target_classes}
+    
+    def compute_image_probabilities_only(self, image: Image.Image) -> torch.Tensor:
+        """
+        Compute only the EfficientNet probabilities for an image, without any mapping logic.
+        
+        This method runs EfficientNet inference once and returns the full probability tensor
+        that can be reused for multiple target class mappings.
+        
+        Args:
+            image: PIL Image
+            
+        Returns:
+            EfficientNet probabilities tensor for all 1000 ImageNet classes
+        """
+        try:
+            # Process image with EfficientNet
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            image_tensor = self.transform(image).unsqueeze(0)
+            
+            with torch.no_grad():
+                logits = self.efficientnet(image_tensor)
+                probabilities = torch.softmax(logits, dim=1).squeeze()
+            
+            return probabilities
+            
+        except Exception as e:
+            self.log_debug(f"Error computing image probabilities: {e}")
+            if not isinstance(e, (IndexError, ValueError)):
+                self.log_warning(f"Unexpected error in image probability computation: {type(e).__name__}: {e}")
+            # Return zero tensor with 1000 classes if error
+            return torch.zeros(1000)

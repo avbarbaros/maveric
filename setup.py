@@ -46,7 +46,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "maveric=maveric.cli:main",
+            "maveric=maveric.utils.cli:main",
         ],
     },
 )

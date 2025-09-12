@@ -61,7 +61,7 @@ pytest
 **Import Errors:**
 - Missing `openai-clip`: `pip install openai-clip`
 - Missing `torch`/`torchvision`: Install appropriate version for your system
-- Missing `sentence-transformers`: `pip install sentence-transformers` (required for semantic caption-guided quality)
+- Missing `sentence-transformers`: `pip install sentence-transformers` (required for target class quality metrics)
 - Missing `scikit-learn`: `pip install scikit-learn` (required for cosine similarity calculations)
 - Missing `langdetect`: `pip install langdetect` (required for text quality metrics)
 - Missing `torchvision`: Required for EfficientNet-B0 in semantic quality assessment
@@ -152,7 +152,7 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - **Multimodal metrics** (`multimodal_metrics.py`): Cross-modal quality assessment
   - `MultimodalConsistencyMetric`: CLIP-based cross-modal alignment
   - `CrossModalAlignmentMetric`: Direct image-text similarity  
-  - `SemanticCaptionGuidedQualityMetric`: **Moved here** - EfficientNet + miniLM for per-class quality
+  - `TargetClassQualityMetric`: EfficientNet + miniLM for per-class quality
 
 ### Retrieval System (`maveric/retrieval/`)
 - CLIP-based embedding similarity matching with per-class quality assessment
@@ -163,7 +163,7 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ### Interactive Dashboard (`maveric/interactive/`)
 - Jupyter widget for real-time threshold tuning with **NEW** class selection weight controls
-- Quality distribution visualization (updated to exclude global composite_quality)
+- Quality distribution visualization (updated to exclude global composite_quality, now uses imagenet_probability)
 - Sample gallery with filtering
 - **NEW**: Interactive controls for similarity vs quality balance in class selection
 - **NEW**: Auto-normalizing weight sliders that maintain 1.0 sum
@@ -177,18 +177,21 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ### Advanced Quality Assessment
 
-**Per-Class Composite Quality Scoring**: **MAJOR UPDATE** - Composite quality is now calculated per-class instead of globally, following the same pattern as `hybrid_score` and `consistency`:
+**Per-Class Target Quality Scoring**: **MAJOR UPDATE** - Target class quality is now calculated per-class instead of globally, following the same pattern as `hybrid_score` and `consistency`:
 - For each target dataset class (e.g., CIFAR-10's 10 classes), a class-specific composite quality score is computed
 - Uses EfficientNet-B0 + sentence transformers with class-enhanced captions (`{original_text} {class_name}`)
-- Results in `Class_{class_name}_composite_quality` columns (e.g., `Class_airplane_composite_quality`)
+- Results in `Class_{class_name}_imagenet_probability` columns (e.g., `Class_airplane_imagenet_probability`) with corresponding `Class_{class_name}_best_imagenet_class` mappings
 - Enables class-aware quality assessment - images are evaluated specifically for how well they represent each class
 - Class selection combines similarity score with class-specific quality score using configurable weights
 
-**Semantic Caption-Guided Quality Metric**: **Now properly categorized as multimodal** - Located in `multimodal_metrics.py` and used for per-class quality assessment:
+**Target Class Quality Metric**: **Properly categorized as multimodal** - Located in `multimodal_metrics.py` and used for per-class quality assessment:
 - Uses EfficientNet-B0 (CPU-only) for universal image classification
-- Employs sentence transformers ('all-MiniLM-L6-v2') for semantic similarity with ImageNet classes
+- Employs CLIP for semantic similarity with ImageNet classes (more robust than sentence transformers)
+- Pre-computes CLIP embeddings for all ImageNet classes for efficiency
 - Focuses on semantically relevant ImageNet classes based on caption content
 - Works universally across all ELEVATER datasets without manual class mappings
+- **NEW**: Returns the best matching ImageNet class name and its probability (replaces target_class_quality score)
+- **OPTIMIZED**: Batch processing computes mappings for all target classes using single EfficientNet inference
 - Provides comprehensive quality scores considering both visual quality and semantic relevance
 
 **Semantic Quality Filtering**: **NEW** - Pure text quality assessment now enabled by default:
@@ -256,8 +259,8 @@ Torchvision datasets benefit from automatic downloading, standardized interfaces
 
 ## Important Development Notes
 
-### CLI Entry Point Discrepancy
-The CLI entry point is defined in `setup.py:49` as `maveric=maveric.cli:main`, but the actual CLI implementation is in `maveric/utils/cli.py`. This creates a mismatch where the entry point references a non-existent `maveric/cli.py` file. Be aware of this discrepancy when working with CLI-related code.
+### CLI Entry Point
+The CLI entry point is correctly defined in `setup.py:49` as `maveric=maveric.utils.cli:main`, which points to the actual CLI implementation in `maveric/utils/cli.py`.
 
 ### Testing Environment Setup
 - All tests automatically force CPU device via `conftest.py` device fixture
@@ -284,9 +287,15 @@ Key config features:
 ## Performance & Architecture Improvements
 
 ### CPU-Only Data Retrieval
-- **SemanticCaptionGuidedQualityMetric** now uses EfficientNet-B0 on CPU during data retrieval
+- **TargetClassQualityMetric** now uses EfficientNet-B0 on CPU during data retrieval
 - Eliminates GPU memory usage during the data collection phase
 - Maintains high-quality assessment while reducing hardware requirements
+
+### Optimized Quality Score Calculation
+- **Batch EfficientNet Processing**: EfficientNet inference runs only once per image, not once per target class
+- **Probability Reuse**: Same ImageNet probabilities are reused for all target class mappings
+- **Performance Improvement**: Reduces computational overhead from O(N) to O(1) EfficientNet calls per image (where N = number of target classes)
+- **Memory Efficiency**: Computes all ImageNet mappings from a single probability tensor
 
 ### Progress Bar Management  
 - **Configurable progress bars**: Set `disable_progress_bars: true` in config for cleaner output
@@ -294,7 +303,7 @@ Key config features:
 - **Console-friendly**: Reduces log noise for production environments
 
 ### Per-Class Quality Architecture
-- **Eliminated global quality scores**: No more single `composite_quality` per sample
+- **Eliminated global quality scores**: No more single `composite_quality` per sample - now using `imagenet_probability`
 - **Class-specific assessment**: Quality evaluated relative to each target class
 - **Consistent data structure**: Follows same pattern as similarity metrics (`Class_{name}_{metric}`)
 - **Enhanced class selection**: Combines similarity and quality at the class level

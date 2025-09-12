@@ -232,45 +232,39 @@ class Retriever(BaseComponent):
             print(f"❌ Failed to export rotation file: {e}")
             self.log_warning(f"Failed to export rotation file: {e}")
     
-    def _compute_target_class_quality(self, image, text: str, class_name: str) -> float:
+    def _compute_all_imagenet_mappings(self, image, text: str, target_classes: List[str]) -> Dict[str, Tuple[str, float]]:
         """
-        Compute target class quality score.
+        Efficiently compute ImageNet class mappings for all target classes at once.
         
-        This method computes a quality score for the image-text pair specifically
-        in relation to the given target class, using CLIP-based class mappings
-        and EfficientNet confidence.
+        This method runs EfficientNet only once per image, then reuses the probabilities
+        to compute mappings for all target classes, significantly improving performance.
         
         Args:
             image: PIL Image object
             text: Caption text
-            class_name: Target class name (e.g., 'airplane', 'bird')
+            target_classes: List of target class names to compute mappings for
             
         Returns:
-            Target class quality score (0-1)
+            Dictionary mapping target_class_name -> (best_imagenet_class_name, imagenet_probability)
         """
         try:
             # Get the target class quality metric
             if 'target_class_quality' not in self.quality_metrics:
-                return 0.0
+                return {class_name: ("", 0.0) for class_name in target_classes}
                 
             metric = self.quality_metrics['target_class_quality']
             
-            # Create metadata with target class information
-            # The TargetClassQualityMetric expects 'label' or 'target_class' in metadata
-            metadata = {
-                'text': text, 
-                'label': class_name,  # This is what TargetClassQualityMetric looks for
-                'target_class': class_name  # Alternative key
-            }
+            # Run EfficientNet inference only ONCE for this image
+            probabilities = metric.compute_image_probabilities_only(image)
             
-            # Compute the score
-            score = metric.compute(image, metadata)
+            # Compute mappings for all target classes using the same probabilities
+            results = metric.compute_all_mappings_from_probabilities(probabilities, target_classes)
             
-            return max(0.0, min(1.0, float(score)))  # Ensure 0-1 range
+            return results
             
         except Exception as e:
-            self.log_warning(f"Error computing target class quality for {class_name}: {e}")
-            return 0.0
+            self.log_warning(f"Error computing ImageNet mappings: {e}")
+            return {class_name: ("", 0.0) for class_name in target_classes}
     
     def compute_sample_scores(self, 
                             image_url: str,
@@ -322,7 +316,11 @@ class Retriever(BaseComponent):
                 self.log_debug("No reference embeddings available for class score computation")
                 return {}, {}
             
-            for class_name in self.reference_embeddings.keys():
+            # OPTIMIZATION: Compute ImageNet mappings for ALL target classes at once
+            target_classes = list(self.reference_embeddings.keys())
+            imagenet_mappings = self._compute_all_imagenet_mappings(image, text, target_classes)
+            
+            for class_name in target_classes:
                 # Similarity computations
                 from sklearn.metrics.pairwise import cosine_similarity
                 
@@ -353,8 +351,8 @@ class Retriever(BaseComponent):
                 similarities = [img2img, txt2txt, img2txt, txt2img]
                 consistency = 1.0 - np.std(similarities)
                 
-                # Calculate target class quality
-                target_class_quality = self._compute_target_class_quality(image, text, class_name)
+                # Get pre-computed ImageNet mapping (no additional EfficientNet calls!)
+                best_imagenet_class, imagenet_probability = imagenet_mappings.get(class_name, ("", 0.0))
                 
                 class_scores[class_name] = {
                     'hybrid_score': round(float(hybrid_score), 5),
@@ -363,7 +361,8 @@ class Retriever(BaseComponent):
                     'img2txt': round(float(img2txt), 5),
                     'txt2img': round(float(txt2img), 5),
                     'consistency': round(float(consistency), 5),
-                    'target_class_quality': round(float(target_class_quality), 5)
+                    'best_imagenet_class': best_imagenet_class,
+                    'imagenet_probability': round(float(imagenet_probability), 5)
                 }
             
             # Compute quality scores (exclude semantic_caption_guided_quality as it's now per-class)

@@ -29,6 +29,7 @@ ipywidgets>=7.6.0
 jupyter>=1.0.0
 
 # Text processing
+sentence-transformers>=2.0.0
 langdetect>=1.0.9
 
 # HTTP and networking
