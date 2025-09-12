@@ -594,41 +594,27 @@ class Retriever(BaseComponent):
     
     def _log_class_mappings(self, target_dataset: str, class_names: list):
         """
-        Log target dataset class to ImageNet class mappings at the start of retrieval.
+        Log target dataset class information at the start of retrieval.
+        
+        With the new simplified algorithm, we don't pre-compute class mappings since
+        each image gets a single ImageNet prediction that's compared with all target classes.
         
         Args:
             target_dataset: Name of target dataset
             class_names: List of class names from target dataset
         """
-        self.log_info(f"\n🎯 TARGET DATASET CLASS MAPPINGS FOR {target_dataset.upper()}")
+        self.log_info(f"\n🎯 TARGET DATASET CLASSES FOR {target_dataset.upper()}")
         self.log_info("=" * 80)
+        self.log_info("Using CORRECTED algorithm:")
+        self.log_info("1. EfficientNet predicts single ImageNet class per image")
+        self.log_info("2. CLIP calculates similarity between each target class and predicted ImageNet class")
+        self.log_info("3. Final score = CLIP_similarity × imagenet_probability")
+        self.log_info("-" * 80)
         
-        # Initialize TargetClassQualityMetric to access dynamic mapping functionality
-        if 'target_class_quality' not in self.quality_metrics:
-            from ..quality.metrics.multimodal_metrics import TargetClassQualityMetric
-            temp_metric = TargetClassQualityMetric(target_dataset=target_dataset)
-        else:
-            temp_metric = self.quality_metrics['target_class_quality']
-        
-        # Generate mappings for each target class
+        # Simply log the target classes
         for i, class_name in enumerate(class_names, 1):
-            try:
-                # Get relevant ImageNet classes for this target class
-                relevant_indices = temp_metric._find_relevant_imagenet_classes_for_target_class(
-                    class_name, top_k=10, similarity_threshold=0.25
-                )
-                
-                if relevant_indices:
-                    # Get the mapped ImageNet class names
-                    mapped_classes = [temp_metric.imagenet_classes[idx] for idx in relevant_indices[:10]]
-                    self.log_info(f"{i:2d}. '{class_name}' → {mapped_classes}")
-                else:
-                    self.log_info(f"{i:2d}. '{class_name}' → [No similar ImageNet classes found]")
-                    
-            except Exception as e:
-                self.log_warning(f"Failed to map class '{class_name}': {e}")
-                
+            self.log_info(f"{i:2d}. {class_name}")
+        
         self.log_info("=" * 80)
         self.log_info(f"📊 Total target classes: {len(class_names)}")
-        self.log_info("💡 These mappings show how each target class relates to ImageNet-1K classes")
         self.log_info("🔄 Starting retrieval process...\n")
