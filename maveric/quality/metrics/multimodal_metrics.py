@@ -266,12 +266,7 @@ class TargetClassQualityMetric(BaseQualityMetric):
         except ImportError:
             raise ImportError("ImageNet classes not found")
         
-        # Pre-compute CLIP embeddings for all ImageNet classes (one-time cost at init)
-        self.log_info("Computing ImageNet class embeddings using CLIP...")
-        self.class_embeddings = self._compute_imagenet_embeddings()
-        
-        # Cache for target class mappings (computed on first use)
-        self.class_mappings_cache = {}
+        # No need to pre-compute all ImageNet embeddings with the simplified approach
         
         # Image preprocessing (EfficientNet standard)
         import torchvision.transforms as transforms
@@ -290,94 +285,24 @@ class TargetClassQualityMetric(BaseQualityMetric):
     def requires_reference(self) -> bool:
         return False
     
-    def _compute_imagenet_embeddings(self):
-        """Compute CLIP text embeddings for all ImageNet classes."""
-        import clip
-        
-        # Prepare text prompts for ImageNet classes
-        text_prompts = [f"a photo of a {class_name}" for class_name in self.imagenet_classes]
-        
-        # Tokenize and encode
-        text_tokens = clip.tokenize(text_prompts, truncate=True).to(self.device)
-        
-        with torch.no_grad():
-            text_embeddings = self.clip_model.encode_text(text_tokens)
-            text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
-        
-        return text_embeddings.cpu().numpy()
-    
-    def _find_relevant_imagenet_classes_for_target_class(self, target_class: str, top_k: int = 20, similarity_threshold: float = 0.3):
-        """
-        Find ImageNet classes relevant to a target dataset class using CLIP.
-        
-        Args:
-            target_class: Target class name (e.g., 'dog', 'automobile', 'bird')
-            top_k: Maximum number of relevant classes to return
-            similarity_threshold: Minimum similarity score to include class
-            
-        Returns:
-            List of ImageNet class indices relevant to the target class
-        """
-        # Check cache first
-        cache_key = f"{target_class}_{top_k}_{similarity_threshold}"
-        if cache_key in self.class_mappings_cache:
-            return self.class_mappings_cache[cache_key]
-        
-        try:
-            from sklearn.metrics.pairwise import cosine_similarity
-            import clip
-        except ImportError:
-            raise ImportError("scikit-learn and openai-clip are required")
-        
-        # Encode target class using CLIP
-        target_prompt = f"a photo of a {target_class}"
-        target_tokens = clip.tokenize([target_prompt], truncate=True).to(self.device)
-        
-        with torch.no_grad():
-            target_embedding = self.clip_model.encode_text(target_tokens)
-            target_embedding = target_embedding / target_embedding.norm(dim=-1, keepdim=True)
-        
-        target_embedding = target_embedding.cpu().numpy()
-        
-        # Compute similarities with all ImageNet classes
-        similarities = cosine_similarity(target_embedding, self.class_embeddings)[0]
-        
-        # Get top-K most similar classes above threshold
-        top_indices = np.argsort(similarities)[::-1][:top_k]
-        
-        # Filter by threshold
-        relevant_indices = []
-        for idx in top_indices:
-            if similarities[idx] >= similarity_threshold:
-                relevant_indices.append(idx)
-        
-        # Cache result for future use
-        self.class_mappings_cache[cache_key] = relevant_indices
-        
-        # Log the discovered mapping for transparency
-        if relevant_indices:
-            class_names = [self.imagenet_classes[i] for i in relevant_indices[:5]]  # Show top 5
-            self.log_info(f"Target class '{target_class}' → ImageNet classes: {class_names}... (CLIP)")
-        
-        return relevant_indices
     
     
     def compute(self, image: Image.Image, metadata: Dict[str, Any]) -> float:
         """
-        Compute target class quality using pre-computed CLIP mappings.
+        Compute target class quality using CORRECTED algorithm.
         
-        Algorithm:
-        1. Get target class from metadata 
-        2. Find relevant ImageNet classes using pre-computed CLIP mapping
-        3. Run EfficientNet on image
-        4. Return max probability among relevant ImageNet classes
+        CORRECT ALGORITHM:
+        1. Get target class from metadata
+        2. Get single highest-probability ImageNet class from EfficientNet  
+        3. Calculate CLIP similarity between target class and predicted ImageNet class
+        4. Return: CLIP_similarity × imagenet_probability
         
         Args:
             image: PIL Image
             metadata: Must contain 'label' or 'target_class'
             
         Returns:
-            Quality score (0-1): Max EfficientNet probability of relevant classes
+            EfficientNet score: CLIP_similarity(target_class, imagenet_predicted_class) × imagenet_probability
         """
         try:
             # Get target class
@@ -387,32 +312,16 @@ class TargetClassQualityMetric(BaseQualityMetric):
                 self.log_debug("No target class provided, returning 0.0")
                 return 0.0
             
-            # Process image with EfficientNet
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            image_tensor = self.transform(image).unsqueeze(0)
+            # Get EfficientNet probabilities
+            probabilities = self.compute_image_probabilities_only(image)
             
-            with torch.no_grad():
-                logits = self.efficientnet(image_tensor)
-                probabilities = torch.softmax(logits, dim=1).squeeze()
+            # Use the corrected batch method for single target class
+            results = self.compute_all_mappings_from_probabilities(probabilities, [target_class])
             
-            # Find ImageNet classes relevant to target class using CLIP
-            relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
+            # Extract the score for the target class
+            predicted_imagenet_class, efficientNet_score = results.get(target_class, ("", 0.0))
             
-            if not relevant_classes:
-                self.log_debug(f"No relevant ImageNet classes found for '{target_class}'")
-                return 0.0
-            
-            # Get max probability among relevant classes
-            relevant_probs = probabilities[relevant_classes]
-            quality_score = relevant_probs.max().item()
-            
-            # Log for transparency
-            best_idx = relevant_classes[np.argmax(relevant_probs.cpu().numpy())]
-            best_class_name = self.imagenet_classes[best_idx]
-            self.log_debug(f"Target '{target_class}' → Best: '{best_class_name}' (prob: {quality_score:.3f})")
-            
-            return round(quality_score, 5)
+            return efficientNet_score
             
         except Exception as e:
             self.log_debug(f"Error computing target class quality: {e}")
@@ -422,17 +331,19 @@ class TargetClassQualityMetric(BaseQualityMetric):
     
     def compute_with_best_mapping(self, image: Image.Image, metadata: Dict[str, Any]) -> Tuple[float, str, float]:
         """
-        Compute target class quality and return the best matching ImageNet class name and its probability.
+        Compute target class quality using CORRECTED algorithm and return mapping details.
         
-        This method returns only the single ImageNet class that achieved the highest probability
-        (which corresponds to the target_class_quality score).
+        CORRECT ALGORITHM:
+        1. Get single highest-probability ImageNet class from EfficientNet
+        2. Calculate CLIP similarity between target class and predicted ImageNet class  
+        3. Return: (CLIP_similarity × imagenet_probability, predicted_imagenet_class, imagenet_probability)
         
         Args:
             image: PIL Image
             metadata: Must contain 'label' or 'target_class'
             
         Returns:
-            Tuple of (quality_score, best_imagenet_class_name, class_probability)
+            Tuple of (efficientNet_score, predicted_imagenet_class_name, imagenet_probability)
         """
         try:
             # Get target class
@@ -442,33 +353,17 @@ class TargetClassQualityMetric(BaseQualityMetric):
                 self.log_debug("No target class provided, returning 0.0 and empty string")
                 return 0.0, "", 0.0
             
-            # Process image with EfficientNet
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            image_tensor = self.transform(image).unsqueeze(0)
+            # Get EfficientNet probabilities and predicted class
+            probabilities = self.compute_image_probabilities_only(image)
+            predicted_imagenet_class, imagenet_probability = self.compute_single_imagenet_prediction(image)
             
-            with torch.no_grad():
-                logits = self.efficientnet(image_tensor)
-                probabilities = torch.softmax(logits, dim=1).squeeze()
+            # Use the corrected batch method for single target class  
+            results = self.compute_all_mappings_from_probabilities(probabilities, [target_class])
             
-            # Find ImageNet classes relevant to target class using CLIP
-            relevant_classes = self._find_relevant_imagenet_classes_for_target_class(target_class)
+            # Extract the score for the target class
+            _, efficientNet_score = results.get(target_class, ("", 0.0))
             
-            if not relevant_classes:
-                self.log_debug(f"No relevant ImageNet classes found for '{target_class}'")
-                return 0.0, "", 0.0
-            
-            # Get max probability among relevant classes
-            relevant_probs = probabilities[relevant_classes]
-            quality_score = relevant_probs.max().item()
-            
-            # Get the best ImageNet class (the one with highest probability)
-            best_idx = np.argmax(relevant_probs.cpu().numpy())
-            best_imagenet_idx = relevant_classes[best_idx]
-            best_class_name = self.imagenet_classes[best_imagenet_idx]
-            best_probability = relevant_probs[best_idx].item()
-            
-            return round(quality_score, 5), best_class_name, round(best_probability, 5)
+            return efficientNet_score, predicted_imagenet_class, imagenet_probability
             
         except Exception as e:
             self.log_debug(f"Error computing target class quality with best mapping: {e}")
@@ -478,12 +373,12 @@ class TargetClassQualityMetric(BaseQualityMetric):
     
     def compute_all_mappings_from_probabilities(self, probabilities: torch.Tensor, target_classes: List[str]) -> Dict[str, Tuple[str, float]]:
         """
-        Efficiently compute EfficientNet scores for all target classes using pre-computed probabilities.
+        Compute EfficientNet scores for all target classes using CORRECTED algorithm.
         
-        NEW ALGORITHM:
+        CORRECT ALGORITHM:
         1. Get the single highest-probability ImageNet class from EfficientNet
-        2. Calculate CLIP similarity between each target class and the predicted ImageNet class
-        3. Multiply CLIP similarity by ImageNet probability to get className_efficientNet_score
+        2. For each target class: Calculate CLIP similarity between target class and predicted ImageNet class
+        3. Multiply: CLIP_similarity(target_class, imagenet_predicted_class) × imagenet_probability
         
         Args:
             probabilities: Pre-computed EfficientNet probabilities tensor (1000 ImageNet classes)
@@ -497,14 +392,15 @@ class TargetClassQualityMetric(BaseQualityMetric):
             
             # Step 1: Get single highest-probability ImageNet class
             best_imagenet_idx = torch.argmax(probabilities).item()
-            predicted_class = self.imagenet_classes[best_imagenet_idx]
+            predicted_imagenet_class = self.imagenet_classes[best_imagenet_idx]
             imagenet_probability = probabilities[best_imagenet_idx].item()
             
-            # Step 2: Calculate CLIP similarities between target classes and predicted ImageNet class
+            # Step 2 & 3: For each target class, calculate CLIP similarity and final score
             import clip
+            from sklearn.metrics.pairwise import cosine_similarity
             
-            # Encode the predicted ImageNet class
-            imagenet_prompt = f"a photo of a {predicted_class}"
+            # Pre-encode the predicted ImageNet class once
+            imagenet_prompt = f"a photo of a {predicted_imagenet_class}"
             imagenet_tokens = clip.tokenize([imagenet_prompt], truncate=True).to(self.device)
             
             with torch.no_grad():
@@ -513,10 +409,10 @@ class TargetClassQualityMetric(BaseQualityMetric):
             
             imagenet_embedding = imagenet_embedding.cpu().numpy()
             
-            # Step 3: Calculate similarity and score for each target class
+            # Calculate score for each target class
             for target_class in target_classes:
                 if not target_class or len(target_class.strip()) == 0:
-                    results[target_class] = (predicted_class, 0.0)
+                    results[target_class] = (predicted_imagenet_class, 0.0)
                     continue
                 
                 # Encode target class
@@ -529,15 +425,16 @@ class TargetClassQualityMetric(BaseQualityMetric):
                 
                 target_embedding = target_embedding.cpu().numpy()
                 
-                # Calculate CLIP similarity
-                from sklearn.metrics.pairwise import cosine_similarity
-                similarity = cosine_similarity(target_embedding, imagenet_embedding)[0][0]
+                # Calculate CLIP similarity between target class and predicted ImageNet class
+                clip_similarity = cosine_similarity(target_embedding, imagenet_embedding)[0][0]
                 
-                # Convert similarity from [-1, 1] to [0, 1] range and multiply by ImageNet probability
-                normalized_similarity = (similarity + 1.0) / 2.0
+                # Final score: CLIP_similarity × imagenet_probability
+                # Note: CLIP similarity is already in [-1, 1] range, we can use it directly
+                # or normalize to [0, 1] if preferred
+                normalized_similarity = (clip_similarity + 1.0) / 2.0  # Convert [-1,1] to [0,1]
                 efficientNet_score = normalized_similarity * imagenet_probability
                 
-                results[target_class] = (predicted_class, round(efficientNet_score, 5))
+                results[target_class] = (predicted_imagenet_class, round(efficientNet_score, 5))
             
             return results
             
