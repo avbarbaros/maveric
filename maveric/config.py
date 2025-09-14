@@ -110,16 +110,42 @@ class MAVERICConfig:
     def from_yaml(cls, path: Union[str, Path]) -> 'MAVERICConfig':
         """
         Load configuration from a YAML file.
-        
+
         Args:
             path: Path to YAML configuration file
-            
+
         Returns:
             MAVERICConfig instance
         """
         with open(path, 'r') as f:
             config_dict = yaml.safe_load(f)
-        return cls(**config_dict)
+
+        # Filter config_dict to only include fields that exist in MAVERICConfig
+        if hasattr(cls, '__dataclass_fields__'):
+            valid_fields = set(cls.__dataclass_fields__.keys())
+            filtered_config = {k: v for k, v in config_dict.items() if k in valid_fields}
+
+            # Map legacy field names
+            if 'quality_thresholds' in config_dict and 'quality_thresholds' not in valid_fields:
+                if 'default_thresholds' in valid_fields:
+                    filtered_config['default_thresholds'] = config_dict['quality_thresholds']
+
+            # Fix problematic cache paths
+            if 'cache_base_dir' in filtered_config:
+                cache_path = filtered_config['cache_base_dir']
+                if cache_path.startswith('/content/') and not Path('/content').exists():
+                    # Replace with local cache for non-Colab environments
+                    filtered_config['cache_base_dir'] = './maveric_cache'
+                    print(f"⚠️ Replaced inaccessible cache path {cache_path} with ./maveric_cache")
+
+            # Log which fields were ignored for debugging
+            ignored_fields = set(config_dict.keys()) - valid_fields - {'quality_thresholds'}
+            if ignored_fields:
+                print(f"⚠️ Ignoring unknown config fields: {sorted(ignored_fields)}")
+
+            return cls(**filtered_config)
+        else:
+            return cls(**config_dict)
     
     @classmethod
     def from_json(cls, path: Union[str, Path]) -> 'MAVERICConfig':
