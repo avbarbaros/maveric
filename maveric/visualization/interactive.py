@@ -92,7 +92,8 @@ class MAVERICInteractiveQualityControl:
             'sharpness_score': 0.850,
             'color_score': 0.750,
             'weighted_class_score': 0.400,
-            'consistency': 0.780
+            'consistency': 0.780,
+            'imagenet_probability': 0.100
         }
         
         # Default balance settings
@@ -610,7 +611,7 @@ class MAVERICInteractiveQualityControl:
             return
         
         if metrics is None:
-            metrics = ['resolution_score', 'sharpness_score', 'color_score', 'weighted_class_score', 'consistency']
+            metrics = ['resolution_score', 'sharpness_score', 'color_score', 'weighted_class_score', 'consistency', 'imagenet_probability']
         
         # Filter valid metrics
         metrics = [m for m in metrics if m in self.data.columns]
@@ -879,6 +880,8 @@ class MAVERICInteractiveQualityControl:
                     config['quality_thresholds']['sharpness_score'] = threshold
                 elif metric == 'color_score':
                     config['quality_thresholds']['color_score'] = threshold
+                elif metric == 'imagenet_probability':
+                    config['quality_thresholds']['imagenet_probability'] = threshold
             
             # Update class weights (save to metric_weights section)
             if 'metric_weights' not in config:
