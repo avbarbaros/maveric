@@ -64,10 +64,11 @@ class MAVERICConfig:
         'resolution_score': 0.370,
         'sharpness_score': 0.880,
         'color_score': 0.768,
-        # Semantic metrics  
+        # Semantic metrics
         'text_quality_score': 0.600,      # Text quality threshold
         'caption_length_score': 0.700,    # Caption length threshold
         # Multimodal metrics
+        'imagenet_probability': 0.5,      # ImageNet probability threshold (global quality)
         'target_class_quality': 0.493,    # Target class quality using CLIP mappings
         'consistency': 0.796,             # Multimodal consistency
         # Legacy

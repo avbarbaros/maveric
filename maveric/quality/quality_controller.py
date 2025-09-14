@@ -71,6 +71,11 @@ class QualityController(BaseComponent):
                 'quality_weight': 0.5      # Weight for semantic quality scoring
             }
 
+        # Use config default thresholds if provided
+        if config and hasattr(config, 'default_thresholds'):
+            # Update default thresholds with config values
+            self.thresholds.update(config.default_thresholds)
+
         # Filters
         self.filters = []
 

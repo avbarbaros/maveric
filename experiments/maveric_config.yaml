@@ -56,9 +56,11 @@ quality_thresholds:
   caption_length_score: 0.1 # Caption length appropriateness
   
   # Multimodal metrics
-  efficientNet_score: 0.1      # EfficientNet-based class quality scores
-  consistency: 0.1          # Text-image consistency
-  cross_modal_alignment: 0.1 # Cross-modal feature alignment
+  weighted_class_score: 0.493     # Composite similarity score across all modalities
+  imagenet_probability: 0.1       # ImageNet probability score (global quality)
+  efficientNet_score: 0.1         # EfficientNet-based class quality scores
+  consistency: 0.1                # Text-image consistency
+  cross_modal_alignment: 0.1      # Cross-modal feature alignment
 
 # Caching settings for efficiency
 caching:
