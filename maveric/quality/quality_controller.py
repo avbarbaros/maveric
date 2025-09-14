@@ -22,15 +22,17 @@ class QualityController(BaseComponent):
     metrics and filters to create high-quality datasets for model training.
     """
     
-    def __init__(self, 
+    def __init__(self,
                  data: Union[pd.DataFrame, List[Dict], str] = None,
-                 metrics: Optional[List[BaseQualityMetric]] = None):
+                 metrics: Optional[List[BaseQualityMetric]] = None,
+                 config: Optional[Any] = None):
         """
         Initialize quality controller.
-        
+
         Args:
             data: Input data (DataFrame, list of dicts, or file path)
             metrics: List of quality metrics to use
+            config: MAVERICConfig instance for weights and thresholds
         """
         super().__init__("QualityController")
         
@@ -53,18 +55,26 @@ class QualityController(BaseComponent):
             'color_score': 0.768
         }
         
-        self.class_weights = {
-            'img2img': 0.40,
-            'txt2txt': 0.20,
-            'img2txt': 0.20,
-            'txt2img': 0.20
-        }
-        
-        # Class selection weights: balance between similarity and quality
-        self.class_selection_weights = {
-            'similarity_weight': 0.7,  # Weight for similarity-based scoring
-            'quality_weight': 0.3      # Weight for semantic quality scoring
-        }
+        # Use config values if provided, otherwise use defaults
+        if config and hasattr(config, 'metric_weights'):
+            self.class_weights = config.metric_weights.copy()
+        else:
+            self.class_weights = {
+                'img2img': 0.40,
+                'txt2txt': 0.20,
+                'img2txt': 0.20,
+                'txt2img': 0.20
+            }
+
+        # Use config class selection weights if provided
+        if config and hasattr(config, 'class_selection_weights'):
+            self.class_selection_weights = config.class_selection_weights.copy()
+        else:
+            # Default class selection weights: balance between similarity and quality
+            self.class_selection_weights = {
+                'similarity_weight': 0.7,  # Weight for similarity-based scoring
+                'quality_weight': 0.3      # Weight for semantic quality scoring
+            }
         
         # Filters
         self.filters = []

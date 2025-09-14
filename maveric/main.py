@@ -193,7 +193,7 @@ class MAVERIC(BaseComponent):
         """
         # Initialize quality controller if needed
         if self.quality_controller is None:
-            self.quality_controller = QualityController()
+            self.quality_controller = QualityController(config=self.config)
         
         # Load data
         if isinstance(data, RetrievalResult):
