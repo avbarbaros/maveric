@@ -288,13 +288,14 @@ class InteractiveThresholdSelector(BaseComponent):
         score_widgets = widgets.VBox([
             widgets.HTML("<h4>Score Thresholds</h4>"),
             threshold_widgets.get('weighted_class_score', widgets.Label('N/A')),
-            threshold_widgets.get('consistency', widgets.Label('N/A'))
+            threshold_widgets.get('consistency', widgets.Label('N/A')),
+            threshold_widgets.get('imagenet_probability', widgets.Label('N/A'))
         ])
-        
+
         quality_widgets = widgets.VBox([
             widgets.HTML("<h4>Quality Thresholds</h4>"),
-            *[w for k, w in threshold_widgets.items() 
-              if k not in ['weighted_class_score', 'consistency']]
+            *[w for k, w in threshold_widgets.items()
+              if k not in ['weighted_class_score', 'consistency', 'imagenet_probability']]
         ])
         
         # Add explanatory text
@@ -422,7 +423,8 @@ class InteractiveThresholdSelector(BaseComponent):
             'Resolution Score': 'Resolution',
             'Sharpness Score': 'Sharpness',
             'Color Score': 'Color Diversity',
-            'Composite Quality': 'Semantic Quality'
+            'Composite Quality': 'Semantic Quality',
+            'Imagenet Probability': 'ImageNet Quality'
         }
         
         return replacements.get(formatted, formatted)
@@ -521,6 +523,7 @@ class InteractiveThresholdSelector(BaseComponent):
         default_thresholds = {
             'weighted_class_score': 0.493,
             'consistency': 0.796,
+            'imagenet_probability': 0.5,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
             'color_score': 0.768
@@ -625,7 +628,7 @@ class InteractiveThresholdSelector(BaseComponent):
             
             # Select key metrics to visualize
             metrics_to_show = []
-            for metric in ['weighted_class_score', 'consistency', 'sharpness_score']:
+            for metric in ['weighted_class_score', 'consistency', 'imagenet_probability', 'sharpness_score']:
                 if metric in self.qc.data.columns:
                     metrics_to_show.append(metric)
             
@@ -645,6 +648,18 @@ class InteractiveThresholdSelector(BaseComponent):
                 print(f"Total samples: {stats['total_samples']:,}")
                 print(f"Filtered samples: {stats['filtered_samples']:,}")
                 print(f"Retention rate: {stats['retention_rate']:.1%}")
+
+                # Show individual threshold statistics
+                threshold_stats = self.qc.get_threshold_statistics()
+                if threshold_stats:
+                    print("\n🎚️ Individual Threshold Statistics:")
+                    for metric, stat in threshold_stats.items():
+                        metric_display = self._format_metric_name(metric)
+                        print(f"{metric_display}:")
+                        print(f"  Threshold: {stat['threshold']:.3f}")
+                        print(f"  Pass rate: {stat['pass_rate']:.1f}% ({stat['passing_samples']:,}/{stat['total_samples']:,})")
+                        print(f"  Samples filtered out: {stat['samples_filtered_out']:,}")
+                        print()
     
     def add_callback(self, callback: Callable):
         """

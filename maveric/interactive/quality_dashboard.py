@@ -132,8 +132,8 @@ class QualityDashboard(BaseComponent):
     def _create_explorer_tab(self) -> widgets.VBox:
         """Create data exploration tab."""
         # Metric selector
-        available_metrics = [col for col in self.qc.data.columns 
-                           if 'score' in col or 'consistency' in col or 'quality' in col]
+        available_metrics = [col for col in self.qc.data.columns
+                           if 'score' in col or 'consistency' in col or 'quality' in col or 'imagenet_probability' in col]
         
         metric_selector = widgets.SelectMultiple(
             options=available_metrics,
@@ -453,7 +453,7 @@ class QualityDashboard(BaseComponent):
                 # Metric statistics
                 if 'metric_statistics' in stats and stats['metric_statistics']:
                     print("\n📏 **Metric Statistics**")
-                    
+
                     for metric, values in stats['metric_statistics'].items():
                         print(f"\n{metric}:")
                         print(f"  Mean: {values['mean']:.4f}")
@@ -461,6 +461,17 @@ class QualityDashboard(BaseComponent):
                         print(f"  Min: {values['min']:.4f}")
                         print(f"  Max: {values['max']:.4f}")
                         print(f"  Median: {values['median']:.4f}")
+
+                # Individual threshold statistics
+                threshold_stats = self.qc.get_threshold_statistics()
+                if threshold_stats:
+                    print("\n🎚️ **Individual Threshold Statistics**")
+
+                    for metric, stat in threshold_stats.items():
+                        print(f"\n{metric}:")
+                        print(f"  Threshold: {stat['threshold']:.3f}")
+                        print(f"  Pass rate: {stat['pass_rate']:.1f}% ({stat['passing_samples']:,}/{stat['total_samples']:,})")
+                        print(f"  Samples filtered out: {stat['samples_filtered_out']:,}")
         
         update_button = widgets.Button(
             description='Update Statistics',

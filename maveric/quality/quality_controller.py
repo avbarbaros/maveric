@@ -44,6 +44,7 @@ class QualityController(BaseComponent):
         self.thresholds = {
             'weighted_class_score': 0.493,
             'consistency': 0.796,
+            'imagenet_probability': 0.5,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
             'color_score': 0.768
@@ -363,8 +364,8 @@ class QualityController(BaseComponent):
                 stats['class_distribution']['filtered'] = filtered_dist
         
         # Metric statistics
-        metric_columns = [col for col in self.data.columns 
-                         if 'score' in col or 'consistency' in col]
+        metric_columns = [col for col in self.data.columns
+                         if 'score' in col or 'consistency' in col or 'imagenet_probability' in col]
         
         for col in metric_columns:
             if col in self.data.columns:
@@ -379,6 +380,39 @@ class QualityController(BaseComponent):
                     }
         
         return stats
+
+    def get_threshold_statistics(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get statistics for each individual threshold.
+
+        Returns:
+            Dictionary with threshold statistics for each metric
+        """
+        if self.data is None:
+            return {}
+
+        threshold_stats = {}
+        total_samples = len(self.data)
+
+        for metric, threshold in self.thresholds.items():
+            if metric in self.data.columns:
+                values = self.data[metric].dropna()
+                if len(values) > 0:
+                    # Count samples that pass this threshold
+                    passing_samples = (values >= threshold).sum()
+                    failing_samples = len(values) - passing_samples
+                    pass_rate = (passing_samples / len(values)) * 100
+
+                    threshold_stats[metric] = {
+                        'threshold': threshold,
+                        'total_samples': len(values),
+                        'passing_samples': passing_samples,
+                        'failing_samples': failing_samples,
+                        'pass_rate': round(pass_rate, 1),
+                        'samples_filtered_out': failing_samples
+                    }
+
+        return threshold_stats
     
     def create_quality_result(self, 
                             thresholds: Optional[Dict[str, float]] = None,
