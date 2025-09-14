@@ -79,6 +79,12 @@ class MAVERICInteractiveQualityControl:
             'img2txt': 0.20,
             'txt2img': 0.20
         }
+
+        # Class selection weights: balance between similarity and quality
+        self.class_selection_weights = {
+            'similarity_weight': 0.5,  # Weight for similarity-based scoring
+            'quality_weight': 0.5      # Weight for semantic quality scoring
+        }
         
         # Default quality thresholds (ordered by application sequence)
         self.thresholds = {
@@ -173,6 +179,18 @@ class MAVERICInteractiveQualityControl:
                 self.balance_settings['balance_min_samples'] = config['balance_min_samples']
             if 'balance_enable_oversampling' in config:
                 self.balance_settings['balance_enable_oversampling'] = config['balance_enable_oversampling']
+
+            # Load class selection weights from config
+            class_selection_weights = config.get('class_selection_weights', {})
+            if class_selection_weights:
+                self.class_selection_weights.update(class_selection_weights)
+                print(f"⚖️ Loaded class selection weights: {self.class_selection_weights}")
+
+            # Load metric weights from config
+            metric_weights = config.get('metric_weights', {})
+            if metric_weights:
+                self.class_weights.update(metric_weights)
+                print(f"⚖️ Loaded metric weights: {self.class_weights}")
             
             # Construct the correct data path: results_dir/dataset_name/raw
             config_data_path = os.path.join(results_dir, self.dataset_name, 'raw')
@@ -260,22 +278,34 @@ class MAVERICInteractiveQualityControl:
             class_scores = {}
             
             for class_name in self.class_names:
-                weighted_score = 0.0
+                similarity_score = 0.0
                 valid_weights_sum = 0.0
-                
-                # Calculate weighted score across sub-metrics
+
+                # Calculate weighted similarity score
                 for metric, weight in self.class_weights.items():
                     col_name = f"Class_{class_name}_{metric}"
-                    
+
                     if col_name in row and not pd.isna(row[col_name]):
-                        weighted_score += row[col_name] * weight
+                        similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
-                
-                # Normalize score
+
+                # Get class-specific EfficientNet quality score
+                efficientNet_score_col = f"Class_{class_name}_efficientNet_score"
+                efficientNet_score = row.get(efficientNet_score_col, 0.0)
+                if pd.isna(efficientNet_score):
+                    efficientNet_score = 0.0
+
+                # Normalize similarity score and combine with quality score
                 if valid_weights_sum > 0:
-                    weighted_score /= valid_weights_sum
-                
-                class_scores[class_name] = weighted_score
+                    similarity_score /= valid_weights_sum
+
+                    # Combine similarity score with class-specific quality score
+                    combined_score = (
+                        self.class_selection_weights['similarity_weight'] * similarity_score +
+                        self.class_selection_weights['quality_weight'] * efficientNet_score
+                    )
+
+                    class_scores[class_name] = combined_score
             
             # Find best class
             if class_scores:

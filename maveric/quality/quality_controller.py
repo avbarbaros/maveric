@@ -35,17 +35,11 @@ class QualityController(BaseComponent):
             config: MAVERICConfig instance for weights and thresholds
         """
         super().__init__("QualityController")
-        
-        # Load data
-        self.data = None
-        self.filtered_data = None
-        if data is not None:
-            self.load_data(data)
-        
+
         # Initialize metrics
         self.metrics = metrics or []
         self.metric_registry = {m.metric_name: m for m in self.metrics}
-        
+
         # Default thresholds and weights
         self.thresholds = {
             'weighted_class_score': 0.493,
@@ -54,7 +48,7 @@ class QualityController(BaseComponent):
             'sharpness_score': 0.880,
             'color_score': 0.768
         }
-        
+
         # Use config values if provided, otherwise use defaults
         if config and hasattr(config, 'metric_weights'):
             self.class_weights = config.metric_weights.copy()
@@ -72,12 +66,18 @@ class QualityController(BaseComponent):
         else:
             # Default class selection weights: balance between similarity and quality
             self.class_selection_weights = {
-                'similarity_weight': 0.7,  # Weight for similarity-based scoring
-                'quality_weight': 0.3      # Weight for semantic quality scoring
+                'similarity_weight': 0.5,  # Weight for similarity-based scoring
+                'quality_weight': 0.5      # Weight for semantic quality scoring
             }
-        
+
         # Filters
         self.filters = []
+
+        # Load data
+        self.data = None
+        self.filtered_data = None
+        if data is not None:
+            self.load_data(data)
         
     def load_data(self, data: Union[pd.DataFrame, List[Dict], str]):
         """

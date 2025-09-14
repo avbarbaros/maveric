@@ -4,7 +4,7 @@ import ipywidgets as widgets
 from IPython.display import display, clear_output
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Union, Optional
+from typing import Union, Optional, Any
 from pathlib import Path
 
 from ..core.base import BaseComponent
@@ -22,15 +22,17 @@ class QualityDashboard(BaseComponent):
     multiple tabs for different aspects of the data.
     """
     
-    def __init__(self, cache_dir: Optional[str] = None):
+    def __init__(self, cache_dir: Optional[str] = None, config: Optional[Any] = None):
         """
         Initialize quality dashboard.
-        
+
         Args:
             cache_dir: Directory for saving/loading data
+            config: MAVERICConfig instance for weights and thresholds
         """
         super().__init__("QualityDashboard")
         self.cache_dir = Path(cache_dir) if cache_dir else Path.cwd()
+        self.config = config
         self.qc = None
         self.selector = None
         self.visualizers = {
@@ -54,8 +56,8 @@ class QualityDashboard(BaseComponent):
         # Load data
         data_df = self._load_data(data)
         
-        # Create quality controller
-        self.qc = QualityController(data_df)
+        # Create quality controller with config
+        self.qc = QualityController(data_df, config=self.config)
         
         # Create interactive selector
         self.selector = InteractiveThresholdSelector(self.qc)
