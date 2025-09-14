@@ -40,8 +40,8 @@ metric_weights:
 
 # Class selection weights: balance between similarity and quality
 class_selection_weights:
-  similarity_weight: 0.5  # Weight for similarity-based class scoring
-  quality_weight: 0.5     # Weight for semantic quality in class selection
+  similarity_weight: 0.7  # Weight for similarity-based class scoring
+  quality_weight: 0.3     # Weight for semantic quality in class selection
 
 # Quality thresholds for ELEVATER experiments - organized by category
 # These can be adjusted based on your requirements
