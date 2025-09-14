@@ -178,7 +178,7 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 **Per-Class Target Quality Scoring**: **MAJOR UPDATE** - Target class quality is now calculated per-class instead of globally, following the same pattern as `hybrid_score` and `consistency`:
 - For each target dataset class (e.g., CIFAR-10's 10 classes), a class-specific composite quality score is computed
-- Uses EfficientNet-B0 + CLIP for semantic similarity with ImageNet classes (no longer using sentence transformers)
+- Uses EfficientNet-B0 + CLIP embeddings for semantic similarity with ImageNet classes
 - Results in `Class_{class_name}_efficientNet_score` columns (e.g., `Class_airplane_efficientNet_score`) based on CLIP similarity with predicted ImageNet class
 - Enables class-aware quality assessment - images are evaluated specifically for how well they represent each class
 - Class selection combines similarity score with class-specific quality score using configurable weights
@@ -242,15 +242,15 @@ Reference texts files contain:
 
 MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified handler:
 
-### Torchvision-based Datasets (11):
+### Torchvision-based Datasets (9):
 - CIFAR-10, CIFAR-100
 - Caltech101, Country211, EuroSAT
-- Food101, GTSRB, MNIST
+- Food101, GTSRB
 - Oxford Flowers102, Oxford Pets
 
-### File-based Datasets (9):
+### File-based Datasets (11):
 - DTD, FER2013, FGVCAircraft
-- Hateful Memes, KITTI Distance
+- Hateful Memes, KITTI Distance, MNIST
 - PatchCamelyon, RenderedSST2, RESISC45
 - Stanford Cars, VOC2007
 
