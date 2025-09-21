@@ -133,7 +133,7 @@ class QualityDashboard(BaseComponent):
         """Create data exploration tab."""
         # Metric selector
         available_metrics = [col for col in self.qc.data.columns
-                           if 'score' in col or 'consistency' in col or 'quality' in col or 'imagenet_probability' in col]
+                           if 'score' in col or 'consistency' in col or 'quality' in col]
         
         metric_selector = widgets.SelectMultiple(
             options=available_metrics,

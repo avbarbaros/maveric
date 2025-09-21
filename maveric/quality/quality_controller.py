@@ -44,7 +44,6 @@ class QualityController(BaseComponent):
         self.thresholds = {
             'weighted_class_score': 0.493,
             'consistency': 0.796,
-            'imagenet_probability': 0.5,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
             'color_score': 0.768
@@ -315,7 +314,7 @@ class QualityController(BaseComponent):
         
         # Metric statistics
         metric_columns = [col for col in self.data.columns
-                         if 'score' in col or 'consistency' in col or 'imagenet_probability' in col]
+                         if 'score' in col or 'consistency' in col]
         
         for col in metric_columns:
             if col in self.data.columns:

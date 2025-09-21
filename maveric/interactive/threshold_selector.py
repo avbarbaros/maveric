@@ -63,12 +63,12 @@ class InteractiveThresholdSelector(BaseComponent):
         # Create tabs
         tab = widgets.Tab()
         tab.children = [
-            self._create_threshold_tab(threshold_widgets),
             self._create_weight_tab(weight_widgets),
+            self._create_threshold_tab(threshold_widgets),
             self._create_visualization_tab()
         ]
-        tab.set_title(0, 'Quality Thresholds')
-        tab.set_title(1, 'Metric Weights')
+        tab.set_title(0, 'Metric Weights')
+        tab.set_title(1, 'Quality Thresholds')
         tab.set_title(2, 'Live Preview')
         
         # Status display
@@ -216,13 +216,12 @@ class InteractiveThresholdSelector(BaseComponent):
             widgets.HTML("<h4>Score Thresholds</h4>"),
             threshold_widgets.get('weighted_class_score', widgets.Label('N/A')),
             threshold_widgets.get('consistency', widgets.Label('N/A')),
-            threshold_widgets.get('imagenet_probability', widgets.Label('N/A'))
         ])
 
         quality_widgets = widgets.VBox([
             widgets.HTML("<h4>Quality Thresholds</h4>"),
             *[w for k, w in threshold_widgets.items()
-              if k not in ['weighted_class_score', 'consistency', 'imagenet_probability']]
+              if k not in ['weighted_class_score', 'consistency']]
         ])
         
         # Add explanatory text
@@ -441,7 +440,6 @@ class InteractiveThresholdSelector(BaseComponent):
         default_thresholds = {
             'weighted_class_score': 0.493,
             'consistency': 0.796,
-            'imagenet_probability': 0.5,
             'resolution_score': 0.370,
             'sharpness_score': 0.880,
             'color_score': 0.768
@@ -536,7 +534,7 @@ class InteractiveThresholdSelector(BaseComponent):
             
             # Select key metrics to visualize
             metrics_to_show = []
-            for metric in ['weighted_class_score', 'consistency', 'imagenet_probability', 'sharpness_score']:
+            for metric in ['weighted_class_score', 'consistency', 'sharpness_score']:
                 if metric in self.qc.data.columns:
                     metrics_to_show.append(metric)
             
