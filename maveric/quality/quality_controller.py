@@ -61,15 +61,6 @@ class QualityController(BaseComponent):
                 'txt2img': 0.20
             }
 
-        # Use config class selection weights if provided
-        if config and hasattr(config, 'class_selection_weights'):
-            self.class_selection_weights = config.class_selection_weights.copy()
-        else:
-            # Default class selection weights: balance between similarity and quality
-            self.class_selection_weights = {
-                'similarity_weight': 0.5,  # Weight for similarity-based scoring
-                'quality_weight': 0.5      # Weight for semantic quality scoring
-            }
 
         # Use config default thresholds if provided
         if config and hasattr(config, 'default_thresholds'):
@@ -121,13 +112,11 @@ class QualityController(BaseComponent):
     
     def _calculate_best_class(self):
         """
-        Calculate the best class for each item using both similarity and quality scores.
-        
-        This method identifies the most likely class for each sample by combining:
-        1. Similarity-based scores (img2img, txt2txt, img2txt, txt2img)
-        2. Target class quality score (target_class_quality) for universal quality assessment
-        
-        The final score is a weighted combination of both factors for better class selection.
+        Calculate the best class for each item using similarity scores.
+
+        This method identifies the most likely class for each sample using
+        weighted similarity-based scores (img2img, txt2txt, img2txt, txt2img).
+        The weights are defined in metric_weights configuration.
         """
         if self.data is None:
             return
@@ -168,23 +157,10 @@ class QualityController(BaseComponent):
                         similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
                 
-                # Get class-specific EfficientNet quality score
-                efficientNet_score_col = f"Class_{class_name}_efficientNet_score"
-                efficientNet_score = row.get(efficientNet_score_col, 0.0)
-                if pd.isna(efficientNet_score):
-                    efficientNet_score = 0.0
-                
                 # Normalize similarity score
                 if valid_weights_sum > 0:
                     similarity_score /= valid_weights_sum
-                    
-                    # Combine similarity score with class-specific quality score
-                    combined_score = (
-                        self.class_selection_weights['similarity_weight'] * similarity_score +
-                        self.class_selection_weights['quality_weight'] * efficientNet_score
-                    )
-                    
-                    class_scores[class_name] = combined_score
+                    class_scores[class_name] = similarity_score
             
             # Find best class
             if class_scores:
@@ -234,37 +210,6 @@ class QualityController(BaseComponent):
         self._calculate_best_class()
         self.log_debug(f"Set {metric} weight to {value}")
     
-    def set_class_selection_weight(self, weight_type: str, value: float):
-        """
-        Set class selection weight for balancing similarity vs quality.
-        
-        Args:
-            weight_type: Either 'similarity_weight' or 'quality_weight'
-            value: Weight value (should sum to 1.0 with the other weight)
-        """
-        if weight_type not in self.class_selection_weights:
-            raise ValueError(f"Invalid weight type: {weight_type}")
-        
-        self.class_selection_weights[weight_type] = value
-        
-        # Normalize weights to sum to 1.0
-        total = sum(self.class_selection_weights.values())
-        if total > 0:
-            for key in self.class_selection_weights:
-                self.class_selection_weights[key] /= total
-        
-        # Recalculate best class with new weights
-        self._calculate_best_class()
-        self.log_info(f"Set {weight_type} to {value:.3f} (normalized to {self.class_selection_weights[weight_type]:.3f})")
-    
-    def get_class_selection_weights(self) -> Dict[str, float]:
-        """
-        Get current class selection weights.
-        
-        Returns:
-            Dictionary of class selection weights
-        """
-        return self.class_selection_weights.copy()
     
     def add_filter(self, filter_instance):
         """

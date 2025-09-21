@@ -38,10 +38,6 @@ metric_weights:
   img2txt: 0.20    # Image-to-text consistency weight
   txt2img: 0.20    # Text-to-image consistency weight
 
-# Class selection weights: balance between similarity and quality
-class_selection_weights:
-  similarity_weight: 0.5  # Weight for similarity-based class scoring
-  quality_weight: 0.5     # Weight for semantic quality in class selection
 
 # Quality thresholds for ELEVATER experiments - organized by category
 # These can be adjusted based on your requirements

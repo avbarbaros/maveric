@@ -68,7 +68,7 @@ class InteractiveThresholdSelector(BaseComponent):
             self._create_visualization_tab()
         ]
         tab.set_title(0, 'Quality Thresholds')
-        tab.set_title(1, 'Class Weights')
+        tab.set_title(1, 'Metric Weights')
         tab.set_title(2, 'Live Preview')
         
         # Status display
@@ -136,79 +136,6 @@ class InteractiveThresholdSelector(BaseComponent):
         
         return threshold_widgets
     
-    def _create_class_selection_widgets(self) -> widgets.VBox:
-        """Create widgets for class selection weight configuration."""
-        class_selection_weights = self.qc.get_class_selection_weights()
-        
-        # Similarity vs Quality weight sliders
-        similarity_slider = widgets.FloatSlider(
-            value=class_selection_weights['similarity_weight'],
-            min=0.0,
-            max=1.0,
-            step=0.05,
-            description='Similarity Weight',
-            disabled=False,
-            continuous_update=False,
-            orientation='horizontal',
-            readout=True,
-            readout_format='.2f',
-            layout=widgets.Layout(width='500px'),
-            style={'description_width': '150px'}
-        )
-        
-        quality_slider = widgets.FloatSlider(
-            value=class_selection_weights['quality_weight'], 
-            min=0.0,
-            max=1.0,
-            step=0.05,
-            description='Quality Weight',
-            disabled=False,
-            continuous_update=False,
-            orientation='horizontal',
-            readout=True,
-            readout_format='.2f',
-            layout=widgets.Layout(width='500px'),
-            style={'description_width': '150px'}
-        )
-        
-        # Store references for later use
-        self.similarity_weight_slider = similarity_slider
-        self.quality_weight_slider = quality_slider
-        
-        # Add observers for automatic normalization
-        def on_similarity_change(change):
-            # Auto-adjust quality weight
-            quality_weight = 1.0 - change['new']
-            self.quality_weight_slider.value = quality_weight
-            self.qc.set_class_selection_weight('similarity_weight', change['new'])
-            
-        def on_quality_change(change):
-            # Auto-adjust similarity weight
-            similarity_weight = 1.0 - change['new']
-            self.similarity_weight_slider.value = similarity_weight
-            self.qc.set_class_selection_weight('quality_weight', change['new'])
-        
-        similarity_slider.observe(on_similarity_change, names='value')
-        quality_slider.observe(on_quality_change, names='value')
-        
-        # Explanation
-        explanation = widgets.HTML(
-            "<div style='background-color: #e8f4f8; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>"
-            "<b>Class Selection Strategy:</b><br>"
-            "• <b>Similarity Weight</b>: Emphasizes similarity to reference images/text<br>"
-            "• <b>Quality Weight</b>: Emphasizes universal semantic quality<br>"
-            "• Weights automatically sum to 1.0<br>"
-            "• Higher similarity weight = more class-specific matching<br>"
-            "• Higher quality weight = better overall sample quality"
-            "</div>"
-        )
-        
-        return widgets.VBox([
-            explanation,
-            widgets.HTML("<h4>Class Selection Weights</h4>"),
-            similarity_slider,
-            quality_slider
-        ])
     
     def _create_weight_widgets(self) -> Dict[str, widgets.FloatSlider]:
         """Create sliders for class similarity weights."""
@@ -316,47 +243,38 @@ class InteractiveThresholdSelector(BaseComponent):
     
     def _create_weight_tab(self, weight_widgets: Dict) -> widgets.VBox:
         """Create the weight adjustment tab."""
-        # Class selection weights (similarity vs quality)
-        class_selection_widgets = self._create_class_selection_widgets()
-        
         # Normalize button for similarity weights
         normalize_button = widgets.Button(
-            description='Normalize Similarity Weights',
+            description='Normalize Weights',
             button_style='info',
             icon='balance-scale'
         )
         normalize_button.on_click(self._normalize_weights)
-        
+
         # Weight display
         weight_sum_label = widgets.Label(
-            value=f"Total similarity weight: {sum(self.qc.class_weights.values()):.2f}"
+            value=f"Total weight: {sum(self.qc.class_weights.values()):.2f}"
         )
         self.weight_sum_label = weight_sum_label
-        
+
         # Explanation
         explanation = widgets.HTML(
             "<div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px;'>"
-            "<b>Class Similarity Weights:</b><br>"
+            "<b>Metric Weights:</b><br>"
             "• img2img: How similar the image is to reference images<br>"
             "• txt2txt: How similar the caption is to reference captions<br>"
             "• img2txt: How well the image matches reference text<br>"
             "• txt2img: How well the caption matches reference images<br>"
-            "<br>Weights should sum to 1.0 for proper scoring."
+            "<br>Weights should sum to 1.0 for proper scoring. "
+            "Class selection uses only the weighted_class_score from these metrics."
             "</div>"
         )
-        
-        # Layout - combine class selection and similarity weights
-        similarity_weight_controls = widgets.VBox([
-            widgets.HTML("<h4>Similarity Component Weights</h4>"),
+
+        return widgets.VBox([
+            explanation,
+            widgets.HTML("<h4>Metric Weights</h4>"),
             *weight_widgets.values(),
             widgets.HBox([normalize_button, weight_sum_label])
-        ])
-        
-        return widgets.VBox([
-            class_selection_widgets,  # Class selection strategy at the top
-            widgets.HTML("<hr>"),     # Visual separator
-            explanation,              # Original explanation
-            similarity_weight_controls # Similarity weights at the bottom
         ])
     
     def _create_visualization_tab(self) -> widgets.VBox:
@@ -545,11 +463,6 @@ class InteractiveThresholdSelector(BaseComponent):
             if metric in default_weights:
                 widget.value = default_weights[metric]
         
-        # Reset class selection weights to defaults
-        if hasattr(self, 'similarity_weight_slider'):
-            self.similarity_weight_slider.value = 0.7
-        if hasattr(self, 'quality_weight_slider'):
-            self.quality_weight_slider.value = 0.3
         
         # Apply
         self._on_apply_clicked(button)
@@ -558,14 +471,13 @@ class InteractiveThresholdSelector(BaseComponent):
         """Handle Export button click."""
         config = {
             'thresholds': {
-                metric: widget.value 
+                metric: widget.value
                 for metric, widget in self.widgets['thresholds'].items()
             },
-            'weights': {
-                metric: widget.value 
+            'metric_weights': {
+                metric: widget.value
                 for metric, widget in self.widgets['weights'].items()
-            },
-            'class_selection_weights': self.qc.get_class_selection_weights()
+            }
         }
         
         with self.output:
@@ -577,12 +489,8 @@ class InteractiveThresholdSelector(BaseComponent):
             for k, v in config['thresholds'].items():
                 print(f"        '{k}': {v:.3f},")
             print("    },")
-            print("    'weights': {")
-            for k, v in config['weights'].items():
-                print(f"        '{k}': {v:.2f},")
-            print("    },")
-            print("    'class_selection_weights': {")
-            for k, v in config['class_selection_weights'].items():
+            print("    'metric_weights': {")
+            for k, v in config['metric_weights'].items():
                 print(f"        '{k}': {v:.2f},")
             print("    }")
             print("}")

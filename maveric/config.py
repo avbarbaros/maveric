@@ -52,11 +52,6 @@ class MAVERICConfig:
         'txt2img': 0.20
     })
     
-    # Class selection weights: balance between similarity and quality
-    class_selection_weights: Dict[str, float] = field(default_factory=lambda: {
-        'similarity_weight': 0.7,  # Weight for similarity-based scoring
-        'quality_weight': 0.3      # Weight for semantic quality scoring  
-    })
     
     # Default quality thresholds - organized by metric category
     default_thresholds: Dict[str, float] = field(default_factory=lambda: {

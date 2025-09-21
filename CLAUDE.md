@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 MAVERIC is a multi-modal dataset curation system for vision-language models. The codebase follows a modular architecture:
 
 - **`maveric/main.py`**: Main MAVERIC class providing high-level API for retrieval, quality control, and model customization
-- **`maveric/core/`**: Base interfaces, exceptions, and abstract components
+- **`maveric/core/`**: Base interfaces, exceptions, abstract components, and progress tracking system
 - **`maveric/retrieval/`**: Dataset retrieval and caching system with CLIP-based embedding
 - **`maveric/quality/`**: Quality assessment metrics (visual, semantic, multimodal consistency)
 - **`maveric/customization/`**: Model fine-tuning with filtered data
@@ -15,6 +15,7 @@ MAVERIC is a multi-modal dataset curation system for vision-language models. The
 - **`maveric/visualization/`**: Data distribution plots and sample galleries
 - **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 11 torchvision + 9 file-based)
 - **`maveric/models/`**: CLIP model wrappers and factory patterns
+- **`maveric/utils/`**: Command-line interface, I/O utilities, logging, and visualization helpers
 
 ## Development Commands
 
@@ -125,7 +126,6 @@ Key configuration options:
 - `retrieval_rotation_size`: Samples per file when saving results and training data (default: 1000)
 - `quality_metrics`: List of quality metrics to compute (default: visual: resolution, sharpness, color_diversity; semantic: text_quality, caption_length; multimodal: semantic_caption_guided_quality, multimodal_consistency)
 - `metric_weights`: Weights for composite scoring across modalities (img2img: 0.4, txt2txt/img2txt/txt2img: 0.2 each)
-- `class_selection_weights`: Balance between similarity and quality (similarity_weight: 0.7, quality_weight: 0.3)
 - `seed`: Random seed for reproducible sampling (default: 42)
 
 Configuration can be loaded from YAML/JSON files:
@@ -153,6 +153,12 @@ maveric = MAVERIC.from_config_file('config.yaml')
   - `CrossModalAlignmentMetric`: Direct image-text similarity  
   - `TargetClassQualityMetric`: EfficientNet + miniLM for per-class quality
 
+### Core System (`maveric/core/`)
+- **Base Classes**: Abstract components for datasets, metrics, and system components
+- **Interfaces**: Result types and callback interfaces for consistent API
+- **Exception Handling**: Centralized exception hierarchy for error management
+- **Progress Tracking**: `RealTimeStats` system for live download/cache statistics display
+
 ### Retrieval System (`maveric/retrieval/`)
 - CLIP-based embedding similarity matching with per-class quality assessment
 - Smart caching system for images and embeddings
@@ -161,11 +167,16 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - **NEW**: Progress bar suppression for cleaner console output
 
 ### Interactive Dashboard (`maveric/interactive/`)
-- Jupyter widget for real-time threshold tuning with **NEW** class selection weight controls
+- Jupyter widget for real-time threshold tuning with metric weight controls
 - Quality distribution visualization (updated to exclude global composite_quality, now uses imagenet_probability)
 - Sample gallery with filtering
-- **NEW**: Interactive controls for similarity vs quality balance in class selection
-- **NEW**: Auto-normalizing weight sliders that maintain 1.0 sum
+- Interactive controls for metric weights with auto-normalizing sliders that maintain 1.0 sum
+
+### Utilities (`maveric/utils/`)
+- **CLI System**: Complete command-line interface for all MAVERIC operations (retrieve, quality-control, customize, visualize)
+- **I/O Utilities**: File handling, data serialization, and configuration management
+- **Logging**: Structured logging system with configurable levels and formatters
+- **Visualization Helpers**: Utility functions for plotting and data visualization
 
 ## Data Flow
 
@@ -198,11 +209,10 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - Caption length metrics ensure appropriate caption sizes
 - Semantic filtering works alongside visual and multimodal quality assessment
 
-**Class Selection Architecture**: Enhanced class selection logic that integrates both similarity and quality:
-- Similarity-based scoring: Traditional img2img, txt2txt, img2txt, txt2img metrics
-- Quality-enhanced scoring: Per-class composite quality scores
-- Configurable weighting: Balance between similarity (default: 70%) and quality (default: 30%)
-- Interactive controls: Real-time adjustment via Jupyter widgets
+**Class Selection Architecture**: Simplified class selection logic using weighted similarity scores:
+- Weighted similarity scoring: Uses img2img, txt2txt, img2txt, txt2img metrics with configurable weights
+- Pure similarity-based approach: Class selection based on weighted_class_score only
+- Interactive controls: Real-time metric weight adjustment via Jupyter widgets
 
 ## Testing Strategy
 
