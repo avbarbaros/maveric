@@ -949,25 +949,44 @@ class MAVERICInteractiveQualityControl:
                     'mean_plus_std': min(max_value, mean_val + std_val)
                 }
 
+                # Flag to track if slider change is programmatic
+                slider._programmatic_change = False
+
                 # Create callback for stats combo
                 def make_stats_callback(slider_widget, combo_widget, stats_dict, metric_name):
                     def on_stats_change(change):
                         if change['new'] != 'custom':
                             new_value = stats_dict[change['new']]
+                            # Set flag to indicate programmatic change
+                            slider_widget._programmatic_change = True
                             slider_widget.value = new_value
+                            slider_widget._programmatic_change = False
                             # Update threshold in the object
                             self.set_threshold(metric_name, new_value)
                     return on_stats_change
 
                 # Create callback for slider to reset combo to custom when manually changed
-                def make_slider_callback(combo_widget):
+                def make_slider_callback(combo_widget, stats_dict):
                     def on_slider_change(change):
-                        combo_widget.value = 'custom'
+                        # Only reset to custom if this is not a programmatic change
+                        if not getattr(change['owner'], '_programmatic_change', False):
+                            # Check if the current slider value matches any of the statistical values
+                            current_value = change['new']
+                            tolerance = 0.001  # Small tolerance for floating point comparison
+
+                            # Check if current value matches any statistical option
+                            for stat_name, stat_value in stats_dict.items():
+                                if abs(current_value - stat_value) < tolerance:
+                                    combo_widget.value = stat_name
+                                    return
+
+                            # If no match found, set to custom
+                            combo_widget.value = 'custom'
                     return on_slider_change
 
                 # Attach callbacks
                 stats_combo.observe(make_stats_callback(slider, stats_combo, stats_values, metric), names='value')
-                slider.observe(make_slider_callback(stats_combo), names='value')
+                slider.observe(make_slider_callback(stats_combo, stats_values), names='value')
 
                 # Create horizontal container for slider and combo
                 container = widgets.HBox([
