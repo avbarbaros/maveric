@@ -21,6 +21,9 @@ try:
 except ImportError:
     WIDGETS_AVAILABLE = False
     print("⚠️ ipywidgets not available. Install with: pip install ipywidgets")
+    # Define dummy clear_output for when widgets are not available
+    def clear_output(wait=False):
+        pass
 
 
 class MAVERICInteractiveQualityControl:
@@ -893,6 +896,207 @@ class MAVERICInteractiveQualityControl:
             print(f"❌ Error saving configuration: {e}")
             return False
     
+    def _create_efficientnet_tab(self):
+        """Create EfficientNet prediction analysis tab"""
+        if not WIDGETS_AVAILABLE:
+            return widgets.VBox([widgets.HTML("❌ ipywidgets not available")])
+
+        # Analysis output widget
+        analysis_output = widgets.Output()
+
+        # Refresh button to update analysis
+        refresh_button = widgets.Button(
+            description='Refresh Analysis',
+            button_style='info',
+            icon='refresh',
+            layout=widgets.Layout(width='150px')
+        )
+
+        # Apply filter button
+        apply_filter_button = widgets.Button(
+            description='Apply Prediction Filter',
+            button_style='warning',
+            icon='filter',
+            layout=widgets.Layout(width='200px')
+        )
+
+        # Status display
+        status_display = widgets.HTML(value="<p>Click 'Refresh Analysis' to analyze predictions</p>")
+
+        def on_refresh_clicked(b):
+            with analysis_output:
+                clear_output(wait=True)
+                try:
+                    self._analyze_class_predictions()
+                    status_display.value = f"<p style='color:green'>✅ Analysis complete for {len(self.filtered_data):,} samples</p>"
+                except Exception as e:
+                    status_display.value = f"<p style='color:red'>❌ Error: {str(e)}</p>"
+
+        def on_apply_filter_clicked(b):
+            with analysis_output:
+                clear_output(wait=True)
+                try:
+                    original_count = len(self.filtered_data)
+                    self._apply_prediction_filter()
+                    new_count = len(self.filtered_data)
+                    filtered_out = original_count - new_count
+
+                    print(f"🔍 Prediction Filter Applied:")
+                    print(f"   Original samples: {original_count:,}")
+                    print(f"   Filtered samples: {new_count:,}")
+                    print(f"   Removed samples: {filtered_out:,} ({filtered_out/original_count*100:.1f}%)")
+                    print(f"   Retention rate: {new_count/original_count*100:.1f}%")
+
+                    status_display.value = f"<p style='color:green'>✅ Filter applied - {new_count:,} samples remaining</p>"
+                except Exception as e:
+                    status_display.value = f"<p style='color:red'>❌ Filter error: {str(e)}</p>"
+
+        # Attach callbacks
+        refresh_button.on_click(on_refresh_clicked)
+        apply_filter_button.on_click(on_apply_filter_clicked)
+
+        # Explanation
+        explanation = widgets.HTML(
+            "<div style='background-color: #f0f8ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>"
+            "<b>EfficientNet Prediction Analysis</b><br>"
+            "• <b>Weighted Score Class</b>: Class selected by similarity-based metrics<br>"
+            "• <b>EfficientNet Class</b>: Class with highest EfficientNet probability<br>"
+            "• <b>Match Rate</b>: Percentage where both predictions agree<br>"
+            "• <b>Apply Filter</b>: Remove samples where predictions don't match"
+            "</div>"
+        )
+
+        # Create tab content
+        tab_content = widgets.VBox([
+            explanation,
+            widgets.HBox([refresh_button, apply_filter_button]),
+            status_display,
+            analysis_output
+        ])
+
+        return tab_content
+
+    def _analyze_class_predictions(self):
+        """Analyze class predictions from weighted scores vs EfficientNet"""
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("❌ No filtered data available. Apply quality thresholds first.")
+            return
+
+        print("🔍 Analyzing Class Predictions...")
+        print("=" * 60)
+
+        # Get weighted score based class (from 'label' column)
+        weighted_classes = self.filtered_data['label'].values
+
+        # Find EfficientNet-based predictions (highest probability class)
+        efficientnet_classes = []
+
+        # Find all EfficientNet score columns
+        efficientnet_columns = [col for col in self.filtered_data.columns
+                               if 'efficientNet_score' in col and col.startswith('Class_')]
+
+        if not efficientnet_columns:
+            print("❌ No EfficientNet score columns found. Make sure target_class_quality metric was computed.")
+            return
+
+        # For each sample, find the class with highest EfficientNet score
+        for _, row in self.filtered_data.iterrows():
+            max_score = -1
+            best_class = 'unknown'
+
+            for col in efficientnet_columns:
+                score = row.get(col, 0)
+                if pd.notna(score) and score > max_score:
+                    max_score = score
+                    # Extract class name from column name: Class_airplane_efficientNet_score -> airplane
+                    best_class = col.split('_')[1]
+
+            efficientnet_classes.append(best_class)
+
+        # Convert to pandas Series for easier analysis
+        weighted_series = pd.Series(weighted_classes)
+        efficientnet_series = pd.Series(efficientnet_classes)
+
+        # Calculate match statistics
+        matches = (weighted_series == efficientnet_series)
+        match_count = matches.sum()
+        total_count = len(matches)
+        match_rate = (match_count / total_count) * 100
+
+        print(f"📊 Prediction Analysis Results:")
+        print(f"   Total samples: {total_count:,}")
+        print(f"   Matching predictions: {match_count:,}")
+        print(f"   Non-matching predictions: {total_count - match_count:,}")
+        print(f"   Match rate: {match_rate:.1f}%")
+        print()
+
+        # Show class distribution comparison
+        print("📋 Class Distribution Comparison:")
+        print("-" * 40)
+
+        weighted_dist = weighted_series.value_counts().sort_index()
+        efficientnet_dist = efficientnet_series.value_counts().sort_index()
+
+        all_classes = sorted(set(weighted_dist.index) | set(efficientnet_dist.index))
+
+        print(f"{'Class':<15} {'Weighted':<10} {'EfficientNet':<12} {'Difference':<10}")
+        print("-" * 50)
+
+        for class_name in all_classes:
+            weighted_count = weighted_dist.get(class_name, 0)
+            efficientnet_count = efficientnet_dist.get(class_name, 0)
+            difference = weighted_count - efficientnet_count
+
+            print(f"{class_name:<15} {weighted_count:<10} {efficientnet_count:<12} {difference:+<10}")
+
+        print()
+
+        # Show mismatched samples by class
+        print("🔍 Mismatch Analysis by Class:")
+        print("-" * 40)
+
+        mismatch_data = self.filtered_data[~matches].copy()
+        if len(mismatch_data) > 0:
+            mismatch_data['efficientnet_class'] = efficientnet_series[~matches].values
+
+            mismatch_summary = mismatch_data.groupby(['label', 'efficientnet_class']).size().sort_values(ascending=False)
+
+            print("Top mismatches (Weighted → EfficientNet):")
+            for (weighted_class, efficient_class), count in mismatch_summary.head(10).items():
+                percentage = (count / total_count) * 100
+                print(f"   {weighted_class} → {efficient_class}: {count:,} samples ({percentage:.1f}%)")
+        else:
+            print("   No mismatches found - perfect agreement!")
+
+        # Store analysis results for filtering
+        self._last_analysis = {
+            'matches': matches,
+            'weighted_classes': weighted_series,
+            'efficientnet_classes': efficientnet_series,
+            'match_rate': match_rate
+        }
+
+    def _apply_prediction_filter(self):
+        """Filter out samples where weighted score and EfficientNet predictions don't match"""
+        if not hasattr(self, '_last_analysis') or self._last_analysis is None:
+            print("❌ No analysis available. Run 'Refresh Analysis' first.")
+            return
+
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("❌ No filtered data available.")
+            return
+
+        matches = self._last_analysis['matches']
+
+        # Keep only samples where predictions match
+        original_count = len(self.filtered_data)
+        self.filtered_data = self.filtered_data[matches].reset_index(drop=True)
+        new_count = len(self.filtered_data)
+
+        print(f"✅ Prediction filter applied successfully!")
+        print(f"   Kept samples with matching predictions: {new_count:,}")
+        print(f"   Removed mismatched samples: {original_count - new_count:,}")
+
     def create_interactive_gui(self):
         """Create interactive GUI with sliders and controls"""
         if not WIDGETS_AVAILABLE:
@@ -1052,17 +1256,22 @@ class MAVERICInteractiveQualityControl:
             balance_oversampling_widget,
             balance_button
         ])
+
+        # Create EfficientNet Prediction tab content
+        efficientnet_tab_content = self._create_efficientnet_tab()
         
         # Create tabs
         tab = widgets.Tab()
         tab.children = [
             widgets.VBox(list(weight_widgets.values())),
             widgets.VBox(list(threshold_containers.values())),
+            efficientnet_tab_content,
             balance_tab_content
         ]
         tab.set_title(0, 'Metric Weights')
         tab.set_title(1, 'Quality Thresholds')
-        tab.set_title(2, 'Balance Settings')
+        tab.set_title(2, 'EfficientNet Prediction')
+        tab.set_title(3, 'Balance Settings')
         
         # Create buttons
         apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
