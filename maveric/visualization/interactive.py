@@ -180,6 +180,15 @@ class MAVERICInteractiveQualityControl:
             if metric_weights:
                 self.class_weights.update(metric_weights)
                 print(f"⚖️ Loaded metric weights: {self.class_weights}")
+
+            # Load quality thresholds from config (excluding imagenet_probability)
+            quality_thresholds = config.get('quality_thresholds', {})
+            if quality_thresholds:
+                # Only update thresholds that we want to support (excluding imagenet_probability)
+                for metric, threshold in quality_thresholds.items():
+                    if metric in self.thresholds:  # Only update thresholds we have defined
+                        self.thresholds[metric] = threshold
+                print(f"🎚️ Loaded quality thresholds: {self.thresholds}")
             
             # Construct the correct data path: results_dir/dataset_name/raw
             config_data_path = os.path.join(results_dir, self.dataset_name, 'raw')
@@ -968,12 +977,12 @@ class MAVERICInteractiveQualityControl:
         # Create tabs
         tab = widgets.Tab()
         tab.children = [
-            widgets.VBox(list(threshold_widgets.values())),
             widgets.VBox(list(weight_widgets.values())),
+            widgets.VBox(list(threshold_widgets.values())),
             balance_tab_content
         ]
-        tab.set_title(0, 'Quality Thresholds')
-        tab.set_title(1, 'Class Weights')
+        tab.set_title(0, 'Metric Weights')
+        tab.set_title(1, 'Quality Thresholds')
         tab.set_title(2, 'Balance Settings')
         
         # Create buttons
