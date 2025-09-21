@@ -899,15 +899,22 @@ class MAVERICInteractiveQualityControl:
             print("❌ ipywidgets not available. Install with: pip install ipywidgets")
             return
         
-        # Create threshold sliders
+        # Create threshold sliders with statistical option comboboxes
         threshold_widgets = {}
+        threshold_combos = {}
+        threshold_containers = {}
+
         for metric, default_value in self.thresholds.items():
             if metric in self.data.columns:
                 data_range = self.data[metric].dropna()
                 max_value = float(data_range.max())
                 min_value = float(data_range.min())
-                
-                threshold_widgets[metric] = widgets.FloatSlider(
+                mean_val = float(data_range.mean())
+                median_val = float(data_range.median())
+                std_val = float(data_range.std())
+
+                # Create slider
+                slider = widgets.FloatSlider(
                     value=max(min_value, min(default_value, max_value)),
                     min=min_value,
                     max=max_value,
@@ -915,9 +922,62 @@ class MAVERICInteractiveQualityControl:
                     description=f'{metric.replace("_", " ").title()}:',
                     continuous_update=False,
                     readout_format='.3f',
-                    layout=widgets.Layout(width='500px'),
+                    layout=widgets.Layout(width='400px'),
                     style={'description_width': '180px'}
                 )
+
+                # Create combobox with statistical options
+                stats_combo = widgets.Dropdown(
+                    options=[
+                        ('Custom', 'custom'),
+                        ('Mean', 'mean'),
+                        ('Median', 'median'),
+                        ('Mean - Std', 'mean_minus_std'),
+                        ('Mean + Std', 'mean_plus_std')
+                    ],
+                    value='custom',
+                    description='',
+                    layout=widgets.Layout(width='120px'),
+                    style={'description_width': '0px'}
+                )
+
+                # Store statistical values for this metric
+                stats_values = {
+                    'mean': mean_val,
+                    'median': median_val,
+                    'mean_minus_std': max(min_value, mean_val - std_val),
+                    'mean_plus_std': min(max_value, mean_val + std_val)
+                }
+
+                # Create callback for stats combo
+                def make_stats_callback(slider_widget, combo_widget, stats_dict, metric_name):
+                    def on_stats_change(change):
+                        if change['new'] != 'custom':
+                            new_value = stats_dict[change['new']]
+                            slider_widget.value = new_value
+                            # Update threshold in the object
+                            self.set_threshold(metric_name, new_value)
+                    return on_stats_change
+
+                # Create callback for slider to reset combo to custom when manually changed
+                def make_slider_callback(combo_widget):
+                    def on_slider_change(change):
+                        combo_widget.value = 'custom'
+                    return on_slider_change
+
+                # Attach callbacks
+                stats_combo.observe(make_stats_callback(slider, stats_combo, stats_values, metric), names='value')
+                slider.observe(make_slider_callback(stats_combo), names='value')
+
+                # Create horizontal container for slider and combo
+                container = widgets.HBox([
+                    slider,
+                    stats_combo
+                ], layout=widgets.Layout(align_items='center', margin='2px 0'))
+
+                threshold_widgets[metric] = slider
+                threshold_combos[metric] = stats_combo
+                threshold_containers[metric] = container
         
         # Create weight sliders
         weight_widgets = {}
@@ -978,7 +1038,7 @@ class MAVERICInteractiveQualityControl:
         tab = widgets.Tab()
         tab.children = [
             widgets.VBox(list(weight_widgets.values())),
-            widgets.VBox(list(threshold_widgets.values())),
+            widgets.VBox(list(threshold_containers.values())),
             balance_tab_content
         ]
         tab.set_title(0, 'Metric Weights')
