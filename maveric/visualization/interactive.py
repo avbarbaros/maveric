@@ -957,7 +957,7 @@ class MAVERICInteractiveQualityControl:
 
         # Explanation
         explanation = widgets.HTML(
-            "<div style='background-color: #f0f8ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>"
+            "<div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>"
             "<b>EfficientNet Prediction Analysis</b><br>"
             "• <b>Weighted Score Class</b>: Class selected by similarity-based metrics<br>"
             "• <b>EfficientNet Class</b>: Class with highest EfficientNet probability<br>"
@@ -1013,9 +1013,9 @@ class MAVERICInteractiveQualityControl:
 
             efficientnet_classes.append(best_class)
 
-        # Convert to pandas Series for easier analysis
-        weighted_series = pd.Series(weighted_classes)
-        efficientnet_series = pd.Series(efficientnet_classes)
+        # Convert to pandas Series with the same index as filtered_data
+        weighted_series = pd.Series(weighted_classes, index=self.filtered_data.index)
+        efficientnet_series = pd.Series(efficientnet_classes, index=self.filtered_data.index)
 
         # Calculate match statistics
         matches = (weighted_series == efficientnet_series)
@@ -1055,14 +1055,20 @@ class MAVERICInteractiveQualityControl:
         print("🔍 Mismatch Analysis by Class:")
         print("-" * 40)
 
-        mismatch_data = self.filtered_data[~matches].copy()
-        if len(mismatch_data) > 0:
-            mismatch_data['efficientnet_class'] = efficientnet_series[~matches].values
+        if match_count < total_count:
+            # Get indices where predictions don't match
+            mismatch_indices = matches[~matches].index
 
-            mismatch_summary = mismatch_data.groupby(['label', 'efficientnet_class']).size().sort_values(ascending=False)
+            # Create mismatch analysis
+            mismatch_weighted = weighted_series[mismatch_indices]
+            mismatch_efficientnet = efficientnet_series[mismatch_indices]
+
+            # Create summary of mismatches
+            mismatch_pairs = list(zip(mismatch_weighted.values, mismatch_efficientnet.values))
+            mismatch_counts = pd.Series(mismatch_pairs).value_counts()
 
             print("Top mismatches (Weighted → EfficientNet):")
-            for (weighted_class, efficient_class), count in mismatch_summary.head(10).items():
+            for (weighted_class, efficient_class), count in mismatch_counts.head(10).items():
                 percentage = (count / total_count) * 100
                 print(f"   {weighted_class} → {efficient_class}: {count:,} samples ({percentage:.1f}%)")
         else:
@@ -1090,7 +1096,10 @@ class MAVERICInteractiveQualityControl:
 
         # Keep only samples where predictions match
         original_count = len(self.filtered_data)
-        self.filtered_data = self.filtered_data[matches].reset_index(drop=True)
+
+        # Filter using the boolean mask - ensure indices align
+        matching_indices = matches[matches].index
+        self.filtered_data = self.filtered_data.loc[matching_indices].reset_index(drop=True)
         new_count = len(self.filtered_data)
 
         print(f"✅ Prediction filter applied successfully!")
