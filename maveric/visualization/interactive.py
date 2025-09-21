@@ -972,7 +972,11 @@ class MAVERICInteractiveQualityControl:
             widgets.HBox([refresh_button, apply_filter_button]),
             status_display,
             analysis_output
-        ])
+        ], layout=widgets.Layout(
+            background_color='#f8f8f8',
+            padding='10px',
+            border='1px solid #ddd'
+        ))
 
         return tab_content
 
@@ -1094,7 +1098,8 @@ class MAVERICInteractiveQualityControl:
 
         matches = self._last_analysis['matches']
 
-        # Keep only samples where predictions match
+        # Get original class distribution before filtering
+        original_distribution = self.filtered_data['label'].value_counts().sort_index()
         original_count = len(self.filtered_data)
 
         # Filter using the boolean mask - ensure indices align
@@ -1102,9 +1107,34 @@ class MAVERICInteractiveQualityControl:
         self.filtered_data = self.filtered_data.loc[matching_indices].reset_index(drop=True)
         new_count = len(self.filtered_data)
 
+        # Get new class distribution after filtering
+        new_distribution = self.filtered_data['label'].value_counts().sort_index()
+
         print(f"✅ Prediction filter applied successfully!")
         print(f"   Kept samples with matching predictions: {new_count:,}")
         print(f"   Removed mismatched samples: {original_count - new_count:,}")
+        print(f"   Retention rate: {new_count/original_count*100:.1f}%")
+        print()
+
+        # Display class distribution comparison
+        print("📊 Class Distribution After Prediction Filtering:")
+        print("-" * 50)
+
+        all_classes = sorted(set(original_distribution.index) | set(new_distribution.index))
+
+        print(f"{'Class':<15} {'Before':<10} {'After':<10} {'Change':<10} {'%Retained':<10}")
+        print("-" * 60)
+
+        for class_name in all_classes:
+            before_count = original_distribution.get(class_name, 0)
+            after_count = new_distribution.get(class_name, 0)
+            change = after_count - before_count
+            retention_pct = (after_count / before_count * 100) if before_count > 0 else 0
+
+            print(f"{class_name:<15} {before_count:<10} {after_count:<10} {change:+<10} {retention_pct:<9.1f}%")
+
+        print()
+        print(f"📈 Overall retention rate: {new_count/original_count*100:.1f}%")
 
     def create_interactive_gui(self):
         """Create interactive GUI with sliders and controls"""
