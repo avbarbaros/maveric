@@ -1353,7 +1353,10 @@ class MAVERICInteractiveQualityControl:
         def on_visualize_clicked(b):
             with output:
                 clear_output()
-                self.visualize_sample_images()
+                # Use current time as seed to ensure different images each time
+                import time
+                random_seed = int(time.time() * 1000) % 1000000  # Use milliseconds for more randomness
+                self.visualize_sample_images(random_seed=random_seed)
         
         def on_compare_clicked(b):
             with output:
