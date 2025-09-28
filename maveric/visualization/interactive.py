@@ -1314,6 +1314,7 @@ class MAVERICInteractiveQualityControl:
         
         # Create buttons
         apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
+        reset_button = widgets.Button(description='Reset All', button_style='warning', icon='refresh')
         visualize_button = widgets.Button(description='Show Samples', button_style='info', icon='image')
         compare_button = widgets.Button(description='Class Comparison', button_style='', icon='bar-chart')
         save_data_button = widgets.Button(description='Save Data', button_style='success', icon='save')
@@ -1385,31 +1386,100 @@ class MAVERICInteractiveQualityControl:
                 else:
                     print(f"❌ Failed to save configuration")
         
+        def on_reset_clicked(b):
+            with output:
+                clear_output()
+                print("🔄 Resetting to original data and default settings...")
+
+                # Reset filtered data to original data
+                self.filtered_data = self.data.copy()
+
+                # Reset thresholds to defaults
+                default_thresholds = {
+                    'resolution_score': 1.000,
+                    'sharpness_score': 0.850,
+                    'color_score': 0.750,
+                    'weighted_class_score': 0.400,
+                    'consistency': 0.780
+                }
+
+                # Reset weights to defaults
+                default_weights = {
+                    'img2img': 0.40,
+                    'txt2txt': 0.20,
+                    'img2txt': 0.20,
+                    'txt2img': 0.20
+                }
+
+                # Reset balance settings to defaults
+                default_balance = {
+                    'balance_strategy': 'median',
+                    'balance_min_samples': 15,
+                    'balance_enable_oversampling': False
+                }
+
+                # Update internal settings
+                self.thresholds.update(default_thresholds)
+                self.class_weights.update(default_weights)
+                self.balance_settings.update(default_balance)
+
+                # Update widgets to match defaults
+                for metric, widget in threshold_widgets.items():
+                    if metric in default_thresholds:
+                        widget.value = default_thresholds[metric]
+                        # Reset combo boxes to custom
+                        if metric in threshold_combos:
+                            threshold_combos[metric].value = 'custom'
+
+                for metric, widget in weight_widgets.items():
+                    if metric in default_weights:
+                        widget.value = default_weights[metric]
+
+                # Update balance widgets
+                balance_strategy_widget.value = default_balance['balance_strategy']
+                balance_min_samples_widget.value = default_balance['balance_min_samples']
+                balance_oversampling_widget.value = default_balance['balance_enable_oversampling']
+
+                # Recalculate best class with default weights
+                self._calculate_best_class()
+
+                # Update filtered count display
+                original_count = len(self.data)
+                filtered_count.value = f"<h4>Filtered data: {original_count:,} items</h4>"
+
+                print(f"✅ Reset complete! Restored to {original_count:,} original samples")
+                print("📋 All thresholds, weights, and balance settings restored to defaults")
+                print("🎯 Ready to start fresh data curation process")
+
+                # Show original data distribution
+                self.visualize_distributions()
+
         def on_balance_clicked(b):
             with output:
                 clear_output()
-                
+
                 # Update balance settings
                 self.balance_settings.update({
                     'balance_strategy': balance_strategy_widget.value,
                     'balance_min_samples': balance_min_samples_widget.value,
                     'balance_enable_oversampling': balance_oversampling_widget.value
                 })
-                
+
                 # Apply balance
                 count = self.apply_balance()
                 filtered_count.value = f"<h4>Balanced data: {count:,} items</h4>"
         
         # Connect callbacks
         apply_button.on_click(on_apply_clicked)
+        reset_button.on_click(on_reset_clicked)
         visualize_button.on_click(on_visualize_clicked)
         compare_button.on_click(on_compare_clicked)
         save_data_button.on_click(on_save_data_clicked)
         save_config_button.on_click(on_save_config_clicked)
         balance_button.on_click(on_balance_clicked)
-        
+
         # Layout
-        button_box = widgets.HBox([apply_button, visualize_button, compare_button, save_data_button, save_config_button])
+        button_box = widgets.HBox([apply_button, reset_button, visualize_button, compare_button, save_data_button, save_config_button])
         
         # Display GUI
         display(widgets.VBox([

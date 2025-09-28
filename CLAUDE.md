@@ -13,7 +13,7 @@ MAVERIC is a multi-modal dataset curation system for vision-language models. The
 - **`maveric/customization/`**: Model fine-tuning with filtered data
 - **`maveric/interactive/`**: Jupyter widgets for threshold selection and quality dashboards
 - **`maveric/visualization/`**: Data distribution plots and sample galleries
-- **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 11 torchvision + 9 file-based)
+- **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 9 torchvision + 11 file-based)
 - **`maveric/models/`**: CLIP model wrappers and factory patterns
 - **`maveric/utils/`**: Command-line interface, I/O utilities, logging, and visualization helpers
 
@@ -124,7 +124,7 @@ Key configuration options:
 - `cache_base_dir`: Directory for caching downloaded images and results
 - `batch_size`: Processing batch size
 - `retrieval_rotation_size`: Samples per file when saving results and training data (default: 1000)
-- `quality_metrics`: List of quality metrics to compute (default: visual: resolution, sharpness, color_diversity; semantic: text_quality, caption_length; multimodal: semantic_caption_guided_quality, multimodal_consistency)
+- `quality_metrics`: List of quality metrics to compute (default: visual: resolution, sharpness, color_diversity; semantic: text_quality, caption_length; multimodal: target_class_quality, multimodal_consistency)
 - `metric_weights`: Weights for composite scoring across modalities (img2img: 0.4, txt2txt/img2txt/txt2img: 0.2 each)
 - `seed`: Random seed for reproducible sampling (default: 42)
 
@@ -151,7 +151,7 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - **Multimodal metrics** (`multimodal_metrics.py`): Cross-modal quality assessment
   - `MultimodalConsistencyMetric`: CLIP-based cross-modal alignment
   - `CrossModalAlignmentMetric`: Direct image-text similarity  
-  - `TargetClassQualityMetric`: EfficientNet + miniLM for per-class quality
+  - `TargetClassQualityMetric`: EfficientNet + CLIP for per-class quality assessment
 
 ### Core System (`maveric/core/`)
 - **Base Classes**: Abstract components for datasets, metrics, and system components
@@ -197,10 +197,10 @@ maveric = MAVERIC.from_config_file('config.yaml')
 **Target Class Quality Metric**: **Properly categorized as multimodal** - Located in `multimodal_metrics.py` and used for per-class quality assessment:
 - Uses EfficientNet-B0 (CPU-only) for universal image classification
 - Employs CLIP for semantic similarity with ImageNet classes (more robust than sentence transformers)
-- Pre-computes CLIP embeddings for all ImageNet classes for efficiency
-- Focuses on semantically relevant ImageNet classes based on caption content  
+- Pre-computes CLIP embeddings for ImageNet classes for efficiency
+- Focuses on semantically relevant ImageNet classes based on caption content
 - Works universally across all ELEVATER datasets without manual class mappings
-- **Current implementation**: Returns ImageNet probability and best matching ImageNet class name per target class
+- **Current implementation**: Returns CLIP similarity × ImageNet probability as final score
 - **OPTIMIZED**: Batch processing computes mappings for all target classes using single EfficientNet inference
 - Provides comprehensive quality scores considering both visual quality and semantic relevance
 
@@ -286,7 +286,7 @@ The project uses layered requirements:
 Configuration uses dataclasses in `config.py` with three main classes:
 - `MAVERICConfig`: System config with intelligent defaults (auto device detection, directory creation)
 - `TrainingConfig`: Model training parameters
-- `ExperimentConfig`: Experiment management
+- `ExperimentConfig`: Experiment management and tracking
 
 Key config features:
 - YAML/JSON loading support

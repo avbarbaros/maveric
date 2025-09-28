@@ -177,10 +177,11 @@ class InteractiveThresholdSelector(BaseComponent):
         
         # Reset button
         reset_button = widgets.Button(
-            description='Reset to Defaults',
+            description='Reset All',
             button_style='warning',
             icon='refresh',
-            layout=widgets.Layout(width='150px')
+            layout=widgets.Layout(width='150px'),
+            tooltip='Reset to original unfiltered data and default thresholds'
         )
         reset_button.on_click(self._on_reset_clicked)
         
@@ -436,34 +437,41 @@ class InteractiveThresholdSelector(BaseComponent):
     
     def _on_reset_clicked(self, button):
         """Handle Reset button click."""
-        # Reset to default values
-        default_thresholds = {
-            'weighted_class_score': 0.493,
-            'consistency': 0.796,
-            'resolution_score': 0.370,
-            'sharpness_score': 0.880,
-            'color_score': 0.768
-        }
-        
-        default_weights = {
-            'img2img': 0.40,
-            'txt2txt': 0.20,
-            'img2txt': 0.20,
-            'txt2img': 0.20
-        }
-        
-        # Update widgets
-        for metric, widget in self.widgets['thresholds'].items():
-            if metric in default_thresholds:
-                widget.value = default_thresholds[metric]
-        
-        for metric, widget in self.widgets['weights'].items():
-            if metric in default_weights:
-                widget.value = default_weights[metric]
-        
-        
-        # Apply
-        self._on_apply_clicked(button)
+        with self.output:
+            clear_output(wait=True)
+            print("🔄 Resetting to original data and default settings...")
+
+            # Perform full reset in quality controller
+            self.qc.full_reset()
+
+            # Get current defaults from quality controller
+            default_thresholds = self.qc.thresholds.copy()
+            default_weights = self.qc.class_weights.copy()
+
+            # Update widgets to match the defaults
+            for metric, widget in self.widgets['thresholds'].items():
+                if metric in default_thresholds:
+                    widget.value = default_thresholds[metric]
+
+            for metric, widget in self.widgets['weights'].items():
+                if metric in default_weights:
+                    widget.value = default_weights[metric]
+
+            # Update weight sum display
+            total = sum(default_weights.values())
+            self.weight_sum_label.value = f"Total weight: {total:.2f}"
+            self.weight_sum_label.style = {'text_color': 'green'}
+
+            # Update status to show original data count
+            original_count = len(self.qc.data) if self.qc.data is not None else 0
+            self.status_html.value = self._get_status_html(original_count, original_count)
+
+            # Update visualizations with original data
+            self._update_visualizations()
+
+            print(f"✅ Reset complete! Restored to {original_count:,} original samples")
+            print("📋 All thresholds and weights restored to defaults")
+            print("🎯 Ready to start fresh data curation process")
     
     def _on_export_clicked(self, button):
         """Handle Export button click."""

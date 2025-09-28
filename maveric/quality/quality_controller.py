@@ -71,6 +71,7 @@ class QualityController(BaseComponent):
 
         # Load data
         self.data = None
+        self.original_data = None  # Store original unfiltered data
         self.filtered_data = None
         if data is not None:
             self.load_data(data)
@@ -78,14 +79,16 @@ class QualityController(BaseComponent):
     def load_data(self, data: Union[pd.DataFrame, List[Dict], str]):
         """
         Load data from various sources.
-        
+
         Args:
             data: Data source (DataFrame, list, or file path)
         """
         if isinstance(data, pd.DataFrame):
-            self.data = data
+            self.data = data.copy()
+            self.original_data = data.copy()  # Store original copy
         elif isinstance(data, list):
             self.data = pd.DataFrame(data)
+            self.original_data = self.data.copy()  # Store original copy
         elif isinstance(data, str):
             # Load from file
             path = Path(data)
@@ -93,8 +96,10 @@ class QualityController(BaseComponent):
                 with open(path, 'r') as f:
                     loaded_data = json.load(f)
                 self.data = pd.DataFrame(loaded_data)
+                self.original_data = self.data.copy()  # Store original copy
             elif path.suffix == '.csv':
                 self.data = pd.read_csv(path)
+                self.original_data = self.data.copy()  # Store original copy
             else:
                 raise ValueError(f"Unsupported file format: {path.suffix}")
         else:
@@ -329,6 +334,81 @@ class QualityController(BaseComponent):
                     }
         
         return stats
+
+    def reset_to_original_data(self):
+        """
+        Reset all data to original unfiltered state.
+
+        This method:
+        1. Restores the original data before any filtering
+        2. Clears any filtered data
+        3. Resets filters
+        """
+        if self.original_data is None:
+            self.log_warning("No original data available to reset to")
+            return False
+
+        # Restore original data
+        self.data = self.original_data.copy()
+
+        # Clear filtered data
+        self.filtered_data = None
+
+        # Clear filters
+        self.filters = []
+
+        self.log_info(f"Reset to original data: {len(self.data)} samples")
+        return True
+
+    def reset_to_defaults(self):
+        """
+        Reset thresholds and weights to default values.
+
+        This method resets all thresholds and metric weights to their
+        default values as defined in the configuration.
+        """
+        # Reset thresholds to defaults
+        default_thresholds = {
+            'weighted_class_score': 0.493,
+            'consistency': 0.796,
+            'resolution_score': 0.370,
+            'sharpness_score': 0.880,
+            'color_score': 0.768,
+            'text_quality_score': 0.600,
+            'caption_length_score': 0.700,
+            'target_class_quality': 0.493
+        }
+
+        # Reset weights to defaults
+        default_weights = {
+            'img2img': 0.40,
+            'txt2txt': 0.20,
+            'img2txt': 0.20,
+            'txt2img': 0.20
+        }
+
+        self.thresholds.update(default_thresholds)
+        self.class_weights.update(default_weights)
+
+        self.log_info("Reset thresholds and weights to default values")
+
+    def full_reset(self):
+        """
+        Perform a complete reset: restore original data AND reset to defaults.
+
+        This is the most comprehensive reset option that:
+        1. Restores original unfiltered data
+        2. Resets all thresholds to defaults
+        3. Resets all metric weights to defaults
+        4. Clears all filters
+        """
+        # Reset data
+        self.reset_to_original_data()
+
+        # Reset thresholds and weights
+        self.reset_to_defaults()
+
+        self.log_info("Performed full reset: data, thresholds, and weights")
 
     def get_threshold_statistics(self) -> Dict[str, Dict[str, Any]]:
         """
