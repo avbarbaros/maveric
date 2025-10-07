@@ -26,6 +26,9 @@ pip install -e ".[dev]"
 
 # Install with docs dependencies
 pip install -e ".[dev,docs]"
+
+# Install hyperparameter search dependencies
+pip install -e ".[dev]"  # Includes numpy, scikit-learn for search utilities
 ```
 
 ### Testing
@@ -110,12 +113,49 @@ maveric customize --input filtered.json --model openai/clip-vit-base-patch32 --e
 maveric visualize --input results.json --output-dir ./plots
 ```
 
+### Hyperparameter Search
+MAVERIC includes a systematic hyperparameter search tool for optimizing model performance:
+
+```bash
+# Focused search around optimal regularization (recommended)
+python experiments/05_hyperparameter_search.py \
+    --input data/training/ \
+    --config maveric_config.yaml \
+    --output results/hp_search/ \
+    --search-type focused
+
+# Fine-grained regularization weight search
+python experiments/05_hyperparameter_search.py \
+    --input data/training/ \
+    --config maveric_config.yaml \
+    --output results/hp_search/ \
+    --search-type regularization
+
+# Learning rate optimization
+python experiments/05_hyperparameter_search.py \
+    --input data/training/ \
+    --config maveric_config.yaml \
+    --output results/hp_search/ \
+    --search-type learning_rate
+
+# Random search (faster exploration)
+python experiments/05_hyperparameter_search.py \
+    --input data/training/ \
+    --config maveric_config.yaml \
+    --output results/hp_search/ \
+    --search-type broad \
+    --method random \
+    -n 30
+```
+
+See `experiments/HYPERPARAMETER_SEARCH.md` for detailed guide and search strategies.
+
 ## Configuration System
 
 MAVERIC uses dataclass-based configuration in `config.py`:
 
 - **MAVERICConfig**: Main system configuration (models, caching, quality thresholds, progress display)
-- **TrainingConfig**: Model training parameters
+- **TrainingConfig**: Model training parameters with regularization and augmentation
 - **ExperimentConfig**: Experiment management and tracking
 
 Key configuration options:
@@ -127,6 +167,20 @@ Key configuration options:
 - `quality_metrics`: List of quality metrics to compute (default: visual: resolution, sharpness, color_diversity; semantic: text_quality, caption_length; multimodal: target_class_quality, multimodal_consistency)
 - `metric_weights`: Weights for composite scoring across modalities (img2img: 0.4, txt2txt/img2txt/txt2img: 0.2 each)
 - `seed`: Random seed for reproducible sampling (default: 42)
+
+TrainingConfig key parameters:
+- `epochs`: Number of training epochs (default: 10)
+- `learning_rate`: Learning rate for optimizer (default: 1e-6)
+- `weight_decay`: L2 regularization weight (default: 0.01)
+- `use_regularization`: Enable MSE regularization to prevent catastrophic forgetting (default: true)
+- `regularization_weight`: Weight for regularization loss (default: 0.5, range: 0.0-1.0)
+- `use_augmentation`: Enable RandAugment data augmentation (default: true)
+- `augmentation_strength`: RandAugment num_ops parameter (default: 2)
+- `augmentation_magnitude`: RandAugment magnitude parameter (default: 9)
+- `optimizer`: Optimizer type - adamw, adam, or sgd (default: "adamw")
+- `scheduler`: Learning rate scheduler - cosine, linear, or constant (default: "cosine")
+- `use_validation`: Enable validation split during training (default: true)
+- `validation_method`: Validation strategy - stratified_kfold or simple_split (default: "stratified_kfold")
 
 Configuration can be loaded from YAML/JSON files:
 ```python
@@ -305,6 +359,13 @@ Key config features:
 - **Probability Reuse**: Same ImageNet probabilities are reused for all target class mappings
 - **Performance Improvement**: Reduces computational overhead from O(N) to O(1) EfficientNet calls per image (where N = number of target classes)
 - **Memory Efficiency**: Computes all ImageNet mappings from a single probability tensor
+
+### Model Customization with Regularization
+- **Locked-Text Tuning**: Only vision encoder is fine-tuned, text encoder remains frozen
+- **MSE Regularization**: Prevents catastrophic forgetting by maintaining similarity to original vision weights
+- **Configurable Regularization Weight**: Control trade-off between adaptation and preservation (default: 0.5)
+- **Formula**: `total_loss = task_loss + regularization_weight × MSE(current_weights, original_weights)`
+- **Performance**: Optimal `regularization_weight` typically in range [0.4, 0.6] based on empirical results
 
 ### Progress Bar Management  
 - **Real-time statistics**: Set `enable_real_time_stats: false` in config to disable live download/cache statistics

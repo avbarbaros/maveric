@@ -78,22 +78,37 @@ training:
   epochs: 10
   learning_rate: 0.000001
   weight_decay: 0.01
-  optimizer: "adamw"  # adamw, adam, sgd
-  scheduler: "cosine"  # cosine, linear, constant
-  use_regularization: false
+  warmup_steps: 0
+
+  # Regularization settings
+  use_regularization: true  # Prevent catastrophic forgetting with MSE loss to original weights
+  regularization_weight: 0.5  # Weight for regularization loss (0.0-1.0)
+
+  # Data augmentation settings
   use_augmentation: true
   augmentation_strength: 2  # RandAugment num_ops
   augmentation_magnitude: 9  # RandAugment magnitude
-  
+
+  # Optimization settings
+  optimizer: "adamw"  # adamw, adam, sgd
+  scheduler: "cosine"  # cosine, linear, constant
+  gradient_clip_value: 1.0
+
   # Validation settings
   use_validation: false  # Set to false to disable validation and use all data for training
   validation_method: "stratified_kfold"  # "stratified_kfold" or "simple_split"
   validation_k_folds: 5  # Number of folds for stratified k-fold validation
   validation_split: 0.2  # Fraction for simple split validation (used if method is "simple_split")
-  
+
   # Model checkpointing
   save_best_model: true
   eval_frequency: 1
+  save_frequency: 1
+  keep_last_n_checkpoints: 3
+
+  # Advanced settings
+  mixed_precision: false
+  gradient_accumulation_steps: 1
 
 # Logging and monitoring
 logging:
@@ -171,11 +186,3 @@ visualization:
   style: "default"          # Matplotlib style
   dpi: 100                  # Figure DPI
   save_figures: false       # Save plots to files
-  
-# Model customization settings (if enabled)
-customization:
-  enable_fine_tuning: false  # Set to true if you want to fine-tune models
-  epochs: 5
-  learning_rate: 0.0001
-  weight_decay: 0.01
-  save_checkpoints: true
