@@ -75,9 +75,9 @@ processing:
   
 # Training configuration (for model customization)
 training:
-  epochs: 10
-  learning_rate: 0.000001
-  weight_decay: 0.01
+  epochs: 15
+  learning_rate: 0.0000015
+  weight_decay: 0.005
   warmup_steps: 0
 
   # Regularization settings
@@ -87,7 +87,7 @@ training:
   # Data augmentation settings
   use_augmentation: true
   augmentation_strength: 2  # RandAugment num_ops
-  augmentation_magnitude: 9  # RandAugment magnitude
+  augmentation_magnitude: 4  # RandAugment magnitude
 
   # Optimization settings
   optimizer: "adamw"  # adamw, adam, sgd
