@@ -778,6 +778,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             
             # Try to download and cache the image
             try:
+                print(f"Image not found at cache dir: {cache_path}")
                 response = requests.get(url, timeout=5)
                 response.raise_for_status()
                 
