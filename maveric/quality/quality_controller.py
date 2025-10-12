@@ -537,7 +537,6 @@ class QualityController(BaseComponent):
         import hashlib
         import shutil
         import requests
-        from tqdm import tqdm
         from PIL import Image
         from io import BytesIO
 
@@ -558,12 +557,8 @@ class QualityController(BaseComponent):
         copied_count = 0
         downloaded_count = 0
         failed_count = 0
-        failed_downloads = []  # Store failed downloads to report at the end
 
-        # Use tqdm with leave=True to keep the bar after completion
-        pbar = tqdm(self.filtered_data.iterrows(), total=total_images, desc="Processing images", leave=True)
-
-        for _, row in pbar:
+        for _, row in self.filtered_data.iterrows():
             url = row.get('url')
             if not url:
                 failed_count += 1
@@ -622,21 +617,13 @@ class QualityController(BaseComponent):
 
                 except Exception as e:
                     failed_count += 1
-                    failed_downloads.append({
-                        'filename': src_filename,
-                        'url': url,
-                        'error': str(e)
-                    })
-
-        pbar.close()
+                    # Print failed download immediately
+                    self.log_warning(f"Failed to download: {src_filename}")
+                    self.log_warning(f"  URL: {url}")
+                    self.log_warning(f"  Error: {str(e)}")
 
         # Calculate successful total
         success_count = existing_count + copied_count + downloaded_count
         self.log_info(f"Successfully processed {success_count}/{total_images} images: {copied_count} copied from cache, {downloaded_count} downloaded, {existing_count} already existed")
-
         if failed_count > 0:
-            self.log_warning(f"{failed_count} images failed to process:")
-            for failed in failed_downloads:
-                self.log_warning(f"  ❌ {failed['filename']}")
-                self.log_warning(f"     URL: {failed['url']}")
-                self.log_warning(f"     Error: {failed['error']}")
+            self.log_warning(f"{failed_count} images failed to process (errors shown above)")

@@ -850,7 +850,6 @@ class MAVERICInteractiveQualityControl:
         from pathlib import Path
         from PIL import Image
         from io import BytesIO
-        from tqdm import tqdm
 
         try:
             # Create images directory
@@ -874,13 +873,8 @@ class MAVERICInteractiveQualityControl:
             copied_count = 0
             downloaded_count = 0
             failed_count = 0
-            failed_downloads = []  # Store failed downloads to report at the end
 
-            # Use tqdm with leave=True to keep the bar after completion
-            pbar = tqdm(self.filtered_data.iterrows(), total=total_images, desc="Processing images", leave=True)
-
-            for idx, row in enumerate(pbar, 1):
-                _, row = row  # unpack the tuple from iterrows()
+            for idx, (_, row) in enumerate(self.filtered_data.iterrows(), 1):
                 url = row.get('url')
                 if not url:
                     failed_count += 1
@@ -939,24 +933,16 @@ class MAVERICInteractiveQualityControl:
 
                     except Exception as e:
                         failed_count += 1
-                        failed_downloads.append({
-                            'filename': src_filename,
-                            'url': url,
-                            'error': str(e)
-                        })
-
-            pbar.close()
+                        # Print failed download immediately
+                        print(f"❌ Failed to download: {src_filename}")
+                        print(f"   URL: {url}")
+                        print(f"   Error: {str(e)}")
 
             # Calculate successful total
             success_count = existing_count + copied_count + downloaded_count
-            print(f"✅ Successfully processed {success_count}/{total_images} images: {copied_count} copied from cache, {downloaded_count} downloaded, {existing_count} already existed")
-
+            print(f"\n✅ Successfully processed {success_count}/{total_images} images: {copied_count} copied from cache, {downloaded_count} downloaded, {existing_count} already existed")
             if failed_count > 0:
-                print(f"\n⚠️  {failed_count} images failed to process:")
-                for failed in failed_downloads:
-                    print(f"  ❌ {failed['filename']}")
-                    print(f"     URL: {failed['url']}")
-                    print(f"     Error: {failed['error']}")
+                print(f"⚠️  {failed_count} images failed to process (errors shown above)")
 
         except Exception as e:
             print(f"❌ Error processing images: {e}")
