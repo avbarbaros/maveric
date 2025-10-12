@@ -558,8 +558,12 @@ class QualityController(BaseComponent):
         copied_count = 0
         downloaded_count = 0
         failed_count = 0
+        failed_downloads = []  # Store failed downloads to report at the end
 
-        for _, row in tqdm(self.filtered_data.iterrows(), total=total_images, desc="Processing images"):
+        # Use tqdm with leave=True to keep the bar after completion
+        pbar = tqdm(self.filtered_data.iterrows(), total=total_images, desc="Processing images", leave=True)
+
+        for _, row in pbar:
             url = row.get('url')
             if not url:
                 failed_count += 1
@@ -593,13 +597,12 @@ class QualityController(BaseComponent):
                         src_found = True
                         break
                     except Exception as e:
-                        self.log_warning(f"Failed to copy {src_filename}: {e}")
                         continue
 
             # If not found in cache, download it
             if not src_found:
                 try:
-                    response = requests.get(url, timeout=(2, 5))
+                    response = requests.get(url, timeout=(10, 30))  # Increased timeout: 10s connect, 30s read
                     response.raise_for_status()
 
                     # Load and validate image
@@ -618,13 +621,22 @@ class QualityController(BaseComponent):
                         pass  # Cache save failed, but we have the training image
 
                 except Exception as e:
-                    self.log_warning(f"Failed to download: {src_filename}")
-                    self.log_warning(f"  URL: {url}")
-                    self.log_warning(f"  Error: {str(e)}")
                     failed_count += 1
+                    failed_downloads.append({
+                        'filename': src_filename,
+                        'url': url,
+                        'error': str(e)
+                    })
+
+        pbar.close()
 
         # Calculate successful total
         success_count = existing_count + copied_count + downloaded_count
         self.log_info(f"Successfully processed {success_count}/{total_images} images: {copied_count} copied from cache, {downloaded_count} downloaded, {existing_count} already existed")
+
         if failed_count > 0:
-            self.log_warning(f"{failed_count} images failed to process")
+            self.log_warning(f"{failed_count} images failed to process:")
+            for failed in failed_downloads:
+                self.log_warning(f"  ❌ {failed['filename']}")
+                self.log_warning(f"     URL: {failed['url']}")
+                self.log_warning(f"     Error: {failed['error']}")
