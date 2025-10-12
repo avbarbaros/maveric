@@ -87,7 +87,7 @@ def load_training_dataset_from_directory(directory_path: str) -> Optional[List[D
         return None
 
 
-def convert_to_quality_result(data: List[Dict]) -> QualityResult:
+def convert_to_quality_result(data: List[Dict], input_path: str = None) -> QualityResult:
     """Convert training dataset JSON to QualityResult object."""
     # For model customization, we treat the training data as both original and filtered
     # since it's already been through quality control
@@ -95,7 +95,8 @@ def convert_to_quality_result(data: List[Dict]) -> QualityResult:
         filtered_samples=data,
         original_samples=data,  # Same as filtered since already curated
         thresholds={},  # Already applied in previous step
-        balance_strategy="applied"
+        balance_strategy="applied",
+        source_path=input_path  # Store input path for dataset-specific image cache
     )
 
 
@@ -357,7 +358,7 @@ def main():
         
         # Convert to QualityResult
         print("🔄 Converting to QualityResult...")
-        quality_result = convert_to_quality_result(training_data)
+        quality_result = convert_to_quality_result(training_data, args.input)
         
         # Create training configuration
         training_config = create_training_config(config, args)

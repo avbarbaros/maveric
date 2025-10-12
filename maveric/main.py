@@ -386,7 +386,10 @@ class MAVERIC(BaseComponent):
         Returns:
             Interactive dashboard widget (for Jupyter environments)
         """
-        dashboard = QualityDashboard(cache_dir=self.config.cache_base_dir)
+        dashboard = QualityDashboard(
+            cache_dir=self.config.cache_base_dir,
+            cache_manager=self.cache_manager
+        )
         return dashboard.launch(data)
     
     def get_cache_stats(self) -> Dict[str, Any]:

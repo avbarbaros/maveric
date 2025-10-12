@@ -22,17 +22,19 @@ class QualityDashboard(BaseComponent):
     multiple tabs for different aspects of the data.
     """
     
-    def __init__(self, cache_dir: Optional[str] = None, config: Optional[Any] = None):
+    def __init__(self, cache_dir: Optional[str] = None, config: Optional[Any] = None, cache_manager=None):
         """
         Initialize quality dashboard.
 
         Args:
             cache_dir: Directory for saving/loading data
             config: MAVERICConfig instance for weights and thresholds
+            cache_manager: CacheManager instance for image copying
         """
         super().__init__("QualityDashboard")
         self.cache_dir = Path(cache_dir) if cache_dir else Path.cwd()
         self.config = config
+        self.cache_manager = cache_manager
         self.qc = None
         self.selector = None
         self.visualizers = {
@@ -391,15 +393,23 @@ class QualityDashboard(BaseComponent):
         def export_data(b):
             with export_output:
                 clear_output()
-                
+
                 if self.qc.filtered_data is None:
                     print("No filtered data to export")
                     return
-                
+
                 try:
                     format_type = export_format.value.lower()
-                    self.qc.save_filtered_data(export_path.value, format=format_type)
+                    # Pass cache_manager for image copying
+                    self.qc.save_filtered_data(
+                        export_path.value,
+                        format=format_type,
+                        copy_images=True,
+                        cache_manager=self.cache_manager
+                    )
                     print(f"✅ Exported {len(self.qc.filtered_data)} samples to {export_path.value}")
+                    if self.cache_manager:
+                        print(f"✅ Training images copied to {Path(export_path.value).parent / 'images'}")
                 except Exception as e:
                     print(f"❌ Export failed: {e}")
         

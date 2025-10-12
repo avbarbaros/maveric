@@ -232,7 +232,8 @@ class ModelCustomizer(BaseComponent):
                 'num_ops': training_config.augmentation_strength,
                 'magnitude': training_config.augmentation_magnitude
             },
-            cache_dir=self.cache_base_dir
+            cache_dir=self.cache_base_dir,
+            training_data_path=quality_result.source_path  # Use dataset-specific images folder
         )
         
         # Prepare validation based on configuration
@@ -718,30 +719,47 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                  processor: CLIPProcessor,
                  use_augmentation: bool = True,
                  augmentation_config: Optional[Dict] = None,
-                 cache_dir: Optional[str] = None):
+                 cache_dir: Optional[str] = None,
+                 training_data_path: Optional[str] = None):
         """
         Initialize dataset.
-        
+
         Args:
             samples: List of sample dictionaries
             class_names: List of class names
             processor: CLIP processor
             use_augmentation: Whether to use data augmentation
             augmentation_config: Augmentation configuration
-            cache_dir: Directory for caching images
+            cache_dir: Directory for caching images (global cache)
+            training_data_path: Path to training data JSON (for dataset-specific cache)
         """
         self.samples = samples
         self.class_names = class_names
         self.class_to_idx = {name: i for i, name in enumerate(class_names)}
         self.processor = processor
-        
+
         # Setup augmentation configuration
         self.use_augmentation = use_augmentation
         self.augmentation_config = augmentation_config or {}
-        
-        # Setup image caching
-        self.cache_dir = cache_dir or './cache'
-        self.image_cache_dir = os.path.join(self.cache_dir, 'image_cache')
+
+        # Setup image caching - prioritize dataset-specific images folder
+        if training_data_path:
+            # Use dataset-specific images folder (e.g., .../cifar10/images/)
+            from pathlib import Path
+            dataset_dir = Path(training_data_path).parent if os.path.isfile(training_data_path) else Path(training_data_path)
+            self.image_cache_dir = str(dataset_dir / 'images')
+            print(f"Using dataset-specific image cache: {self.image_cache_dir}")
+        elif cache_dir:
+            # Fallback to global cache
+            self.cache_dir = cache_dir
+            self.image_cache_dir = os.path.join(self.cache_dir, 'image_cache')
+            print(f"Using global image cache: {self.image_cache_dir}")
+        else:
+            # Default fallback
+            self.cache_dir = './cache'
+            self.image_cache_dir = os.path.join(self.cache_dir, 'image_cache')
+            print(f"Using default image cache: {self.image_cache_dir}")
+
         os.makedirs(self.image_cache_dir, exist_ok=True)
         
         # Pre-filter samples to only include those with cached images or that can be downloaded

@@ -474,24 +474,26 @@ class QualityController(BaseComponent):
         
         return result
     
-    def save_filtered_data(self, output_path: str, format: str = 'json'):
+    def save_filtered_data(self, output_path: str, format: str = 'json', copy_images: bool = True, cache_manager=None):
         """
-        Save filtered data to file.
-        
+        Save filtered data to file and optionally copy images to dataset-specific folder.
+
         Args:
             output_path: Output file path
             format: Output format ('json' or 'csv')
+            copy_images: Whether to copy images to dataset-specific images folder
+            cache_manager: CacheManager instance for accessing cached images
         """
         if self.filtered_data is None:
             raise DatasetError("No filtered data to save")
-        
+
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         if format == 'json':
             # Convert to simplified format for JSON
             simplified_data = []
-            
+
             for _, row in self.filtered_data.iterrows():
                 item = {
                     'id': int(row.get('id', 0)),
@@ -501,20 +503,78 @@ class QualityController(BaseComponent):
                     'weighted_class_score': round(float(row.get('weighted_class_score', 0)), 5),
                     'consistency': round(float(row.get('consistency', 0)), 5)
                 }
-                
+
                 # Add quality scores
                 for metric in ['resolution_score', 'sharpness_score', 'color_score', 'target_class_quality']:
                     if metric in row:
                         item[metric] = round(float(row[metric]), 5)
-                
+
                 simplified_data.append(item)
-            
+
             with open(output_path, 'w') as f:
                 json.dump(simplified_data, f, indent=2)
-                
+
         elif format == 'csv':
             self.filtered_data.to_csv(output_path, index=False)
         else:
             raise ValueError(f"Unsupported format: {format}")
-        
+
         self.log_info(f"Saved {len(self.filtered_data)} samples to {output_path}")
+
+        # Copy images to dataset-specific folder
+        if copy_images and cache_manager is not None:
+            self._copy_training_images(output_path, cache_manager)
+
+    def _copy_training_images(self, output_path: Path, cache_manager):
+        """
+        Copy training images to dataset-specific images folder.
+
+        Args:
+            output_path: Path to saved training data JSON
+            cache_manager: CacheManager instance for accessing cached images
+        """
+        import hashlib
+        import shutil
+        from tqdm import tqdm
+
+        output_path = Path(output_path)
+        images_dir = output_path.parent / 'images'
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        self.log_info(f"Copying training images to {images_dir}...")
+
+        copied_count = 0
+        skipped_count = 0
+        failed_count = 0
+
+        for _, row in tqdm(self.filtered_data.iterrows(), total=len(self.filtered_data), desc="Copying images"):
+            url = row.get('url')
+            if not url:
+                continue
+
+            # Calculate image hash
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            src_filename = f"img_{url_hash}.jpg"
+
+            # Source: global cache
+            src_path = cache_manager.image_cache_dir / src_filename
+            # Destination: dataset-specific images folder
+            dst_path = images_dir / src_filename
+
+            # Skip if already exists in destination
+            if dst_path.exists():
+                skipped_count += 1
+                continue
+
+            # Copy if exists in source
+            if src_path.exists():
+                try:
+                    shutil.copy2(src_path, dst_path)
+                    copied_count += 1
+                except Exception as e:
+                    self.log_warning(f"Failed to copy {src_filename}: {e}")
+                    failed_count += 1
+            else:
+                failed_count += 1
+
+        self.log_info(f"Image copying complete: {copied_count} copied, {skipped_count} already exist, {failed_count} failed/missing")

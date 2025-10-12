@@ -46,6 +46,7 @@ class MAVERICInteractiveQualityControl:
         self.config_file = config_file
         self.data = None
         self.filtered_data = None
+        self.cache_base_dir = None  # Will be loaded from config
         
         # Class names for different datasets
         self.cifar10_class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
@@ -154,7 +155,10 @@ class MAVERICInteractiveQualityControl:
         try:
             with open(self.config_file, 'r') as f:
                 config = yaml.safe_load(f)
-            
+
+            # Get cache_base_dir from config
+            self.cache_base_dir = config.get('cache_base_dir', '/content/drive/MyDrive/MAVERIC/maveric_cache')
+
             # Get results_dir from config
             results_dir = config.get('results_dir', '/content/drive/MyDrive/MAVERIC/maveric_experiments')
             
@@ -716,8 +720,15 @@ class MAVERICInteractiveQualityControl:
         plt.tight_layout()
         plt.show()
     
-    def save_filtered_data(self, output_file=None, rotation_size=None):
-        """Save filtered data in the same format as 02_data_curation.py script"""
+    def save_filtered_data(self, output_file=None, rotation_size=None, copy_images=True):
+        """
+        Save filtered data in the same format as 02_data_curation.py script.
+
+        Args:
+            output_file: Output file path (optional)
+            rotation_size: Number of samples per file (optional)
+            copy_images: Whether to copy images to dataset-specific folder (default: True)
+        """
         if self.filtered_data is None:
             print("❌ No filtered data available")
             return None
@@ -813,14 +824,80 @@ class MAVERICInteractiveQualityControl:
                 
                 print(f"📁 Exported {len(output_paths)} training dataset files to: {base_dir}")
                 print(f"   First file: {os.path.basename(output_paths[0])}")
-                
+
+                # Copy images to dataset-specific folder
+                if copy_images and self.cache_base_dir:
+                    self._copy_training_images(base_dir)
+
                 # Return the first file path for backward compatibility
                 return output_paths[0]
         
         except Exception as e:
             print(f"❌ Error saving data: {e}")
             return None
-    
+
+    def _copy_training_images(self, output_dir):
+        """
+        Copy training images from global cache to dataset-specific images folder.
+
+        Args:
+            output_dir: Directory where training JSON files are saved
+        """
+        import hashlib
+        import shutil
+        from pathlib import Path
+
+        try:
+            # Create images directory
+            images_dir = Path(output_dir) / 'images'
+            images_dir.mkdir(parents=True, exist_ok=True)
+
+            # Source: global cache
+            global_cache_dir = Path(self.cache_base_dir) / 'image_cache'
+
+            if not global_cache_dir.exists():
+                print(f"⚠️ Global cache directory not found: {global_cache_dir}")
+                return
+
+            print(f"📦 Copying training images to {images_dir}...")
+
+            copied_count = 0
+            skipped_count = 0
+            failed_count = 0
+
+            for _, row in self.filtered_data.iterrows():
+                url = row.get('url')
+                if not url:
+                    continue
+
+                # Calculate image hash
+                url_hash = hashlib.md5(url.encode()).hexdigest()
+                src_filename = f"img_{url_hash}.jpg"
+
+                # Source and destination paths
+                src_path = global_cache_dir / src_filename
+                dst_path = images_dir / src_filename
+
+                # Skip if already exists
+                if dst_path.exists():
+                    skipped_count += 1
+                    continue
+
+                # Copy if exists in source
+                if src_path.exists():
+                    try:
+                        shutil.copy2(src_path, dst_path)
+                        copied_count += 1
+                    except Exception as e:
+                        failed_count += 1
+                else:
+                    failed_count += 1
+
+            print(f"✅ Images copied: {copied_count} new, {skipped_count} already exist, {failed_count} missing/failed")
+
+        except Exception as e:
+            print(f"❌ Error copying images: {e}")
+
     def save_configuration(self, config_file=None):
         """Save current thresholds and weights to MAVERIC configuration file"""
         if config_file is None:

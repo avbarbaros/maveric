@@ -261,15 +261,18 @@ class QualityResult:
     Data container for quality control operation results.
     Stores filtered samples and comprehensive filtering statistics.
     """
-    
+
     # Sample data - before and after filtering
     filtered_samples: List[Dict[str, Any]]  # Samples that passed quality thresholds
     original_samples: List[Dict[str, Any]]  # Original unfiltered samples for comparison
-    
+
     # Configuration used for filtering
     thresholds: Dict[str, float]  # Quality thresholds applied during filtering
     weights: Dict[str, float] = field(default_factory=dict)  # Metric weights if used
     balance_strategy: str = "none"  # Dataset balancing strategy applied
+
+    # Source path for dataset-specific image cache
+    source_path: Optional[str] = None  # Path to training data JSON file
     
     # Overall statistics - calculated automatically
     filtered_count: int = field(init=False)    # Number of samples after filtering
