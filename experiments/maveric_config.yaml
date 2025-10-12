@@ -43,19 +43,13 @@ metric_weights:
 # These can be adjusted based on your requirements
 quality_thresholds:
   # Visual quality metrics
-  sharpness_score: 0.1      # Image sharpness (0-1)
-  resolution_score: 0.1     # Minimum resolution quality
-  color_score: 0.1          # Color distribution diversity
-  
-  # Semantic quality metrics (NEW - now enabled!)
-  text_quality_score: 0.1   # Text quality (vocabulary, length, language)
-  caption_length_score: 0.1 # Caption length appropriateness
+  sharpness_score: 0.885    # (Mean - Standart_Deviation)
+  resolution_score: 0.382   # (Mean - Standart_Deviation)
+  color_score: 0.782        # (Mean - Standart_Deviation)
   
   # Multimodal metrics
-  weighted_class_score: 0.493     # Composite similarity score across all modalities
-  efficientNet_score: 0.1         # EfficientNet-based class quality scores
-  consistency: 0.1                # Text-image consistency
-  cross_modal_alignment: 0.1      # Cross-modal feature alignment
+  weighted_class_score: 0.487     # (Mean + Standart_Deviation/2)
+  consistency: 0.810              # (Mean + Standart_Deviation/2)
 
 # Caching settings for efficiency
 caching:
@@ -69,30 +63,30 @@ caching:
 
 # Dataset processing settings
 processing:
-  max_samples_per_dataset: 100000  # Limit for memory management
+  max_samples_per_dataset: 1000000  # Limit for memory management
   shuffle_data: true
   seed: 42                         # For reproducible results
   
 # Training configuration (for model customization)
 training:
-  epochs: 15
-  learning_rate: 0.0000015
-  weight_decay: 0.005
+  epochs: 10
+  learning_rate: 0.0000006
+  weight_decay: 0.05
   warmup_steps: 0
 
   # Regularization settings
   use_regularization: true  # Prevent catastrophic forgetting with MSE loss to original weights
-  regularization_weight: 0.5  # Weight for regularization loss (0.0-1.0)
+  regularization_weight: 0.80  # Weight for regularization loss (0.0-1.0)
 
   # Data augmentation settings
   use_augmentation: true
-  augmentation_strength: 2  # RandAugment num_ops
-  augmentation_magnitude: 4  # RandAugment magnitude
+  augmentation_strength: 4  # RandAugment num_ops
+  augmentation_magnitude: 15  # RandAugment magnitude
 
   # Optimization settings
   optimizer: "adamw"  # adamw, adam, sgd
   scheduler: "cosine"  # cosine, linear, constant
-  gradient_clip_value: 1.0
+  gradient_clip_value: 0.5
 
   # Validation settings
   use_validation: false  # Set to false to disable validation and use all data for training
@@ -156,7 +150,7 @@ elevater:
     
   # Retrieval settings for each dataset
   retrieval:
-    num_samples: 10000        # Number of samples to retrieve per dataset
+    num_samples: 10000000     # Number of samples to retrieve per dataset
     similarity_threshold: 0.7  # Minimum similarity for retrieval
     diversification: true      # Enable diversity in retrieval
     
@@ -164,9 +158,9 @@ elevater:
   quality_control:
     enable_filtering: true
     balance_classes: true     # Balance classes after filtering
-    balance_strategy: "min"  # Balancing strategy: median, mean, min, max, none
-    min_samples_per_class: 1 # Minimum samples to keep per class
-    enable_oversampling: false # Enable oversampling for small classes
+    balance_strategy: "median"  # Balancing strategy: median, mean, min, max, none
+    min_samples_per_class: 50 # Minimum samples to keep per class
+    enable_oversampling: true # Enable oversampling for small classes
 
 # Performance optimization
 performance:
