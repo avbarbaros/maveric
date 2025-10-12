@@ -934,6 +934,9 @@ class MAVERICInteractiveQualityControl:
                             pass  # Cache save failed, but we have the training image
 
                     except Exception as e:
+                        print(f"❌ Failed to download: {src_filename}")
+                        print(f"   URL: {url}")
+                        print(f"   Error: {str(e)}")
                         failed_count += 1
 
             # Calculate successful total

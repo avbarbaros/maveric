@@ -618,7 +618,9 @@ class QualityController(BaseComponent):
                         pass  # Cache save failed, but we have the training image
 
                 except Exception as e:
-                    self.log_warning(f"Failed to download {url}: {e}")
+                    self.log_warning(f"Failed to download: {src_filename}")
+                    self.log_warning(f"  URL: {url}")
+                    self.log_warning(f"  Error: {str(e)}")
                     failed_count += 1
 
         # Calculate successful total
