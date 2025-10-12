@@ -545,16 +545,24 @@ class QualityController(BaseComponent):
         images_dir = output_path.parent / 'images'
         images_dir.mkdir(parents=True, exist_ok=True)
 
-        self.log_info(f"Processing training images to {images_dir}...")
+        total_images = len(self.filtered_data)
+        self.log_info(f"Processing {total_images} training images to {images_dir}...")
+
+        # Check how many already exist
+        existing_count = sum(1 for _, row in self.filtered_data.iterrows()
+                           if row.get('url') and (images_dir / f"img_{hashlib.md5(row.get('url').encode()).hexdigest()}.jpg").exists())
+
+        if existing_count > 0:
+            self.log_info(f"Found {existing_count} images already in destination, will process {total_images - existing_count} remaining images")
 
         copied_count = 0
         downloaded_count = 0
-        skipped_count = 0
         failed_count = 0
 
-        for _, row in tqdm(self.filtered_data.iterrows(), total=len(self.filtered_data), desc="Processing images"):
+        for _, row in tqdm(self.filtered_data.iterrows(), total=total_images, desc="Processing images"):
             url = row.get('url')
             if not url:
+                failed_count += 1
                 continue
 
             # Calculate image hash
@@ -573,7 +581,6 @@ class QualityController(BaseComponent):
 
             # Skip if already exists in destination
             if dst_path.exists():
-                skipped_count += 1
                 continue
 
             # Try to copy from cache (hierarchical first, then flat)
@@ -614,4 +621,8 @@ class QualityController(BaseComponent):
                     self.log_warning(f"Failed to download {url}: {e}")
                     failed_count += 1
 
-        self.log_info(f"Image processing complete: {copied_count} copied from cache, {downloaded_count} downloaded, {skipped_count} already exist, {failed_count} failed")
+        # Calculate successful total
+        success_count = existing_count + copied_count + downloaded_count
+        self.log_info(f"Successfully processed {success_count}/{total_images} images: {copied_count} copied from cache, {downloaded_count} downloaded, {existing_count} already existed")
+        if failed_count > 0:
+            self.log_warning(f"{failed_count} images failed to process")

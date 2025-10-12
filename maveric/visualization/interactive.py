@@ -850,6 +850,7 @@ class MAVERICInteractiveQualityControl:
         from pathlib import Path
         from PIL import Image
         from io import BytesIO
+        from tqdm import tqdm
 
         try:
             # Create images directory
@@ -860,16 +861,25 @@ class MAVERICInteractiveQualityControl:
             global_cache_dir = Path(self.cache_base_dir) / 'image_cache'
             global_cache_dir.mkdir(parents=True, exist_ok=True)
 
-            print(f"📦 Processing training images to {images_dir}...")
+            total_images = len(self.filtered_data)
+            print(f"📦 Processing {total_images} training images to {images_dir}...")
+
+            # Check how many already exist
+            existing_count = sum(1 for _, row in self.filtered_data.iterrows()
+                               if row.get('url') and (images_dir / f"img_{hashlib.md5(row.get('url').encode()).hexdigest()}.jpg").exists())
+
+            if existing_count > 0:
+                print(f"ℹ️  Found {existing_count} images already in destination, will process {total_images - existing_count} remaining images")
 
             copied_count = 0
             downloaded_count = 0
-            skipped_count = 0
             failed_count = 0
 
-            for _, row in self.filtered_data.iterrows():
+            for idx, row in enumerate(tqdm(self.filtered_data.iterrows(), total=total_images, desc="Processing images"), 1):
+                _, row = row  # unpack the tuple from iterrows()
                 url = row.get('url')
                 if not url:
+                    failed_count += 1
                     continue
 
                 # Calculate image hash
@@ -888,7 +898,6 @@ class MAVERICInteractiveQualityControl:
 
                 # Skip if already exists
                 if dst_path.exists():
-                    skipped_count += 1
                     continue
 
                 # Try to copy from cache (hierarchical first, then flat)
@@ -927,7 +936,11 @@ class MAVERICInteractiveQualityControl:
                     except Exception as e:
                         failed_count += 1
 
-            print(f"✅ Images processed: {copied_count} copied from cache, {downloaded_count} downloaded, {skipped_count} already exist, {failed_count} failed")
+            # Calculate successful total
+            success_count = existing_count + copied_count + downloaded_count
+            print(f"✅ Successfully processed {success_count}/{total_images} images: {copied_count} copied from cache, {downloaded_count} downloaded, {existing_count} already existed")
+            if failed_count > 0:
+                print(f"⚠️  {failed_count} images failed to process")
 
         except Exception as e:
             print(f"❌ Error processing images: {e}")
