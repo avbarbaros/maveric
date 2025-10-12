@@ -528,6 +528,7 @@ class QualityController(BaseComponent):
     def _copy_training_images(self, output_path: Path, cache_manager):
         """
         Copy training images to dataset-specific images folder.
+        If image is not in cache, download it.
 
         Args:
             output_path: Path to saved training data JSON
@@ -535,19 +536,23 @@ class QualityController(BaseComponent):
         """
         import hashlib
         import shutil
+        import requests
         from tqdm import tqdm
+        from PIL import Image
+        from io import BytesIO
 
         output_path = Path(output_path)
         images_dir = output_path.parent / 'images'
         images_dir.mkdir(parents=True, exist_ok=True)
 
-        self.log_info(f"Copying training images to {images_dir}...")
+        self.log_info(f"Processing training images to {images_dir}...")
 
         copied_count = 0
+        downloaded_count = 0
         skipped_count = 0
         failed_count = 0
 
-        for _, row in tqdm(self.filtered_data.iterrows(), total=len(self.filtered_data), desc="Copying images"):
+        for _, row in tqdm(self.filtered_data.iterrows(), total=len(self.filtered_data), desc="Processing images"):
             url = row.get('url')
             if not url:
                 continue
@@ -556,8 +561,13 @@ class QualityController(BaseComponent):
             url_hash = hashlib.md5(url.encode()).hexdigest()
             src_filename = f"img_{url_hash}.jpg"
 
-            # Source: global cache
-            src_path = cache_manager.image_cache_dir / src_filename
+            # Check hierarchical structure first (new format: image_cache/ae/img_aeb88f14....jpg)
+            subdir = url_hash[:2]
+            src_path_hierarchical = cache_manager.image_cache_dir / subdir / src_filename
+
+            # Check flat structure for backward compatibility
+            src_path_flat = cache_manager.image_cache_dir / src_filename
+
             # Destination: dataset-specific images folder
             dst_path = images_dir / src_filename
 
@@ -566,15 +576,42 @@ class QualityController(BaseComponent):
                 skipped_count += 1
                 continue
 
-            # Copy if exists in source
-            if src_path.exists():
-                try:
-                    shutil.copy2(src_path, dst_path)
-                    copied_count += 1
-                except Exception as e:
-                    self.log_warning(f"Failed to copy {src_filename}: {e}")
-                    failed_count += 1
-            else:
-                failed_count += 1
+            # Try to copy from cache (hierarchical first, then flat)
+            src_found = False
+            for src_path in [src_path_hierarchical, src_path_flat]:
+                if src_path.exists():
+                    try:
+                        shutil.copy2(src_path, dst_path)
+                        copied_count += 1
+                        src_found = True
+                        break
+                    except Exception as e:
+                        self.log_warning(f"Failed to copy {src_filename}: {e}")
+                        continue
 
-        self.log_info(f"Image copying complete: {copied_count} copied, {skipped_count} already exist, {failed_count} failed/missing")
+            # If not found in cache, download it
+            if not src_found:
+                try:
+                    response = requests.get(url, timeout=(2, 5))
+                    response.raise_for_status()
+
+                    # Load and validate image
+                    image = Image.open(BytesIO(response.content)).convert('RGB')
+
+                    # Save to destination
+                    image.save(str(dst_path), 'JPEG', quality=95)
+                    downloaded_count += 1
+
+                    # Also save to hierarchical cache for future use
+                    try:
+                        cache_subdir = cache_manager.image_cache_dir / subdir
+                        cache_subdir.mkdir(parents=True, exist_ok=True)
+                        image.save(str(src_path_hierarchical), 'JPEG', quality=95)
+                    except Exception:
+                        pass  # Cache save failed, but we have the training image
+
+                except Exception as e:
+                    self.log_warning(f"Failed to download {url}: {e}")
+                    failed_count += 1
+
+        self.log_info(f"Image processing complete: {copied_count} copied from cache, {downloaded_count} downloaded, {skipped_count} already exist, {failed_count} failed")

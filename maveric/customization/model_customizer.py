@@ -779,40 +779,49 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         from tqdm import tqdm
         
         print(f"Filtering {len(self.samples)} samples to find valid images...")
-        
+
         for sample in tqdm(self.samples, desc="Validating samples"):
             url = sample.get('url')
             if not url:
                 continue
-                
-            # Create cache path
+
+            # Create cache path using hierarchical structure
             url_hash = hashlib.md5(url.encode()).hexdigest()
-            cache_path = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
-            
-            # Check if image is already cached and valid
-            if os.path.exists(cache_path):
-                print(f"Image found at cache dir: {cache_path}")
+
+            # Check hierarchical structure first (new format: image_cache/ae/img_aeb88f14....jpg)
+            subdir = url_hash[:2]
+            cache_subdir = os.path.join(self.image_cache_dir, subdir)
+            cache_path_hierarchical = os.path.join(cache_subdir, f"img_{url_hash}.jpg")
+
+            # Check flat structure for backward compatibility
+            cache_path_flat = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
+
+            # Check if image is already cached (try hierarchical first, then flat)
+            if os.path.exists(cache_path_hierarchical):
                 self.valid_samples.append(sample)
                 continue
-            
+            elif os.path.exists(cache_path_flat):
+                self.valid_samples.append(sample)
+                continue
+
             # Try to download and cache the image
             try:
-                print(f"Image NOT found at cache dir: {cache_path} \nDownloading...")
                 response = requests.get(url, timeout=(2,5))
                 response.raise_for_status()
-                
+
                 # Test if image can be loaded
                 image = Image.open(BytesIO(response.content)).convert('RGB')
-                
-                # Save to cache
+
+                # Save to cache using hierarchical structure
                 try:
-                    image.save(cache_path, 'JPEG', quality=95)
+                    os.makedirs(cache_subdir, exist_ok=True)
+                    image.save(cache_path_hierarchical, 'JPEG', quality=95)
                 except Exception:
                     pass  # Cache save failed, but image is valid
-                
+
                 # Image is valid, add to valid samples
                 self.valid_samples.append(sample)
-                
+
             except Exception:
                 # Skip invalid samples
                 continue
@@ -827,23 +836,29 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
     def _safe_get_image(self, url):
         """Load image from cache (simplified since we pre-filtered valid images)"""
         from PIL import Image
-        
+
         if not url:
             return self._create_placeholder_image()
 
         # Create a hash of the URL for caching
         url_hash = hashlib.md5(url.encode()).hexdigest()
-        cache_path = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
 
-        # Since we pre-filtered, image should be cached and valid
-        if os.path.exists(cache_path):
-            try:
-                image = Image.open(cache_path)
-                image.load()
-                return image.convert('RGB')
-            except Exception:
-                # Fallback to placeholder if something went wrong
-                pass
+        # Try hierarchical structure first (new format)
+        subdir = url_hash[:2]
+        cache_path_hierarchical = os.path.join(self.image_cache_dir, subdir, f"img_{url_hash}.jpg")
+
+        # Try flat structure for backward compatibility
+        cache_path_flat = os.path.join(self.image_cache_dir, f"img_{url_hash}.jpg")
+
+        # Check hierarchical first, then flat
+        for cache_path in [cache_path_hierarchical, cache_path_flat]:
+            if os.path.exists(cache_path):
+                try:
+                    image = Image.open(cache_path)
+                    image.load()
+                    return image.convert('RGB')
+                except Exception:
+                    continue
 
         # Fallback - this should rarely happen since we pre-filtered
         return self._create_placeholder_image()

@@ -839,13 +839,17 @@ class MAVERICInteractiveQualityControl:
     def _copy_training_images(self, output_dir):
         """
         Copy training images from global cache to dataset-specific images folder.
+        If image is not in cache, download it.
 
         Args:
             output_dir: Directory where training JSON files are saved
         """
         import hashlib
         import shutil
+        import requests
         from pathlib import Path
+        from PIL import Image
+        from io import BytesIO
 
         try:
             # Create images directory
@@ -854,14 +858,12 @@ class MAVERICInteractiveQualityControl:
 
             # Source: global cache
             global_cache_dir = Path(self.cache_base_dir) / 'image_cache'
+            global_cache_dir.mkdir(parents=True, exist_ok=True)
 
-            if not global_cache_dir.exists():
-                print(f"⚠️ Global cache directory not found: {global_cache_dir}")
-                return
-
-            print(f"📦 Copying training images to {images_dir}...")
+            print(f"📦 Processing training images to {images_dir}...")
 
             copied_count = 0
+            downloaded_count = 0
             skipped_count = 0
             failed_count = 0
 
@@ -874,8 +876,14 @@ class MAVERICInteractiveQualityControl:
                 url_hash = hashlib.md5(url.encode()).hexdigest()
                 src_filename = f"img_{url_hash}.jpg"
 
-                # Source and destination paths
-                src_path = global_cache_dir / src_filename
+                # Check hierarchical structure first (new format: image_cache/ae/img_aeb88f14....jpg)
+                subdir = url_hash[:2]
+                src_path_hierarchical = global_cache_dir / subdir / src_filename
+
+                # Check flat structure for backward compatibility
+                src_path_flat = global_cache_dir / src_filename
+
+                # Destination path
                 dst_path = images_dir / src_filename
 
                 # Skip if already exists
@@ -883,20 +891,46 @@ class MAVERICInteractiveQualityControl:
                     skipped_count += 1
                     continue
 
-                # Copy if exists in source
-                if src_path.exists():
+                # Try to copy from cache (hierarchical first, then flat)
+                src_found = False
+                for src_path in [src_path_hierarchical, src_path_flat]:
+                    if src_path.exists():
+                        try:
+                            shutil.copy2(src_path, dst_path)
+                            copied_count += 1
+                            src_found = True
+                            break
+                        except Exception as e:
+                            continue
+
+                # If not found in cache, download it
+                if not src_found:
                     try:
-                        shutil.copy2(src_path, dst_path)
-                        copied_count += 1
+                        response = requests.get(url, timeout=(2, 5))
+                        response.raise_for_status()
+
+                        # Load and validate image
+                        image = Image.open(BytesIO(response.content)).convert('RGB')
+
+                        # Save to destination
+                        image.save(dst_path, 'JPEG', quality=95)
+                        downloaded_count += 1
+
+                        # Also save to hierarchical cache for future use
+                        try:
+                            cache_subdir = global_cache_dir / subdir
+                            cache_subdir.mkdir(parents=True, exist_ok=True)
+                            image.save(src_path_hierarchical, 'JPEG', quality=95)
+                        except Exception:
+                            pass  # Cache save failed, but we have the training image
+
                     except Exception as e:
                         failed_count += 1
-                else:
-                    failed_count += 1
 
-            print(f"✅ Images copied: {copied_count} new, {skipped_count} already exist, {failed_count} missing/failed")
+            print(f"✅ Images processed: {copied_count} copied from cache, {downloaded_count} downloaded, {skipped_count} already exist, {failed_count} failed")
 
         except Exception as e:
-            print(f"❌ Error copying images: {e}")
+            print(f"❌ Error processing images: {e}")
 
     def save_configuration(self, config_file=None):
         """Save current thresholds and weights to MAVERIC configuration file"""

@@ -84,24 +84,51 @@ class CacheManager(BaseComponent):
     def _get_url_hash(self, url: str) -> str:
         """Generate hash for URL."""
         return hashlib.md5(url.encode()).hexdigest()
-    
+
+    def _get_hierarchical_cache_path(self, url_hash: str, create_dirs: bool = True) -> Path:
+        """
+        Get hierarchical cache path based on first 2 characters of hash.
+
+        Args:
+            url_hash: MD5 hash of URL
+            create_dirs: Whether to create subdirectory if it doesn't exist
+
+        Returns:
+            Path to hierarchical cache location
+
+        Example:
+            hash='aeb88f14...' -> image_cache/ae/img_aeb88f14....jpg
+            This distributes 270K files into 256 subdirectories (~1K files each)
+        """
+        # Use first 2 hex characters as subdirectory (256 possible dirs: 00-ff)
+        subdir = url_hash[:2]
+        cache_subdir = self.image_cache_dir / subdir
+
+        if create_dirs:
+            cache_subdir.mkdir(parents=True, exist_ok=True)
+
+        return cache_subdir
+
     def cache_image(self, url: str, image: Image.Image) -> str:
         """
-        Cache an image and return cache path.
-        
+        Cache an image and return cache path using hierarchical structure.
+
         Args:
             url: Original image URL
             image: PIL Image to cache
-            
+
         Returns:
             Path to cached image
         """
         if not self.enable_image_cache:
             return ""
-        
+
         url_hash = self._get_url_hash(url)
         cache_filename = f"img_{url_hash}.{self.cache_format}"
-        cache_path = self.image_cache_dir / cache_filename
+
+        # Use hierarchical directory structure
+        cache_subdir = self._get_hierarchical_cache_path(url_hash, create_dirs=True)
+        cache_path = cache_subdir / cache_filename
         
         try:
             # Save image
@@ -126,35 +153,38 @@ class CacheManager(BaseComponent):
     
     def get_cached_image(self, url: str) -> Optional[Image.Image]:
         """
-        Retrieve cached image if exists.
-        
+        Retrieve cached image if exists (checks both hierarchical and flat structure).
+
         Args:
             url: Original image URL
-            
+
         Returns:
             PIL Image if cached, None otherwise
         """
         if not self.enable_image_cache:
             return None
-        
+
         url_hash = self._get_url_hash(url)
-        
-        # Try different formats
+
+        # Try hierarchical structure first (new format)
+        cache_subdir = self._get_hierarchical_cache_path(url_hash, create_dirs=False)
+
+        # Try different formats in hierarchical structure
         for ext in [self.cache_format, 'jpg', 'png']:
             cache_filename = f"img_{url_hash}.{ext}"
-            cache_path = self.image_cache_dir / cache_filename
-            
+            cache_path = cache_subdir / cache_filename
+
             if cache_path.exists():
                 try:
                     image = Image.open(cache_path)
                     # Force load to verify integrity
                     image.load()
                     self.stats['cache_hits'] += 1
-                    
+
                     # Call stats callback if provided
                     if self.stats_callback:
                         self.stats_callback(self.stats.copy())
-                        
+
                     return image.convert('RGB')
                 except Exception as e:
                     self.log_warning(f"Corrupted cache file {cache_filename}: {e}")
@@ -163,7 +193,32 @@ class CacheManager(BaseComponent):
                         cache_path.unlink()
                     except:
                         pass
-        
+
+        # Fallback: Try flat structure (backward compatibility with existing cache)
+        for ext in [self.cache_format, 'jpg', 'png']:
+            cache_filename = f"img_{url_hash}.{ext}"
+            cache_path = self.image_cache_dir / cache_filename
+
+            if cache_path.exists():
+                try:
+                    image = Image.open(cache_path)
+                    # Force load to verify integrity
+                    image.load()
+                    self.stats['cache_hits'] += 1
+
+                    # Call stats callback if provided
+                    if self.stats_callback:
+                        self.stats_callback(self.stats.copy())
+
+                    return image.convert('RGB')
+                except Exception as e:
+                    self.log_warning(f"Corrupted cache file {cache_filename}: {e}")
+                    # Remove corrupted file
+                    try:
+                        cache_path.unlink()
+                    except:
+                        pass
+
         self.stats['cache_misses'] += 1
         return None
     
