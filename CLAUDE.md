@@ -7,15 +7,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 MAVERIC is a multi-modal dataset curation system for vision-language models. The codebase follows a modular architecture:
 
 - **`maveric/main.py`**: Main MAVERIC class providing high-level API for retrieval, quality control, and model customization
+- **`maveric/config.py`**: Dataclass-based configuration system (MAVERICConfig, TrainingConfig, ExperimentConfig)
 - **`maveric/core/`**: Base interfaces, exceptions, abstract components, and progress tracking system
+  - `base.py`: BaseComponent, BaseDataset, BaseMetric abstract classes
+  - `interfaces.py`: RetrievalResult, QualityResult, CustomizationResult, ProgressCallback
+  - `exceptions.py`: MAVERICError hierarchy (ConfigurationError, DatasetError, ModelError, CacheError)
+  - `progress.py`: RealTimeStats for live statistics tracking
 - **`maveric/retrieval/`**: Dataset retrieval and caching system with CLIP-based embedding
+  - `retriever.py`: Main retrieval engine with quality metric computation
+  - `cache_manager.py`: Smart caching for images, embeddings, and results
+  - `dataset_handlers.py`: Handlers for different dataset formats (REACT, etc.)
 - **`maveric/quality/`**: Quality assessment metrics (visual, semantic, multimodal consistency)
+  - `quality_controller.py`: Main quality control orchestration
+  - `filters.py`: Quality-based filtering and dataset balancing
+  - `metrics/`: Quality metric implementations organized by category
 - **`maveric/customization/`**: Model fine-tuning with filtered data
+  - `model_customizer.py`: High-level fine-tuning API
+  - `training.py`: Training loop with Trainer and TrainingMonitor
+  - `evaluation.py`: Model evaluation on test sets
 - **`maveric/interactive/`**: Jupyter widgets for threshold selection and quality dashboards
+  - `threshold_selector.py`: Interactive threshold tuning widget
+  - `quality_dashboard.py`: Quality distribution visualization dashboard
+  - `widgets.py`: Reusable UI components
 - **`maveric/visualization/`**: Data distribution plots and sample galleries
+  - `distributions.py`: MetricsVisualizer for distribution plots
+  - `samples.py`: SampleVisualizer for image galleries
+  - `interactive.py`: Full-featured MAVERICInteractiveQualityControl GUI
+  - `plots.py`: Utility plotting functions
 - **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 9 torchvision + 11 file-based)
+  - `elevater_datasets.py`: ELEVATER benchmark dataset implementations
+  - `dataset_factory.py`: Factory for creating dataset instances
 - **`maveric/models/`**: CLIP model wrappers and factory patterns
+  - `clip_wrapper.py`: CLIP model wrapper with utilities
+  - `model_factory.py`: Factory for creating model instances
 - **`maveric/utils/`**: Command-line interface, I/O utilities, logging, and visualization helpers
+  - `cli.py`: Complete CLI for all MAVERIC operations
+  - `io_utils.py`: File handling and data serialization
+  - `logging.py`: Structured logging system
+  - `visualization.py`: Visualization helper utilities
 
 ## Development Commands
 
@@ -150,6 +179,22 @@ python experiments/05_hyperparameter_search.py \
 
 See `experiments/HYPERPARAMETER_SEARCH.md` for detailed guide and search strategies.
 
+## Experiment Scripts
+
+The `experiments/` directory contains end-to-end workflows for different stages:
+
+- **`00_setup.py`**: Environment setup script for automated installation and configuration
+- **`01_data_retrieval.py`**: Data retrieval from source datasets with CLIP-based matching
+- **`02_data_curation.py`**: Quality control and filtering of retrieved data
+- **`03_model_customization.py`**: Model fine-tuning with curated datasets
+- **`04_results_analysis.py`**: Analysis and visualization of experiment results
+- **`05_hyperparameter_search.py`**: Systematic hyperparameter optimization
+- **`maveric_config.yaml`**: Configuration file with optimal hyperparameters
+- **`run_hp_search.sh`**: Shell script for running hyperparameter searches
+- **`HYPERPARAMETER_SEARCH.md`**: Comprehensive guide for hyperparameter optimization
+
+Each script is designed to be run independently or as part of a complete pipeline.
+
 ## Configuration System
 
 MAVERIC uses dataclass-based configuration in `config.py`:
@@ -221,16 +266,33 @@ maveric = MAVERIC.from_config_file('config.yaml')
 - **NEW**: Progress bar suppression for cleaner console output
 
 ### Interactive Dashboard (`maveric/interactive/`)
-- Jupyter widget for real-time threshold tuning with metric weight controls
-- Quality distribution visualization (updated to exclude global composite_quality, now uses imagenet_probability)
+- **ThresholdSelector** (`threshold_selector.py`): Jupyter widget for real-time threshold tuning with metric weight controls
+- **QualityDashboard** (`quality_dashboard.py`): Quality distribution visualization (updated to exclude global composite_quality, now uses imagenet_probability)
+- **Widgets** (`widgets.py`): Reusable UI components including threshold sliders, weight controls, and metric selectors
 - Sample gallery with filtering
 - Interactive controls for metric weights with auto-normalizing sliders that maintain 1.0 sum
 
+### Customization System (`maveric/customization/`)
+- **ModelCustomizer** (`model_customizer.py`): High-level API for model fine-tuning with regularization
+- **Trainer** (`training.py`): Training loop implementation with validation and monitoring
+- **TrainingMonitor** (`training.py`): Real-time training metrics tracking and logging
+- **Evaluator** (`evaluation.py`): Model evaluation on test sets with comprehensive metrics
+
+### Visualization System (`maveric/visualization/`)
+- **MetricsVisualizer** (`distributions.py`): Quality metric distribution plots and analysis
+- **SampleVisualizer** (`samples.py`): Image galleries and sample inspection tools
+- **Interactive GUI** (`interactive.py`): Full-featured interactive quality control interface for Jupyter/Colab
+  - `MAVERICInteractiveQualityControl`: Main interactive controller class
+  - `create_quality_control()`: Factory function for creating GUI instances
+  - `start_interactive_gui()`: Convenience function for launching GUI
+  - Automatic fallback when ipywidgets unavailable
+- **Plotting Utilities** (`plots.py`): Class distribution, correlation matrices, quality comparisons
+
 ### Utilities (`maveric/utils/`)
-- **CLI System**: Complete command-line interface for all MAVERIC operations (retrieve, quality-control, customize, visualize)
-- **I/O Utilities**: File handling, data serialization, and configuration management
-- **Logging**: Structured logging system with configurable levels and formatters
-- **Visualization Helpers**: Utility functions for plotting and data visualization
+- **CLI System** (`cli.py`): Complete command-line interface for all MAVERIC operations (retrieve, quality-control, customize, visualize)
+- **I/O Utilities** (`io_utils.py`): File handling, data serialization, and configuration management
+- **Logging** (`logging.py`): Structured logging system with configurable levels and formatters
+- **Visualization Helpers** (`visualization.py`): Utility functions for plotting and data visualization
 
 ## Data Flow
 
@@ -238,6 +300,34 @@ maveric = MAVERIC.from_config_file('config.yaml')
 2. **Quality Assessment**: Apply visual/semantic metrics → Score each sample → Calculate composite quality scores per class
 3. **Filtering**: Apply thresholds → Balance dataset → Export filtered results
 4. **Customization**: Fine-tune model on filtered data → Evaluate performance
+
+### Data Formats and Outputs
+
+**Retrieval Results**: Saved as rotation files (JSON/pickle) with hierarchical structure:
+- Image metadata (URL, caption, dimensions)
+- Visual metrics: `resolution_score`, `sharpness_score`, `color_score`
+- Semantic metrics: `text_quality_score`, `caption_length_score`
+- Multimodal metrics: Per-class scores (e.g., `Class_airplane_img2img`, `Class_airplane_efficientNet_score`)
+- Composite scores: `weighted_class_score`, `consistency` per class
+
+**Curated Training Data**: Hierarchical directory structure to avoid NFS issues:
+```
+training_data/
+├── class_000/
+│   ├── batch_000/
+│   │   ├── sample_000.jpg
+│   │   ├── sample_001.jpg
+│   │   └── ...
+│   └── batch_001/
+│       └── ...
+└── class_001/
+    └── ...
+```
+
+**Model Checkpoints**: PyTorch model files with training state:
+- `best_model.pth`: Best model based on validation accuracy
+- Training configuration and hyperparameters embedded
+- Compatible with CLIP architecture for downstream tasks
 
 ### Advanced Quality Assessment
 
@@ -322,6 +412,14 @@ Torchvision datasets benefit from automatic downloading, standardized interfaces
 
 ## Important Development Notes
 
+### Package Structure
+- Entry point: `setup.py` defines package metadata and dependencies
+- Core package: `maveric/` contains all source code
+- Tests: `tests/` contains unit and integration tests
+- Examples: `examples/` contains usage examples
+- Experiments: `experiments/` contains end-to-end workflow scripts
+- Documentation: `README.md`, `CLAUDE.md`, `docs/`, and `experiments/HYPERPARAMETER_SEARCH.md`
+
 ### CLI Entry Point
 The CLI entry point is correctly defined in `setup.py:49` as `maveric=maveric.utils.cli:main`, which points to the actual CLI implementation in `maveric/utils/cli.py`.
 
@@ -346,6 +444,17 @@ Key config features:
 - YAML/JSON loading support
 - Auto device detection when set to "auto"
 - Automatic directory creation in `__post_init__`
+- Smart path handling: Replaces inaccessible `/content/` paths with local alternatives when not in Colab
+- Legacy field mapping: Automatically maps deprecated config fields to current versions
+
+### Google Colab and Drive Compatibility
+MAVERIC is optimized for Google Colab environments:
+- **Setup script**: `experiments/00_setup.py` handles Colab-specific setup including Drive mounting
+- **Path handling**: Config system detects and replaces inaccessible Colab paths
+- **Hierarchical storage**: Avoids Google Drive NFS mount issues with hierarchical file organization
+- **Progress tracking**: Configurable progress displays suitable for Colab notebooks
+- **Environment variables**: Automatic setup of `MAVERIC_BASE_DIR`, `MAVERIC_CACHE_DIR`, etc.
+- **System dependencies**: Automated installation of required system packages
 
 ## Performance & Architecture Improvements
 
@@ -379,5 +488,20 @@ Key config features:
 
 ### Memory Optimization
 - **Efficient caching**: Smart image and embedding cache management
-- **Rotation files**: Large datasets automatically split into manageable chunks
+- **Rotation files**: Large datasets automatically split into manageable chunks (default: 1000 samples per file)
+- **Hierarchical file structure**: Implements hierarchical organization to avoid Google Drive NFS mount errors
 - **Resource management**: Better GPU/CPU resource allocation during different phases
+
+### Recent Improvements (Latest Commits)
+- **Hierarchical file structure**: Avoids Google Drive NFS mount issues by organizing data hierarchically
+- **Image copying optimization**: Pre-copies images during curation for faster validation during customization
+- **Enhanced progress tracking**: Improved progress bars with better timeout handling for data saving
+- **Debug logging**: Added detailed logs for slow validation processes
+- **Timeout configuration**: Configurable timeouts for HTTP requests (default: 5s, configurable up to 10s+)
+- **URL tracking**: Outputs file URLs when downloads fail during curation for debugging
+- **Interactive GUI enhancements**:
+  - Reset button for threshold controls
+  - Random sample display on each "Show Samples" click
+  - Combobox for quality threshold presets
+  - EfficientNet prediction visualization tab
+  - Class distribution in EfficientNet filtering
