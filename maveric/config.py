@@ -84,7 +84,10 @@ class MAVERICConfig:
     
     # Reproducibility configuration
     seed: int = 42  # Random seed for reproducible sampling
-    
+
+    # Performance optimization configuration
+    enable_target_class_quality: bool = True  # Enable/disable EfficientNet-based TargetClassQualityMetric (time-consuming)
+
     # Visualization configuration
     viz_style: str = "default"
     viz_dpi: int = 100

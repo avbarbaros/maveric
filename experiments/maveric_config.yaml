@@ -17,6 +17,7 @@ retrieval_rotation_size: 100   # Samples per file when saving intermediate resul
 n_reference_images: 10         # Number of reference images for similarity matching
 max_retries: 3                 # Maximum download retry attempts
 request_timeout: 5             # Request timeout in seconds
+enable_target_class_quality: false  # Disable EfficientNet
 
 # Quality metrics to compute - organized by category
 quality_metrics:

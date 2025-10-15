@@ -53,36 +53,50 @@ class ThresholdFilter(QualityFilter):
     def apply(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Apply threshold filtering.
-        
+
         Args:
             data: Input DataFrame
-            
+
         Returns:
             Filtered DataFrame
         """
         filtered_data = data.copy()
         initial_count = len(filtered_data)
-        
+
+        # Track which metrics were applied and which were skipped
+        applied_metrics = []
+        skipped_metrics = []
+
         # Apply each threshold
         for metric, threshold in self.thresholds.items():
             if metric in filtered_data.columns:
                 before_count = len(filtered_data)
                 filtered_data = filtered_data[filtered_data[metric] >= threshold]
                 removed = before_count - len(filtered_data)
-                
+
+                applied_metrics.append(metric)
+
                 if removed > 0:
                     self.log_debug(
                         f"Threshold {metric} >= {threshold} removed {removed} samples"
                     )
-        
+            else:
+                skipped_metrics.append(metric)
+
+        # Log information about skipped metrics
+        if skipped_metrics:
+            self.log_debug(
+                f"Skipped thresholds for missing metrics: {', '.join(skipped_metrics)}"
+            )
+
         total_removed = initial_count - len(filtered_data)
         retention_rate = len(filtered_data) / initial_count * 100 if initial_count > 0 else 0
-        
+
         self.log_info(
             f"Threshold filtering: {initial_count} → {len(filtered_data)} samples "
-            f"({retention_rate:.1f}% retained)"
+            f"({retention_rate:.1f}% retained, {len(applied_metrics)} metrics applied)"
         )
-        
+
         return filtered_data
 
 

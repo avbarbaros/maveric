@@ -39,6 +39,20 @@ def load_retrieved_dataset(file_path: str) -> Optional[Dict]:
             data = json.load(f)
         print(f"✅ Retrieved dataset loaded from: {file_path}")
         print(f"📊 Total samples: {len(data)}")
+
+        # Check for EfficientNet fields to inform user about data source
+        if data and len(data) > 0:
+            sample = data[0]
+            has_efficientnet = any(
+                'efficientNet_score' in key for key in sample.keys()
+            ) or 'imagenet_probability' in sample
+
+            if has_efficientnet:
+                print("✓ EfficientNet-based metrics detected in data")
+            else:
+                print("ℹ️  EfficientNet metrics not present (data retrieved with --disable-efficientnet)")
+                print("   Visual, semantic, and similarity metrics are still available for filtering")
+
         return data
     except Exception as e:
         print(f"❌ Error loading retrieved dataset: {e}")

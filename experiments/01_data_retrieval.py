@@ -200,8 +200,19 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Standard retrieval with all metrics (including EfficientNet)
   python 01_data_retrieval.py --config maveric_config.yaml
+
+  # Fast retrieval without EfficientNet (50-70%% faster)
+  python 01_data_retrieval.py --config maveric_config.yaml --disable-efficientnet
+
+  # Custom config path
   python 01_data_retrieval.py -c /path/to/config.yaml
+
+Performance Note:
+  Using --disable-efficientnet significantly speeds up retrieval by skipping
+  EfficientNet-based quality metrics (Class_*_efficientNet_score fields).
+  All other metrics (visual, semantic, similarity-based) remain available.
         """
     )
     
@@ -218,14 +229,28 @@ Examples:
         default=1,
         help='Dataset ID for output filename (default: 1)'
     )
-    
+
+    parser.add_argument(
+        '--disable-efficientnet',
+        action='store_true',
+        help='Disable EfficientNet-based TargetClassQualityMetric calculation (speeds up retrieval)'
+    )
+
     return parser.parse_args()
 
 
-def setup_maveric(config: Dict) -> MAVERIC:
-    """Setup MAVERIC instance with configuration."""
+def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAVERIC:
+    """Setup MAVERIC instance with configuration.
+
+    Args:
+        config: Configuration dictionary
+        enable_target_class_quality: Whether to enable EfficientNet-based target class quality metric
+
+    Returns:
+        MAVERIC instance or None on error
+    """
     print("🔧 Setting up MAVERIC...")
-    
+
     try:
         # Create MAVERICConfig object from loaded config
         maveric_config = MAVERICConfig(
@@ -235,15 +260,22 @@ def setup_maveric(config: Dict) -> MAVERIC:
             device=config.get('device', 'auto'),
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
             retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
-            seed=config.get('processing', {}).get('seed', 42)
+            seed=config.get('processing', {}).get('seed', 42),
+            enable_target_class_quality=enable_target_class_quality
         )
-        
+
         # Initialize MAVERIC (real-time stats are enabled by default)
         maveric = MAVERIC(maveric_config)
         print("✅ MAVERIC initialized successfully")
         print(f"🔄 Rotation size configured: {maveric_config.retrieval_rotation_size}")
+
+        if not enable_target_class_quality:
+            print("⚡ EfficientNet-based TargetClassQualityMetric DISABLED (faster retrieval)")
+        else:
+            print("🎯 EfficientNet-based TargetClassQualityMetric ENABLED")
+
         return maveric
-        
+
     except Exception as e:
         print(f"❌ Error setting up MAVERIC: {e}")
         return None
@@ -280,8 +312,9 @@ def main():
     print(f"📁 Output directory: {output_dir}")
     
     try:
-        # Setup MAVERIC 
-        maveric = setup_maveric(config)
+        # Setup MAVERIC with optional EfficientNet disabled
+        enable_target_class_quality = not args.disable_efficientnet
+        maveric = setup_maveric(config, enable_target_class_quality=enable_target_class_quality)
         if not maveric:
             print("❌ Failed to initialize MAVERIC")
             return False

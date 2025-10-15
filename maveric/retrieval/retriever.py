@@ -38,10 +38,11 @@ class Retriever(BaseComponent):
                  cache_manager: Optional[CacheManager] = None,
                  n_reference_images: int = 10,
                  real_time_stats=None,
-                 seed: int = 42):
+                 seed: int = 42,
+                 enable_target_class_quality: bool = True):
         """
         Initialize retriever.
-        
+
         Args:
             clip_model: CLIP model to use
             device: Computation device
@@ -49,22 +50,24 @@ class Retriever(BaseComponent):
             n_reference_images: Number of reference images per class
             real_time_stats: Real-time stats object for progress tracking
             seed: Random seed for reproducible sampling
+            enable_target_class_quality: Enable EfficientNet-based TargetClassQualityMetric (default: True)
         """
         super().__init__("Retriever")
-        
+
         self.clip_model_name = clip_model
         self.device = device if torch.cuda.is_available() else "cpu"
         self.cache_manager = cache_manager
         self.n_reference_images = n_reference_images
         self.real_time_stats = real_time_stats
         self.seed = seed
-        
+        self.enable_target_class_quality = enable_target_class_quality
+
         # Initialize CLIP model
         self._init_clip_model()
-        
+
         # Initialize quality metrics
         self._init_quality_metrics()
-        
+
         # Storage for embeddings
         self.reference_embeddings = {}
         self.text_embeddings = {}
@@ -87,8 +90,14 @@ class Retriever(BaseComponent):
             'resolution': ResolutionMetric(),
             'sharpness': SharpnessMetric(),
             'color_diversity': ColorDiversityMetric(),
-            'target_class_quality': TargetClassQualityMetric()  # Used for per-class efficientNet_score calculation
         }
+
+        # Conditionally add TargetClassQualityMetric (EfficientNet-based, time-consuming)
+        if self.enable_target_class_quality:
+            self.quality_metrics['target_class_quality'] = TargetClassQualityMetric()
+            self.log_info("TargetClassQualityMetric enabled (EfficientNet-based scoring)")
+        else:
+            self.log_info("TargetClassQualityMetric disabled (skipping EfficientNet calculations)")
     
     def prepare_reference_embeddings(self, 
                                    target_dataset: str,
@@ -316,19 +325,26 @@ class Retriever(BaseComponent):
                 self.log_debug("No reference embeddings available for class score computation")
                 return {}, {}
             
-            # OPTIMIZATION: Compute ImageNet mappings for ALL target classes at once
+            # OPTIMIZATION: Compute ImageNet mappings for ALL target classes at once (if enabled)
             target_classes = list(self.reference_embeddings.keys())
-            imagenet_mappings = self._compute_all_imagenet_mappings(image, text, target_classes)
-            
-            # Get global ImageNet prediction for this image
-            global_imagenet_pred, global_imagenet_prob = ("", 0.0)
-            if 'target_class_quality' in self.quality_metrics:
-                metric = self.quality_metrics['target_class_quality']
-                try:
-                    global_imagenet_pred, global_imagenet_prob = metric.compute_single_imagenet_prediction(image)
-                except Exception as e:
-                    self.log_debug(f"Error getting global ImageNet prediction: {e}")
-                    global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+
+            # Only compute EfficientNet-based scores if enabled
+            if self.enable_target_class_quality:
+                imagenet_mappings = self._compute_all_imagenet_mappings(image, text, target_classes)
+
+                # Get global ImageNet prediction for this image
+                global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+                if 'target_class_quality' in self.quality_metrics:
+                    metric = self.quality_metrics['target_class_quality']
+                    try:
+                        global_imagenet_pred, global_imagenet_prob = metric.compute_single_imagenet_prediction(image)
+                    except Exception as e:
+                        self.log_debug(f"Error getting global ImageNet prediction: {e}")
+                        global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+            else:
+                # Skip EfficientNet calculations entirely
+                imagenet_mappings = {class_name: ("", 0.0, 0.0) for class_name in target_classes}
+                global_imagenet_pred, global_imagenet_prob = ("", 0.0)
             
             for class_name in target_classes:
                 # Similarity computations
@@ -363,7 +379,8 @@ class Retriever(BaseComponent):
                 
                 # Get pre-computed EfficientNet score and CLIP similarity (no additional EfficientNet calls!)
                 predicted_imagenet_class, clip_similarity, efficientNet_score = imagenet_mappings.get(class_name, ("", 0.0, 0.0))
-                
+
+                # Build class scores dictionary
                 class_scores[class_name] = {
                     'hybrid_score': round(float(hybrid_score), 5),
                     'img2img': round(float(img2img), 5),
@@ -371,9 +388,12 @@ class Retriever(BaseComponent):
                     'img2txt': round(float(img2txt), 5),
                     'txt2img': round(float(txt2img), 5),
                     'consistency': round(float(consistency), 5),
-                    'clip_similarity_to_imagenet': round(float(clip_similarity), 5),
-                    'efficientNet_score': round(float(efficientNet_score), 5)
                 }
+
+                # Only include EfficientNet-based scores if enabled
+                if self.enable_target_class_quality:
+                    class_scores[class_name]['clip_similarity_to_imagenet'] = round(float(clip_similarity), 5)
+                    class_scores[class_name]['efficientNet_score'] = round(float(efficientNet_score), 5)
             
             # Compute quality scores (exclude target_class_quality as it's now per-class)
             quality_scores = {}
@@ -391,10 +411,11 @@ class Retriever(BaseComponent):
                     self.log_warning(f"Error computing {metric_name}: {e}")
                     quality_scores[metric.metric_name] = 0.0
             
-            # Add global ImageNet prediction fields
-            quality_scores['imagenet_predicted_class'] = global_imagenet_pred
-            quality_scores['imagenet_probability'] = round(float(global_imagenet_prob), 5)
-            
+            # Add global ImageNet prediction fields (only if EfficientNet is enabled)
+            if self.enable_target_class_quality:
+                quality_scores['imagenet_predicted_class'] = global_imagenet_pred
+                quality_scores['imagenet_probability'] = round(float(global_imagenet_prob), 5)
+
             return class_scores, quality_scores
             
         except Exception as e:
