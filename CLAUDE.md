@@ -563,12 +563,14 @@ The curation script will display:
 - **Resource management**: Better GPU/CPU resource allocation during different phases
 
 ### Recent Improvements (Latest Commits)
-- **Hierarchical file structure**: Avoids Google Drive NFS mount issues by organizing data hierarchically
-- **Image copying optimization**: Pre-copies images during curation for faster validation during customization
-- **Enhanced progress tracking**: Improved progress bars with better timeout handling for data saving
-- **Debug logging**: Added detailed logs for slow validation processes
-- **Timeout configuration**: Configurable timeouts for HTTP requests (default: 5s, configurable up to 10s+)
-- **URL tracking**: Outputs file URLs when downloads fail during curation for debugging
+- **Optional EfficientNet**: EfficientNet calculations can be disabled via `enable_target_class_quality: false` for ~50-70% faster retrieval (commit 8d54ac5)
+- **Hierarchical file structure**: Avoids Google Drive NFS mount issues by organizing data hierarchically (commit 101170c)
+- **Image copying optimization**: Pre-copies images during curation for faster validation during customization (commit 97aa1bd)
+- **Enhanced progress tracking**: Improved progress bars with better timeout handling for data saving (commits 9468f77, f908a6c)
+- **Debug logging**: Added detailed logs for slow validation processes (commit d961256)
+- **Timeout configuration**: Configurable timeouts for HTTP requests (default: 5s, configurable up to 10s+) (commit 50b0b1a)
+- **URL tracking**: Outputs file URLs when downloads fail during curation for debugging (commit 3459d12)
+- **Cleaner output**: Save data output cleaning for better console readability (commit cf27497)
 - **Interactive GUI enhancements**:
   - Reset button for threshold controls
   - Random sample display on each "Show Samples" click
