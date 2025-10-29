@@ -297,26 +297,37 @@ class ModelCustomizer(BaseComponent):
             # Create custom dataset for test data
             test_samples = []
             
-            # Convert dataset to samples format  
+            # Convert dataset to samples format
             if hasattr(test_dataset_handler, '_dataset') and test_dataset_handler._dataset:
                 dataset = test_dataset_handler._dataset
+
+                # Get full dataset class names for proper mapping
+                full_dataset_class_names = test_dataset_handler.class_names
+
+                # Create mapping from training class names to indices
                 class_to_idx = {name: idx for idx, name in enumerate(class_names)}
-                
+                training_class_set = set(class_names)
+
                 self.log_info(f"Processing {len(dataset)} test samples from {target_dataset_name}")
-                
+                self.log_info(f"Training classes: {len(class_names)}, Full dataset classes: {len(full_dataset_class_names)}")
+
                 # Use all test samples for complete evaluation
                 from tqdm import tqdm
-                
+
                 for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
                     try:
                         image, label = dataset[idx]
-                        if isinstance(label, int) and label < len(class_names):
-                            class_name = class_names[label]
-                            test_samples.append({
-                                'image': image,
-                                'label': class_name,
-                                'text': f"a photo of a {class_name}."
-                            })
+                        if isinstance(label, int) and label < len(full_dataset_class_names):
+                            # Map test label to actual class name using full dataset class names
+                            class_name = full_dataset_class_names[label]
+
+                            # Only include if this class exists in training data
+                            if class_name in training_class_set:
+                                test_samples.append({
+                                    'image': image,
+                                    'label': class_name,
+                                    'text': f"a photo of a {class_name}."
+                                })
                     except Exception as e:
                         if idx < 10:  # Only log first few errors to avoid spam
                             self.log_warning(f"Error processing test sample {idx}: {e}")
@@ -325,7 +336,13 @@ class ModelCustomizer(BaseComponent):
             if not test_samples:
                 self.log_warning(f"No test samples loaded from {target_dataset_name}")
                 return None
-            
+
+            # Log which classes are missing from training data
+            missing_classes = set(full_dataset_class_names) - training_class_set
+            if missing_classes:
+                self.log_info(f"Excluding {len(missing_classes)} classes not in training data: {sorted(missing_classes)[:10]}" +
+                             ("..." if len(missing_classes) > 10 else ""))
+
             # Create test dataset
             test_dataset = TestDataset(test_samples, class_names, self.processor)
             
