@@ -414,6 +414,23 @@ MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified h
 
 Torchvision datasets benefit from automatic downloading, standardized interfaces, and optimized loading.
 
+### Important Notes for Large Datasets
+
+**Food101 and Other Large Datasets**: Some torchvision datasets (particularly Food101, ~5GB) require initial download which can take significant time:
+- First-time setup will trigger automatic download via torchvision
+- Download progress is logged but may appear slow on Google Drive/Colab
+- Reference sample selection includes detailed progress logging for visibility
+- If the process appears stuck at "Selecting FOOD101 sample data randomly...", it's likely:
+  1. Downloading the dataset (first time only)
+  2. Iterating through 75,750 samples to find class indices
+  3. Loading reference images from disk (can be slow on Google Drive)
+
+**Recommended Approach for Large Datasets**:
+1. Monitor the detailed progress logs that show per-class processing
+2. Be patient during first run - dataset will be cached for subsequent runs
+3. Consider using local storage instead of Google Drive for faster I/O
+4. Pre-download datasets outside of MAVERIC if experiencing timeout issues
+
 ## Important Development Notes
 
 ### Package Structure

@@ -325,16 +325,24 @@ class ELEVATERDataset(BaseDataset):
         try:
             import torchvision
             from PIL import Image
-            
+
             # Custom transform to convert dataset images to PIL (matching original code)
             class ConvertToPIL:
                 def __call__(self, img):
                     if not isinstance(img, Image.Image):
                         return Image.fromarray(img)
                     return img
-            
+
             convert_transform = ConvertToPIL()
-            
+
+            # Add informative message if dataset needs to be downloaded
+            if self.download:
+                dataset_path = Path(self.root) / self.dataset_name
+                if not dataset_path.exists() or not any(dataset_path.iterdir()):
+                    print(f"⬇️  Dataset '{self.dataset_name}' not found locally. Downloading...")
+                    print(f"   This may take several minutes depending on dataset size.")
+                    print(f"   Download location: {self.root}")
+
             # Define dataset constructors
             dataset_loaders = {
                 'cifar10': lambda: torchvision.datasets.CIFAR10(
@@ -356,10 +364,11 @@ class ELEVATERDataset(BaseDataset):
                 'oxford_pets': lambda: torchvision.datasets.OxfordIIITPet(
                     root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=convert_transform),
             }
-            
+
             if self.dataset_name not in dataset_loaders:
                 raise DatasetError(f"Torchvision support not implemented for {self.dataset_name}")
-            
+
+            self.log_info(f"Initializing {self.dataset_name.upper()} dataset...")
             self._dataset = dataset_loaders[self.dataset_name]()
             self.log_info(f"Loaded {self.dataset_name.upper()} dataset with {len(self._dataset)} samples")
             
@@ -448,37 +457,61 @@ class ELEVATERDataset(BaseDataset):
         """Get reference samples from torchvision datasets (CIFAR)."""
         if self._dataset is None:
             raise DatasetError("Dataset not loaded")
-        
+
         reference_samples = {}
-        
+
         print(f"Selecting {self.dataset_name.upper()} sample data randomly...")
-        
+        print(f"  Dataset size: {len(self._dataset):,} samples")
+        print(f"  Number of classes: {len(self.class_names)}")
+        print(f"  Samples per class: {n_per_class}")
+
         # Process each class following the original code pattern exactly
         for class_idx, class_name in enumerate(self.class_names):
+            print(f"  [{class_idx+1}/{len(self.class_names)}] Processing class '{class_name}'...")
+
             # Find all indices for this class (using class index, not name)
             class_indices = [i for i, (_, label) in enumerate(self._dataset) if label == class_idx]
-            
+
+            if not class_indices:
+                print(f"    ⚠️  No samples found for class '{class_name}'")
+                reference_samples[class_name] = []
+                continue
+
+            print(f"    Found {len(class_indices)} samples in class '{class_name}'")
+
             # Use np.random.choice exactly like the original code
             sampled_indices = np.random.choice(
                 class_indices,
                 size=min(n_per_class, len(class_indices)),
                 replace=False
             )
-            
+
             # Get images for this class
             images = []
-            for idx in sampled_indices:
-                # Get the raw image
-                image, _ = self._dataset[idx]
-                
-                # Convert to PIL Image if needed
-                if not isinstance(image, Image.Image):
-                    image = Image.fromarray(image)
-                
-                images.append(image)
-            
+            print(f"    Loading {len(sampled_indices)} reference images...")
+            for sample_num, idx in enumerate(sampled_indices, 1):
+                try:
+                    # Get the raw image
+                    image, _ = self._dataset[idx]
+
+                    # Convert to PIL Image if needed
+                    if not isinstance(image, Image.Image):
+                        image = Image.fromarray(image)
+
+                    images.append(image)
+
+                    # Progress indicator for slow file-based datasets
+                    if sample_num % 5 == 0 or sample_num == len(sampled_indices):
+                        print(f"      Loaded {sample_num}/{len(sampled_indices)} images...")
+
+                except Exception as e:
+                    print(f"      ⚠️  Failed to load image at index {idx}: {e}")
+                    continue
+
             reference_samples[class_name] = images
-        
+            print(f"    ✅ Completed class '{class_name}': {len(images)} images")
+
+        print(f"✅ Reference sampling complete: {len(reference_samples)} classes, {sum(len(imgs) for imgs in reference_samples.values())} total images")
         return reference_samples
     
     def _get_file_based_reference_samples(self, n_per_class: int) -> Dict[str, List[Image.Image]]:
