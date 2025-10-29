@@ -470,7 +470,7 @@ class ELEVATERDataset(BaseDataset):
         # we iterate once through 75K samples (75K iterations)
         print(f"  Building class index map (one-time scan)...")
         class_indices_map = {class_idx: [] for class_idx in range(len(self.class_names))}
-
+        print(f"  Class indices map builded.")
         dataset_size = len(self._dataset)
         progress_interval = max(1, dataset_size // 20)  # Show progress 20 times
 
