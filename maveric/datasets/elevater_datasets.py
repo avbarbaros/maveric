@@ -465,19 +465,40 @@ class ELEVATERDataset(BaseDataset):
         print(f"  Number of classes: {len(self.class_names)}")
         print(f"  Samples per class: {n_per_class}")
 
-        # Process each class following the original code pattern exactly
-        for class_idx, class_name in enumerate(self.class_names):
-            print(f"  [{class_idx+1}/{len(self.class_names)}] Processing class '{class_name}'...")
+        # CRITICAL OPTIMIZATION: Build class index map in ONE pass through dataset
+        # Instead of iterating 101 times through 75K samples (7.6M iterations),
+        # we iterate once through 75K samples (75K iterations)
+        print(f"  Building class index map (one-time scan)...")
+        class_indices_map = {class_idx: [] for class_idx in range(len(self.class_names))}
 
-            # Find all indices for this class (using class index, not name)
-            class_indices = [i for i, (_, label) in enumerate(self._dataset) if label == class_idx]
+        dataset_size = len(self._dataset)
+        progress_interval = max(1, dataset_size // 20)  # Show progress 20 times
+
+        for i in range(dataset_size):
+            try:
+                _, label = self._dataset[i]
+                class_indices_map[label].append(i)
+
+                # Progress indicator
+                if (i + 1) % progress_interval == 0 or i == dataset_size - 1:
+                    percent = ((i + 1) / dataset_size) * 100
+                    print(f"    Progress: {i+1:,}/{dataset_size:,} ({percent:.1f}%)")
+            except Exception as e:
+                # Skip corrupted samples
+                continue
+
+        print(f"  ✅ Index map built. Processing classes...")
+
+        # Now process each class using pre-built index map (much faster!)
+        for class_idx, class_name in enumerate(self.class_names):
+            class_indices = class_indices_map.get(class_idx, [])
 
             if not class_indices:
                 print(f"    ⚠️  No samples found for class '{class_name}'")
                 reference_samples[class_name] = []
                 continue
 
-            print(f"    Found {len(class_indices)} samples in class '{class_name}'")
+            print(f"  [{class_idx+1}/{len(self.class_names)}] Class '{class_name}': {len(class_indices)} samples")
 
             # Use np.random.choice exactly like the original code
             sampled_indices = np.random.choice(
@@ -488,8 +509,7 @@ class ELEVATERDataset(BaseDataset):
 
             # Get images for this class
             images = []
-            print(f"    Loading {len(sampled_indices)} reference images...")
-            for sample_num, idx in enumerate(sampled_indices, 1):
+            for idx in sampled_indices:
                 try:
                     # Get the raw image
                     image, _ = self._dataset[idx]
@@ -500,16 +520,11 @@ class ELEVATERDataset(BaseDataset):
 
                     images.append(image)
 
-                    # Progress indicator for slow file-based datasets
-                    if sample_num % 5 == 0 or sample_num == len(sampled_indices):
-                        print(f"      Loaded {sample_num}/{len(sampled_indices)} images...")
-
                 except Exception as e:
-                    print(f"      ⚠️  Failed to load image at index {idx}: {e}")
+                    print(f"    ⚠️  Failed to load image at index {idx}: {e}")
                     continue
 
             reference_samples[class_name] = images
-            print(f"    ✅ Completed class '{class_name}': {len(images)} images")
 
         print(f"✅ Reference sampling complete: {len(reference_samples)} classes, {sum(len(imgs) for imgs in reference_samples.values())} total images")
         return reference_samples

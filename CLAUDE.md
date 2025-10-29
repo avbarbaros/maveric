@@ -416,20 +416,36 @@ Torchvision datasets benefit from automatic downloading, standardized interfaces
 
 ### Important Notes for Large Datasets
 
-**Food101 and Other Large Datasets**: Some torchvision datasets (particularly Food101, ~5GB) require initial download which can take significant time:
-- First-time setup will trigger automatic download via torchvision
-- Download progress is logged but may appear slow on Google Drive/Colab
-- Reference sample selection includes detailed progress logging for visibility
-- If the process appears stuck at "Selecting FOOD101 sample data randomly...", it's likely:
-  1. Downloading the dataset (first time only)
-  2. Iterating through 75,750 samples to find class indices
-  3. Loading reference images from disk (can be slow on Google Drive)
+**Food101 and Other Large Datasets**: Some torchvision datasets (particularly Food101, ~5GB with 75,750 training samples) require special handling:
+- **First-time setup**: Automatic download via torchvision (one-time, ~5GB download)
+- **Optimized class indexing**: Single-pass scan through dataset to build class-to-sample mapping
+  - Original approach: O(n × c) = 101 classes × 75,750 samples = 7.6M iterations
+  - Optimized approach: O(n) = 75,750 samples with progress updates
+- **Progress logging**: Real-time progress updates during index building (20 checkpoints)
+- **Google Drive considerations**: Initial scan may be slower on Google Drive vs. local storage
 
-**Recommended Approach for Large Datasets**:
-1. Monitor the detailed progress logs that show per-class processing
-2. Be patient during first run - dataset will be cached for subsequent runs
-3. Consider using local storage instead of Google Drive for faster I/O
-4. Pre-download datasets outside of MAVERIC if experiencing timeout issues
+**What You'll See During Reference Sample Selection**:
+```
+Selecting FOOD101 sample data randomly...
+  Dataset size: 75,750 samples
+  Number of classes: 101
+  Samples per class: 10
+  Building class index map (one-time scan)...
+    Progress: 3,787/75,750 (5.0%)
+    Progress: 7,575/75,750 (10.0%)
+    ...
+    Progress: 75,750/75,750 (100.0%)
+  ✅ Index map built. Processing classes...
+  [1/101] Class 'apple_pie': 750 samples
+  [2/101] Class 'baby_back_ribs': 750 samples
+  ...
+✅ Reference sampling complete: 101 classes, 1010 total images
+```
+
+**Performance Notes**:
+- Index building takes ~2-5 minutes on Google Drive, ~30 seconds on local SSD
+- Subsequent runs use cached embeddings (no need to rebuild)
+- Other large datasets (Caltech101, Country211) benefit from same optimization
 
 ## Important Development Notes
 
