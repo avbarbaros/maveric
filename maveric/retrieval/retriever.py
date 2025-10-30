@@ -508,7 +508,33 @@ class Retriever(BaseComponent):
             raise ValueError(f"Invalid embeddings returned for {target_dataset}: ref_embeddings={type(ref_embeddings)}, text_embeddings={type(text_embeddings)}")
         
         if len(ref_embeddings) == 0:
-            raise ValueError(f"No reference embeddings found for {target_dataset}")
+            # Provide helpful error message based on dataset type
+            dataset = get_dataset(target_dataset)
+            dataset_info = dataset.dataset_info
+
+            error_msg = f"\n❌ No reference embeddings found for {target_dataset}\n"
+
+            if dataset_info.get('type') == 'file_based':
+                error_msg += f"\n📋 This is a file-based dataset. Please follow these steps:\n"
+                error_msg += f"   1. Download the {target_dataset.upper()} dataset\n"
+                error_msg += f"   2. Extract it to: {dataset.data_dir / target_dataset}/\n"
+                error_msg += f"   3. Ensure it has this structure:\n"
+                error_msg += f"      {target_dataset}/\n"
+                error_msg += f"      ├── train/ (or training/)\n"
+                error_msg += f"      │   ├── {dataset.class_names[0]}/\n"
+                error_msg += f"      │   │   ├── image1.jpg\n"
+                error_msg += f"      │   │   └── ...\n"
+                if len(dataset.class_names) > 1:
+                    error_msg += f"      │   ├── {dataset.class_names[1]}/\n"
+                    error_msg += f"      │   │   └── ...\n"
+                error_msg += f"      │   └── ...\n"
+                error_msg += f"\n   Expected class names: {dataset.class_names}\n"
+                error_msg += f"   Expected location: {dataset.data_dir / target_dataset}\n"
+            else:
+                error_msg += f"\n   Dataset type: {dataset_info.get('type')}\n"
+                error_msg += f"   This may indicate a dataset loading issue.\n"
+
+            raise ValueError(error_msg)
         
         total_embeddings = sum(len(v) if hasattr(v, '__len__') else 0 for v in ref_embeddings.values())
         self.log_info(f"Reference embeddings prepared: {len(ref_embeddings)} classes, {total_embeddings} total embeddings")

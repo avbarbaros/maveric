@@ -59,10 +59,17 @@ Summary: Found 1/2 classes with images
 
 ## Code Changes
 
-### Location
+### Locations
+
+#### 1. Enhanced Diagnostic Logging
 **File:** `maveric/datasets/elevater_datasets.py`
 **Method:** `_get_file_based_reference_samples()`
 **Lines:** 532-606
+
+#### 2. Improved Error Messages
+**File:** `maveric/retrieval/retriever.py`
+**Method:** `retrieve()`
+**Lines:** 510-537
 
 ### Changes Made
 
@@ -105,6 +112,21 @@ Summary: Found 1/2 classes with images
        print(f"❌ No reference samples found for {self.dataset_name}")
        print(f"   Looked in: {dataset_dir}")
        print(f"   Expected class names: {self.class_names}")
+   ```
+
+7. **Improved error messages when no embeddings found:**
+   ```python
+   # In retriever.py - provides actionable guidance
+   if len(ref_embeddings) == 0:
+       dataset = get_dataset(target_dataset)
+       dataset_info = dataset.dataset_info
+
+       if dataset_info.get('type') == 'file_based':
+           error_msg = "This is a file-based dataset. Please:\n"
+           error_msg += "1. Download the dataset\n"
+           error_msg += "2. Extract to correct location\n"
+           error_msg += "3. Ensure proper directory structure\n"
+           # Shows expected structure and class names
    ```
 
 ---
@@ -162,6 +184,30 @@ Now: Complete trace of what was found/not found at each step
 ```
 
 In the last case, users can immediately see the problem: the actual directories are named '0', '1' but the code expects 'class_0', 'class_1'.
+
+### Enhanced Error Message (Dataset Not Setup)
+```
+ValueError:
+❌ No reference embeddings found for patchcamelyon
+
+📋 This is a file-based dataset. Please follow these steps:
+   1. Download the PATCHCAMELYON dataset
+   2. Extract it to: /cache/elevater/patchcamelyon/
+   3. Ensure it has this structure:
+      patchcamelyon/
+      ├── train/ (or training/)
+      │   ├── class_0/
+      │   │   ├── image1.jpg
+      │   │   └── ...
+      │   ├── class_1/
+      │   │   └── ...
+      │   └── ...
+
+   Expected class names: ['class_0', 'class_1']
+   Expected location: /cache/elevater/patchcamelyon
+```
+
+This actionable error message tells users exactly what to do and where to put the dataset.
 
 ---
 
