@@ -509,15 +509,22 @@ class Retriever(BaseComponent):
         
         if len(ref_embeddings) == 0:
             # Provide helpful error message based on dataset type
-            dataset = get_dataset(target_dataset)
+            # Use cache manager directory if available, otherwise default
+            if self.cache_manager:
+                dataset_root = self.cache_manager.base_dir / 'datasets'
+                dataset = get_dataset(target_dataset, root=str(dataset_root))
+            else:
+                dataset = get_dataset(target_dataset)
+
             dataset_info = dataset.dataset_info
+            expected_path = dataset.data_dir / target_dataset
 
             error_msg = f"\n❌ No reference embeddings found for {target_dataset}\n"
 
             if dataset_info.get('type') == 'file_based':
                 error_msg += f"\n📋 This is a file-based dataset. Please follow these steps:\n"
                 error_msg += f"   1. Download the {target_dataset.upper()} dataset\n"
-                error_msg += f"   2. Extract it to: {dataset.data_dir / target_dataset}/\n"
+                error_msg += f"   2. Extract it to: {expected_path.absolute()}\n"
                 error_msg += f"   3. Ensure it has this structure:\n"
                 error_msg += f"      {target_dataset}/\n"
                 error_msg += f"      ├── train/ (or training/)\n"
@@ -529,7 +536,7 @@ class Retriever(BaseComponent):
                     error_msg += f"      │   │   └── ...\n"
                 error_msg += f"      │   └── ...\n"
                 error_msg += f"\n   Expected class names: {dataset.class_names}\n"
-                error_msg += f"   Expected location: {dataset.data_dir / target_dataset}\n"
+                error_msg += f"   Full path: {expected_path.absolute()}\n"
             else:
                 error_msg += f"\n   Dataset type: {dataset_info.get('type')}\n"
                 error_msg += f"   This may indicate a dataset loading issue.\n"

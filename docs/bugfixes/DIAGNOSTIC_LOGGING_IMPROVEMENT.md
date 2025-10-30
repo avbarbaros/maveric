@@ -116,17 +116,23 @@ Summary: Found 1/2 classes with images
 
 7. **Improved error messages when no embeddings found:**
    ```python
-   # In retriever.py - provides actionable guidance
+   # In retriever.py - provides actionable guidance with exact paths
    if len(ref_embeddings) == 0:
-       dataset = get_dataset(target_dataset)
-       dataset_info = dataset.dataset_info
+       # Use cache manager directory to get exact configured path
+       if self.cache_manager:
+           dataset_root = self.cache_manager.base_dir / 'datasets'
+           dataset = get_dataset(target_dataset, root=str(dataset_root))
+       else:
+           dataset = get_dataset(target_dataset)
+
+       expected_path = dataset.data_dir / target_dataset
 
        if dataset_info.get('type') == 'file_based':
            error_msg = "This is a file-based dataset. Please:\n"
-           error_msg += "1. Download the dataset\n"
-           error_msg += "2. Extract to correct location\n"
-           error_msg += "3. Ensure proper directory structure\n"
-           # Shows expected structure and class names
+           error_msg += f"1. Download the dataset\n"
+           error_msg += f"2. Extract to: {expected_path.absolute()}\n"
+           error_msg += f"3. Ensure proper directory structure\n"
+           # Shows expected structure, class names, and ABSOLUTE path from config
    ```
 
 ---
@@ -192,7 +198,7 @@ ValueError:
 
 📋 This is a file-based dataset. Please follow these steps:
    1. Download the PATCHCAMELYON dataset
-   2. Extract it to: /cache/elevater/patchcamelyon/
+   2. Extract it to: /content/drive/MyDrive/MAVERIC/maveric_cache/datasets/elevater/patchcamelyon
    3. Ensure it has this structure:
       patchcamelyon/
       ├── train/ (or training/)
@@ -204,10 +210,10 @@ ValueError:
       │   └── ...
 
    Expected class names: ['class_0', 'class_1']
-   Expected location: /cache/elevater/patchcamelyon
+   Full path: /content/drive/MyDrive/MAVERIC/maveric_cache/datasets/elevater/patchcamelyon
 ```
 
-This actionable error message tells users exactly what to do and where to put the dataset.
+**Key Improvement:** The error message now uses `.absolute()` and respects the cache manager's configured base directory, showing the **exact absolute path** where the dataset should be placed based on the user's configuration.
 
 ---
 
