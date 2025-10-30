@@ -21,22 +21,28 @@ This directory contains comprehensive documentation for the data retrieval bug f
    - Quick reference for what changed
    - Links to specific code locations
 
+3. **[DIAGNOSTIC_LOGGING_IMPROVEMENT.md](DIAGNOSTIC_LOGGING_IMPROVEMENT.md)** (6 KB)
+   - Enhanced diagnostic logging for file-based datasets
+   - Helps diagnose "0 images" errors
+   - Shows exact directory structure issues
+   - Examples of diagnostic output
+
 ### Analysis Documentation (Background)
-3. **[RETRIEVAL_ANALYSIS_INDEX.md](RETRIEVAL_ANALYSIS_INDEX.md)** (8 KB)
+4. **[RETRIEVAL_ANALYSIS_INDEX.md](RETRIEVAL_ANALYSIS_INDEX.md)** (8 KB)
    - Navigation guide for all analysis documents
    - Quick reference for finding specific information
 
-4. **[RETRIEVAL_ANALYSIS_SUMMARY.md](RETRIEVAL_ANALYSIS_SUMMARY.md)** (6 KB)
+5. **[RETRIEVAL_ANALYSIS_SUMMARY.md](RETRIEVAL_ANALYSIS_SUMMARY.md)** (6 KB)
    - High-level analysis of retrieval architecture
    - Critical issues identified
    - Root cause analysis
 
-5. **[RETRIEVAL_ANALYSIS_CODE_LOCATIONS.md](RETRIEVAL_ANALYSIS_CODE_LOCATIONS.md)** (10 KB)
+6. **[RETRIEVAL_ANALYSIS_CODE_LOCATIONS.md](RETRIEVAL_ANALYSIS_CODE_LOCATIONS.md)** (10 KB)
    - Exact file/line numbers for each component
    - Code snippets for each issue
    - Implementation guidance
 
-6. **[RETRIEVAL_ANALYSIS.md](RETRIEVAL_ANALYSIS.md)** (23 KB)
+7. **[RETRIEVAL_ANALYSIS.md](RETRIEVAL_ANALYSIS.md)** (23 KB)
    - Complete technical analysis
    - Detailed workflow documentation
    - Component interactions

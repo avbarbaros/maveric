@@ -532,21 +532,31 @@ class ELEVATERDataset(BaseDataset):
     def _get_file_based_reference_samples(self, n_per_class: int) -> Dict[str, List[Image.Image]]:
         """Get reference samples from file-based datasets."""
         reference_samples = {}
-        
+
         # Check if dataset directory exists
         dataset_dir = self.data_dir / self.dataset_name
         if not dataset_dir.exists():
+            print(f"❌ Dataset directory not found: {dataset_dir}")
             self.log_warning(
                 f"Dataset directory {dataset_dir} not found. "
                 "Please download and set up the dataset first."
             )
             return reference_samples
-        
+
+        print(f"📁 Searching for reference images in: {dataset_dir}")
+
         # Try different common directory structures
         for split in ['train', 'training', 'val', 'validation']:
             split_dir = dataset_dir / split
             if split_dir.exists():
+                print(f"  ✓ Found split directory: {split}")
+
+                # List what's actually in the split directory for debugging
+                subdirs = [d.name for d in split_dir.iterdir() if d.is_dir()]
+                print(f"    Available subdirectories: {subdirs[:10]}")  # Show first 10
+
                 # Look for class subdirectories
+                found_classes = 0
                 for class_name in self.class_names:
                     class_dir = split_dir / class_name
                     if class_dir.exists() and class_dir.is_dir():
@@ -554,7 +564,11 @@ class ELEVATERDataset(BaseDataset):
                         image_files = list(class_dir.glob('*.jpg')) + \
                                     list(class_dir.glob('*.png')) + \
                                     list(class_dir.glob('*.jpeg'))
-                        
+
+                        if len(image_files) == 0:
+                            print(f"    ⚠️  Class '{class_name}': directory exists but no images found")
+                            continue
+
                         # Sample images using np.random.choice for consistency
                         sampled_indices = np.random.choice(
                             len(image_files),
@@ -562,7 +576,7 @@ class ELEVATERDataset(BaseDataset):
                             replace=False
                         )
                         sampled_files = [image_files[i] for i in sampled_indices]
-                        
+
                         # Load images
                         images = []
                         for img_file in sampled_files:
@@ -571,12 +585,24 @@ class ELEVATERDataset(BaseDataset):
                                 images.append(img)
                             except Exception as e:
                                 self.log_warning(f"Failed to load {img_file}: {e}")
-                        
-                        reference_samples[class_name] = images
-                
+
+                        if images:
+                            reference_samples[class_name] = images
+                            found_classes += 1
+                            print(f"    ✓ Class '{class_name}': loaded {len(images)} images")
+                    else:
+                        print(f"    ✗ Class '{class_name}': directory not found at {class_dir}")
+
+                print(f"  Summary: Found {found_classes}/{len(self.class_names)} classes with images")
+
                 if reference_samples:
                     break
-        
+
+        if not reference_samples:
+            print(f"❌ No reference samples found for {self.dataset_name}")
+            print(f"   Looked in: {dataset_dir}")
+            print(f"   Expected class names: {self.class_names}")
+
         return reference_samples
     
     def get_dataloader(self, batch_size: int = 32, shuffle: bool = True, 
