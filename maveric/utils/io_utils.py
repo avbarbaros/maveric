@@ -3,6 +3,8 @@
 import json
 import csv
 import requests
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import pandas as pd
@@ -26,7 +28,7 @@ def load_json(path: Union[str, Path]) -> Any:
 def save_json(data: Any, path: Union[str, Path], indent: int = 2):
     """
     Save data to JSON file.
-    
+
     Args:
         data: Data to save
         path: Output path
@@ -34,9 +36,55 @@ def save_json(data: Any, path: Union[str, Path], indent: int = 2):
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(path, 'w') as f:
         json.dump(data, f, indent=indent)
+
+
+def save_json_atomic(data: Any, path: Union[str, Path], indent: int = 2, timeout: Optional[float] = None):
+    """
+    Save data to JSON file atomically to prevent corruption.
+
+    Uses atomic write pattern: write to temp file, then rename.
+    This prevents partial writes on network filesystems that could cause
+    the process to hang indefinitely.
+
+    Args:
+        data: Data to save
+        path: Output path
+        indent: Indentation level
+        timeout: Optional timeout for the write operation (in seconds)
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create temp file in same directory as target (ensures same filesystem)
+    fd, temp_path = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f'.{path.name}.',
+        suffix='.tmp'
+    )
+
+    try:
+        # Write to temp file with timeout if specified
+        with os.fdopen(fd, 'w') as f:
+            if timeout is not None:
+                # For timeout support, we'd need signal-based timeout
+                # For now, just do the write (TODO: add proper timeout)
+                json.dump(data, f, indent=indent)
+            else:
+                json.dump(data, f, indent=indent)
+
+        # Atomic rename (works on both POSIX and Windows)
+        os.replace(temp_path, path)
+
+    except Exception as e:
+        # Clean up temp file on error
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
+        raise e
 
 
 def load_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:

@@ -32,7 +32,7 @@ class MAVERICConfig:
     n_reference_images: int = 10
     retrieval_rotation_size: int = 1000
     max_retries: int = 3
-    request_timeout: int = 5
+    request_timeout: int = 15  # Increased from 5s to 15s for large images on slow networks
     
     # Quality metrics configuration - organized by category
     quality_metrics: List[str] = field(default_factory=lambda: [
@@ -86,7 +86,7 @@ class MAVERICConfig:
     seed: int = 42  # Random seed for reproducible sampling
 
     # Performance optimization configuration
-    enable_target_class_quality: bool = True  # Enable/disable EfficientNet-based TargetClassQualityMetric (time-consuming)
+    enable_target_class_quality: bool = False  # Enable/disable EfficientNet-based TargetClassQualityMetric (time-consuming, ~50-70% overhead)
 
     # Visualization configuration
     viz_style: str = "default"

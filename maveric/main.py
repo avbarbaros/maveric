@@ -81,7 +81,9 @@ class MAVERIC(BaseComponent):
             n_reference_images=self.config.n_reference_images,
             real_time_stats=self.real_time_stats,
             seed=self.config.seed,
-            enable_target_class_quality=self.config.enable_target_class_quality
+            enable_target_class_quality=self.config.enable_target_class_quality,
+            max_retries=self.config.max_retries,
+            request_timeout=self.config.request_timeout
         )
         
         # Quality controller (initialized on demand)

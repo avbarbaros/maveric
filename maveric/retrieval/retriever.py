@@ -19,6 +19,7 @@ from ..quality.metrics import (
     ColorDiversityMetric,
     TargetClassQualityMetric
 )
+from ..utils.io_utils import save_json_atomic
 from .cache_manager import CacheManager
 from .dataset_handlers import DatasetHandler
 
@@ -39,7 +40,9 @@ class Retriever(BaseComponent):
                  n_reference_images: int = 10,
                  real_time_stats=None,
                  seed: int = 42,
-                 enable_target_class_quality: bool = True):
+                 enable_target_class_quality: bool = True,
+                 max_retries: int = 3,
+                 request_timeout: int = 15):
         """
         Initialize retriever.
 
@@ -51,6 +54,8 @@ class Retriever(BaseComponent):
             real_time_stats: Real-time stats object for progress tracking
             seed: Random seed for reproducible sampling
             enable_target_class_quality: Enable EfficientNet-based TargetClassQualityMetric (default: True)
+            max_retries: Maximum number of download retry attempts
+            request_timeout: HTTP request timeout in seconds
         """
         super().__init__("Retriever")
 
@@ -61,6 +66,8 @@ class Retriever(BaseComponent):
         self.real_time_stats = real_time_stats
         self.seed = seed
         self.enable_target_class_quality = enable_target_class_quality
+        self.max_retries = max_retries
+        self.request_timeout = request_timeout
 
         # Initialize CLIP model
         self._init_clip_model()
@@ -75,12 +82,15 @@ class Retriever(BaseComponent):
     def _init_clip_model(self):
         """Initialize CLIP model."""
         try:
+            print(f"🔄 Loading CLIP model: {self.clip_model_name}...")
             self.log_info(f"Loading CLIP model: {self.clip_model_name}")
             self.model, self.preprocess = clip.load(
                 self.clip_model_name,
                 device=self.device
             )
             self.model.eval()
+            print(f"✅ CLIP model loaded successfully")
+            self.log_info(f"CLIP model loaded successfully")
         except Exception as e:
             raise ModelError(f"Failed to load CLIP model: {e}")
     
@@ -120,17 +130,45 @@ class Retriever(BaseComponent):
                 ref_cache = cached.get('reference', {})
                 text_cache = cached.get('text', {})
                 
-                # More lenient validation for reproducibility
+                # Validate cache structure integrity
                 if ref_cache and text_cache:
                     try:
-                        # Try to use cached data
-                        self.reference_embeddings = ref_cache if isinstance(ref_cache, dict) else {}
-                        self.text_embeddings = text_cache if isinstance(text_cache, dict) else {}
-                        
-                        # Only reject if completely empty
-                        if len(self.reference_embeddings) > 0 and len(self.text_embeddings) > 0:
-                            self.log_info("Loaded reference embeddings from cache")
-                            return self.reference_embeddings, self.text_embeddings
+                        # Validate structure
+                        if not isinstance(ref_cache, dict) or not isinstance(text_cache, dict):
+                            self.log_warning("Invalid cache structure: not dictionaries")
+                            cached = None
+                        elif len(ref_cache) == 0 or len(text_cache) == 0:
+                            self.log_warning("Invalid cache: empty dictionaries")
+                            cached = None
+                        else:
+                            # Validate embeddings are tensors with correct shape
+                            valid_cache = True
+                            for class_name, embeddings in ref_cache.items():
+                                if not isinstance(embeddings, (torch.Tensor, np.ndarray)):
+                                    self.log_warning(f"Invalid reference embedding for {class_name}: not a tensor/array")
+                                    valid_cache = False
+                                    break
+                                if len(embeddings.shape) < 2:
+                                    self.log_warning(f"Invalid reference embedding shape for {class_name}: {embeddings.shape}")
+                                    valid_cache = False
+                                    break
+
+                            for class_name, embedding in text_cache.items():
+                                if not isinstance(embedding, (torch.Tensor, np.ndarray)):
+                                    self.log_warning(f"Invalid text embedding for {class_name}: not a tensor/array")
+                                    valid_cache = False
+                                    break
+                                if len(embedding.shape) < 1:
+                                    self.log_warning(f"Invalid text embedding shape for {class_name}: {embedding.shape}")
+                                    valid_cache = False
+                                    break
+
+                            if valid_cache:
+                                # Use validated cached data
+                                self.reference_embeddings = ref_cache
+                                self.text_embeddings = text_cache
+                                self.log_info("Loaded reference embeddings from cache")
+                                return self.reference_embeddings, self.text_embeddings
                     except Exception as e:
                         self.log_warning(f"Error loading cached embeddings: {e}")
                 
@@ -138,6 +176,8 @@ class Retriever(BaseComponent):
                 # Continue to regenerate embeddings
         
         # Load target dataset with proper cache directory
+        print(f"🔄 Loading target dataset: {target_dataset}...")
+        self.log_info(f"Loading target dataset: {target_dataset}")
         if self.cache_manager:
             # Use cache directory for dataset storage
             dataset_cache_dir = self.cache_manager.base_dir / 'datasets'
@@ -145,10 +185,13 @@ class Retriever(BaseComponent):
         else:
             # Fallback to default location
             dataset = get_dataset(target_dataset)
-        
+        print(f"✅ Dataset loaded")
+
         # Get reference samples with seed for reproducibility
+        print(f"🔄 Generating reference samples ({self.n_reference_images} per class)...")
         self.log_info(f"Creating reference embeddings for {target_dataset}")
         reference_samples = dataset.get_reference_samples(self.n_reference_images, seed=self.seed)
+        print(f"✅ Reference samples generated")
         
         # Get text templates for later use
         text_templates = dataset.get_text_templates()
@@ -211,15 +254,16 @@ class Retriever(BaseComponent):
                              file_id: int,
                              export_dir: str):
         """
-        Export rotation file with proper naming convention.
-        
+        Export rotation file with proper naming convention using atomic writes.
+
+        Uses atomic write pattern to prevent file corruption on network filesystems.
+
         Args:
             batch: List of sample dictionaries to export
             target_dataset: Target dataset name
             file_id: File identifier
             export_dir: Directory to export the file to
         """
-        import json
         from pathlib import Path
         
         try:
@@ -230,9 +274,8 @@ class Retriever(BaseComponent):
             filename = f"{target_dataset.lower()}_raw_maveric_dataset{file_id}.json"
             filepath = Path(export_dir) / filename
             
-            # Save the batch
-            with open(filepath, 'w') as f:
-                json.dump(batch, f, indent=2)
+            # Save the batch using atomic write to prevent corruption
+            save_json_atomic(batch, filepath, indent=2)
             
             print(f"📁 Exported rotation file: {filename} ({len(batch)} samples)")
             self.log_info(f"Exported rotation file: {filename} ({len(batch)} samples)")
@@ -293,12 +336,16 @@ class Retriever(BaseComponent):
         try:
             # Get image
             if download_image and self.cache_manager:
-                image = self.cache_manager.download_and_cache_image(image_url)
+                image = self.cache_manager.download_and_cache_image(
+                    image_url,
+                    max_retries=self.max_retries,
+                    timeout=self.request_timeout
+                )
             else:
                 # Direct download without caching
                 import requests
                 from io import BytesIO
-                response = requests.get(image_url, timeout=5)
+                response = requests.get(image_url, timeout=self.request_timeout)
                 image = Image.open(BytesIO(response.content)).convert('RGB')
             
             if image is None:
