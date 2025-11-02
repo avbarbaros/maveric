@@ -272,7 +272,20 @@ class MAVERICInteractiveQualityControl:
         # Auto-detect class names if not predefined
         if not self.class_names:
             class_columns = [col for col in self.data.columns if col.startswith('Class_')]
-            self.class_names = list(set([col.split('_')[1] for col in class_columns]))
+            # Extract class names by removing 'Class_' prefix and known metric suffixes
+            # Known suffixes: img2img, txt2txt, img2txt, txt2img, efficientNet_score, clip_similarity_to_imagenet
+            known_suffixes = ['_img2img', '_txt2txt', '_img2txt', '_txt2img', '_efficientNet_score', '_clip_similarity_to_imagenet']
+            class_names_set = set()
+            for col in class_columns:
+                # Remove 'Class_' prefix
+                name_with_suffix = col[6:]  # len('Class_') = 6
+                # Remove known suffix from the end
+                for suffix in known_suffixes:
+                    if name_with_suffix.endswith(suffix):
+                        class_name = name_with_suffix[:-len(suffix)]
+                        class_names_set.add(class_name)
+                        break
+            self.class_names = list(class_names_set)
             print(f"📋 Auto-detected classes: {len(self.class_names)}")
         
         best_classes = []
@@ -1138,8 +1151,9 @@ class MAVERICInteractiveQualityControl:
                 score = row.get(col, 0)
                 if pd.notna(score) and score > max_score:
                     max_score = score
-                    # Extract class name from column name: Class_airplane_efficientNet_score -> airplane
-                    best_class = col.split('_')[1]
+                    # Extract class name from column name: Class_ahead_only_efficientNet_score -> ahead_only
+                    # Remove 'Class_' prefix and '_efficientNet_score' suffix
+                    best_class = col[6:-len('_efficientNet_score')]  # len('Class_') = 6
 
             efficientnet_classes.append(best_class)
 
