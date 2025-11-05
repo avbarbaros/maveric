@@ -98,9 +98,6 @@ pip install -e ".[dev]"
 
 # Install with docs dependencies
 pip install -e ".[dev,docs]"
-
-# Install hyperparameter search dependencies
-pip install -e ".[dev]"  # Includes numpy, scikit-learn for search utilities
 ```
 
 ### Testing
@@ -188,43 +185,6 @@ maveric customize --input filtered.json --model openai/clip-vit-base-patch32 --e
 maveric visualize --input results.json --output-dir ./plots
 ```
 
-### Hyperparameter Search
-MAVERIC includes a systematic hyperparameter search tool for optimizing model performance:
-
-```bash
-# Focused search around optimal regularization (recommended)
-python experiments/05_hyperparameter_search.py \
-    --input data/training/ \
-    --config maveric_config.yaml \
-    --output results/hp_search/ \
-    --search-type focused
-
-# Fine-grained regularization weight search
-python experiments/05_hyperparameter_search.py \
-    --input data/training/ \
-    --config maveric_config.yaml \
-    --output results/hp_search/ \
-    --search-type regularization
-
-# Learning rate optimization
-python experiments/05_hyperparameter_search.py \
-    --input data/training/ \
-    --config maveric_config.yaml \
-    --output results/hp_search/ \
-    --search-type learning_rate
-
-# Random search (faster exploration)
-python experiments/05_hyperparameter_search.py \
-    --input data/training/ \
-    --config maveric_config.yaml \
-    --output results/hp_search/ \
-    --search-type broad \
-    --method random \
-    -n 30
-```
-
-See `experiments/HYPERPARAMETER_SEARCH.md` for detailed guide and search strategies.
-
 ## Experiment Scripts
 
 The `experiments/` directory contains end-to-end workflows for different stages:
@@ -234,10 +194,7 @@ The `experiments/` directory contains end-to-end workflows for different stages:
 - **`02_data_curation.py`**: Quality control and filtering of retrieved data
 - **`03_model_customization.py`**: Model fine-tuning with curated datasets
 - **`04_results_analysis.py`**: Analysis and visualization of experiment results
-- **`05_hyperparameter_search.py`**: Systematic hyperparameter optimization
 - **`maveric_config.yaml`**: Configuration file with optimal hyperparameters
-- **`run_hp_search.sh`**: Shell script for running hyperparameter searches
-- **`HYPERPARAMETER_SEARCH.md`**: Comprehensive guide for hyperparameter optimization
 
 Each script is designed to be run independently or as part of a complete pipeline.
 
@@ -574,15 +531,13 @@ Selecting FOOD101 sample data randomly...
 - Examples: `examples/` contains usage examples
   - `interactive_notebook.ipynb`: Interactive Jupyter notebook demonstrating MAVERIC features
 - Experiments: `experiments/` contains end-to-end workflow scripts
-  - `CIFAR100_Experiments.txt`: 10 complete experiment runs with hyperparameter tuning results (362 lines)
-  - `run_hp_search.sh`: Automated shell script for hyperparameter search campaigns
+  - `CIFAR100_Experiments.txt`: 10 complete experiment runs with manual hyperparameter tuning results (362 lines)
 - Documentation: Comprehensive documentation suite
   - `README.md`: Main project documentation (16.6 KB)
   - `CLAUDE.md`: Developer guide for Claude Code (this file, 30+ KB)
   - `docs/bugfixes/`: Bug fix documentation suite (67 KB total, 8 files)
   - `docs/maveric-api-docs.md`: API reference documentation (12 KB)
   - `docs/detailed_documentation.txt`: Detailed API and architecture docs (16 KB)
-  - `experiments/HYPERPARAMETER_SEARCH.md`: HP optimization guide (9.4 KB)
 
 ### CLI Entry Point
 The CLI entry point is correctly defined in `setup.py:49` as `maveric=maveric.utils.cli:main`, which points to the actual CLI implementation in `maveric/utils/cli.py`.
