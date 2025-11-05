@@ -81,12 +81,16 @@ class MAVERICConfig:
     
     # Progress display configuration
     enable_real_time_stats: bool = True
-    
+
     # Reproducibility configuration
     seed: int = 42  # Random seed for reproducible sampling
 
     # Performance optimization configuration
     enable_target_class_quality: bool = False  # Enable/disable EfficientNet-based TargetClassQualityMetric (time-consuming, ~50-70% overhead)
+
+    # Cross-dataset sample caching configuration
+    enable_sample_cache: bool = True  # Enable caching of sample metadata across datasets (60-85% speedup for subsequent datasets)
+    sample_cache_version: int = 2  # Sample cache format version (increment to invalidate old cache)
 
     # Visualization configuration
     viz_style: str = "default"

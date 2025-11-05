@@ -466,10 +466,60 @@ class TargetClassQualityMetric(BaseQualityMetric):
             self.log_debug(f"Error computing single ImageNet prediction: {e}")
             return "", 0.0
     
+    def compute_clip_similarity_for_class(self, target_class: str, imagenet_class: str) -> float:
+        """
+        Compute CLIP similarity between a target class and ImageNet class.
+
+        This method is used for cached samples where we have the ImageNet prediction
+        but need to compute similarity for a new target dataset's classes.
+
+        Args:
+            target_class: Target dataset class name (e.g., "airplane")
+            imagenet_class: Predicted ImageNet class name (e.g., "jet")
+
+        Returns:
+            CLIP similarity score (cosine similarity in range [-1, 1])
+        """
+        try:
+            if not target_class or not imagenet_class:
+                return 0.0
+
+            import clip
+            from sklearn.metrics.pairwise import cosine_similarity
+
+            # Encode target class
+            target_prompt = f"a photo of a {target_class}"
+            target_tokens = clip.tokenize([target_prompt], truncate=True).to(self.device)
+
+            with torch.no_grad():
+                target_embedding = self.clip_model.encode_text(target_tokens)
+                target_embedding = target_embedding / target_embedding.norm(dim=-1, keepdim=True)
+
+            target_embedding = target_embedding.cpu().numpy()
+
+            # Encode ImageNet class
+            imagenet_prompt = f"a photo of a {imagenet_class}"
+            imagenet_tokens = clip.tokenize([imagenet_prompt], truncate=True).to(self.device)
+
+            with torch.no_grad():
+                imagenet_embedding = self.clip_model.encode_text(imagenet_tokens)
+                imagenet_embedding = imagenet_embedding / imagenet_embedding.norm(dim=-1, keepdim=True)
+
+            imagenet_embedding = imagenet_embedding.cpu().numpy()
+
+            # Calculate CLIP similarity
+            clip_similarity = cosine_similarity(target_embedding, imagenet_embedding)[0][0]
+
+            return round(float(clip_similarity), 5)
+
+        except Exception as e:
+            self.log_debug(f"Error computing CLIP similarity: {e}")
+            return 0.0
+
     def compute_image_probabilities_only(self, image: Image.Image) -> torch.Tensor:
         """
         Compute only the EfficientNet probabilities for an image, without any mapping logic.
-        
+
         This method runs EfficientNet inference once and returns the full probability tensor
         that can be reused for multiple target class mappings.
         

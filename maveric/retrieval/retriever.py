@@ -22,6 +22,7 @@ from ..quality.metrics import (
 from ..utils.io_utils import save_json_atomic
 from .cache_manager import CacheManager
 from .dataset_handlers import DatasetHandler
+from .sample_cache_manager import SampleCacheManager
 
 
 class Retriever(BaseComponent):
@@ -42,7 +43,9 @@ class Retriever(BaseComponent):
                  seed: int = 42,
                  enable_target_class_quality: bool = True,
                  max_retries: int = 3,
-                 request_timeout: int = 15):
+                 request_timeout: int = 15,
+                 enable_sample_cache: bool = True,
+                 sample_cache_version: int = 2):
         """
         Initialize retriever.
 
@@ -56,6 +59,8 @@ class Retriever(BaseComponent):
             enable_target_class_quality: Enable EfficientNet-based TargetClassQualityMetric (default: True)
             max_retries: Maximum number of download retry attempts
             request_timeout: HTTP request timeout in seconds
+            enable_sample_cache: Enable cross-dataset sample caching
+            sample_cache_version: Sample cache format version
         """
         super().__init__("Retriever")
 
@@ -74,6 +79,16 @@ class Retriever(BaseComponent):
 
         # Initialize quality metrics
         self._init_quality_metrics()
+
+        # Initialize sample cache manager
+        if enable_sample_cache and cache_manager:
+            self.sample_cache = SampleCacheManager(
+                base_dir=cache_manager.base_dir,
+                cache_version=sample_cache_version,
+                enabled=enable_sample_cache
+            )
+        else:
+            self.sample_cache = None
 
         # Storage for embeddings
         self.reference_embeddings = {}
@@ -318,79 +333,180 @@ class Retriever(BaseComponent):
             self.log_warning(f"Error computing ImageNet mappings: {e}")
             return {class_name: ("", 0.0) for class_name in target_classes}
     
-    def compute_sample_scores(self, 
+    def compute_sample_scores(self,
                             image_url: str,
                             text: str,
                             download_image: bool = True) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float]]:
         """
-        Compute all scores for a single sample.
-        
+        Compute all scores for a single sample with caching support.
+
+        This method implements a two-tier caching strategy:
+        1. Sample metadata cache: Stores visual/semantic metrics, CLIP embeddings,
+           and EfficientNet predictions that are reusable across datasets
+        2. Dataset-specific computation: Per-class similarity scores that depend
+           on the target dataset
+
         Args:
             image_url: URL of the image
             text: Text caption
             download_image: Whether to download the image
-            
+
         Returns:
             Tuple of (class_scores, quality_scores)
         """
         try:
-            # Get image
-            if download_image and self.cache_manager:
-                image = self.cache_manager.download_and_cache_image(
-                    image_url,
-                    max_retries=self.max_retries,
-                    timeout=self.request_timeout
-                )
+            # STEP 1: Check sample cache first (FAST PATH)
+            cached = self.sample_cache.get_cached_sample(image_url) if self.sample_cache else None
+
+            if cached and cached.get('text') == text:
+                # Cache hit! Use cached data
+                self.log_debug(f"✅ Cache HIT: {image_url[:50]}...")
+
+                # Extract cached data
+                visual_metrics = cached['visual_metrics']
+                semantic_metrics = cached['semantic_metrics']
+                img_embedding = np.array(cached['clip_embeddings']['image_embedding'])
+                text_embedding = np.array(cached['clip_embeddings']['text_embedding'])
+                efficientnet_data = cached.get('efficientnet_predictions', {})
+
+                # No need to load image for cached samples
+                image = None
+
             else:
-                # Direct download without caching
-                import requests
-                from io import BytesIO
-                response = requests.get(image_url, timeout=self.request_timeout)
-                image = Image.open(BytesIO(response.content)).convert('RGB')
-            
-            if image is None:
-                return {}, {}
-            
-            # Compute embeddings
-            with torch.no_grad():
-                # Image embedding
-                img_input = self.preprocess(image).unsqueeze(0).to(self.device)
-                img_embedding = self.model.encode_image(img_input)
-                img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
-                img_embedding = img_embedding.cpu().numpy()
-                
-                # Text embedding
-                text_tokens = clip.tokenize([text], truncate=True).to(self.device)
-                text_embedding = self.model.encode_text(text_tokens)
-                text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
-                text_embedding = text_embedding.cpu().numpy()
-            
-            # Compute class scores
+                # Cache miss! Compute everything (SLOW PATH)
+                if cached:
+                    self.log_debug(f"⚠️  Cache INVALID (caption mismatch): {image_url[:50]}...")
+                else:
+                    self.log_debug(f"❌ Cache MISS: {image_url[:50]}...")
+
+                # Get image
+                if download_image and self.cache_manager:
+                    image = self.cache_manager.download_and_cache_image(
+                        image_url,
+                        max_retries=self.max_retries,
+                        timeout=self.request_timeout
+                    )
+                else:
+                    # Direct download without caching
+                    import requests
+                    from io import BytesIO
+                    response = requests.get(image_url, timeout=self.request_timeout)
+                    image = Image.open(BytesIO(response.content)).convert('RGB')
+
+                if image is None:
+                    return {}, {}
+
+                # Compute CLIP embeddings
+                with torch.no_grad():
+                    # Image embedding
+                    img_input = self.preprocess(image).unsqueeze(0).to(self.device)
+                    img_embedding = self.model.encode_image(img_input)
+                    img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
+                    img_embedding = img_embedding.cpu().numpy()
+
+                    # Text embedding
+                    text_tokens = clip.tokenize([text], truncate=True).to(self.device)
+                    text_embedding = self.model.encode_text(text_tokens)
+                    text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
+                    text_embedding = text_embedding.cpu().numpy()
+
+                # Compute visual metrics
+                visual_metrics = {}
+                metadata = {'url': image_url, 'text': text}
+
+                for metric_name in ['resolution', 'sharpness', 'color_diversity']:
+                    if metric_name in self.quality_metrics:
+                        try:
+                            metric = self.quality_metrics[metric_name]
+                            score = metric.compute(image, metadata)
+                            visual_metrics[metric.metric_name] = round(float(score), 5)
+                        except Exception as e:
+                            self.log_warning(f"Error computing {metric_name}: {e}")
+                            visual_metrics[metric.metric_name] = 0.0
+
+                # Compute semantic metrics (text-only, no image needed)
+                semantic_metrics = {}
+                for metric_name in ['text_quality', 'caption_length']:
+                    if metric_name in self.quality_metrics:
+                        try:
+                            metric = self.quality_metrics[metric_name]
+                            score = metric.compute(image, metadata)
+                            semantic_metrics[metric.metric_name] = round(float(score), 5)
+                        except Exception as e:
+                            self.log_warning(f"Error computing {metric_name}: {e}")
+                            semantic_metrics[metric.metric_name] = 0.0
+
+                # Compute EfficientNet predictions if enabled
+                efficientnet_data = {}
+                if self.enable_target_class_quality and 'target_class_quality' in self.quality_metrics:
+                    try:
+                        metric = self.quality_metrics['target_class_quality']
+                        pred_class, pred_prob = metric.compute_single_imagenet_prediction(image)
+                        efficientnet_data = {
+                            'imagenet_predicted_class': pred_class,
+                            'imagenet_probability': round(float(pred_prob), 5)
+                        }
+                    except Exception as e:
+                        self.log_debug(f"Error computing EfficientNet prediction: {e}")
+                        efficientnet_data = {
+                            'imagenet_predicted_class': "",
+                            'imagenet_probability': 0.0
+                        }
+
+                # Cache everything for future use
+                if self.sample_cache:
+                    self.sample_cache.cache_sample(
+                        url=image_url,
+                        text=text,
+                        visual_metrics=visual_metrics,
+                        semantic_metrics=semantic_metrics,
+                        image_embedding=img_embedding,
+                        text_embedding=text_embedding,
+                        efficientnet_data=efficientnet_data if efficientnet_data else None
+                    )
+
+            # STEP 2: Compute dataset-specific per-class scores (NOT CACHED)
             class_scores = {}
-            
+
             if not self.reference_embeddings:
                 self.log_debug("No reference embeddings available for class score computation")
                 return {}, {}
-            
-            # OPTIMIZATION: Compute ImageNet mappings for ALL target classes at once (if enabled)
+
             target_classes = list(self.reference_embeddings.keys())
 
-            # Only compute EfficientNet-based scores if enabled
-            if self.enable_target_class_quality:
+            # Compute EfficientNet-based scores if enabled and we have an image
+            if self.enable_target_class_quality and image is not None:
+                # Need to compute fresh since we don't have image loaded for cached samples
                 imagenet_mappings = self._compute_all_imagenet_mappings(image, text, target_classes)
-
-                # Get global ImageNet prediction for this image
-                global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+            elif self.enable_target_class_quality and image is None and efficientnet_data:
+                # For cached samples, we use stored EfficientNet predictions
+                # and compute CLIP similarities using the predictions
                 if 'target_class_quality' in self.quality_metrics:
                     metric = self.quality_metrics['target_class_quality']
-                    try:
-                        global_imagenet_pred, global_imagenet_prob = metric.compute_single_imagenet_prediction(image)
-                    except Exception as e:
-                        self.log_debug(f"Error getting global ImageNet prediction: {e}")
-                        global_imagenet_pred, global_imagenet_prob = ("", 0.0)
+                    imagenet_pred = efficientnet_data.get('imagenet_predicted_class', '')
+                    imagenet_prob = efficientnet_data.get('imagenet_probability', 0.0)
+
+                    # Compute CLIP similarity for each target class to the predicted ImageNet class
+                    imagenet_mappings = {}
+                    for class_name in target_classes:
+                        try:
+                            clip_sim = metric.compute_clip_similarity_for_class(class_name, imagenet_pred)
+                            efficientnet_score = clip_sim * imagenet_prob
+                            imagenet_mappings[class_name] = (imagenet_pred, clip_sim, efficientnet_score)
+                        except Exception as e:
+                            self.log_debug(f"Error computing CLIP similarity for {class_name}: {e}")
+                            imagenet_mappings[class_name] = (imagenet_pred, 0.0, 0.0)
+                else:
+                    imagenet_mappings = {class_name: ("", 0.0, 0.0) for class_name in target_classes}
             else:
                 # Skip EfficientNet calculations entirely
                 imagenet_mappings = {class_name: ("", 0.0, 0.0) for class_name in target_classes}
+
+            # Extract global ImageNet predictions
+            if self.enable_target_class_quality:
+                global_imagenet_pred = efficientnet_data.get('imagenet_predicted_class', '')
+                global_imagenet_prob = efficientnet_data.get('imagenet_probability', 0.0)
+            else:
                 global_imagenet_pred, global_imagenet_prob = ("", 0.0)
             
             for class_name in target_classes:
@@ -442,22 +558,9 @@ class Retriever(BaseComponent):
                     class_scores[class_name]['clip_similarity_to_imagenet'] = round(float(clip_similarity), 5)
                     class_scores[class_name]['efficientNet_score'] = round(float(efficientNet_score), 5)
             
-            # Compute quality scores (exclude target_class_quality as it's now per-class)
-            quality_scores = {}
-            metadata = {'url': image_url, 'text': text}
-            
-            for metric_name, metric in self.quality_metrics.items():
-                # Skip target_class_quality as it's now calculated per-class as efficientNet_score
-                if metric_name == 'target_class_quality':
-                    continue
-                    
-                try:
-                    score = metric.compute(image, metadata)
-                    quality_scores[metric.metric_name] = round(float(score), 5)
-                except Exception as e:
-                    self.log_warning(f"Error computing {metric_name}: {e}")
-                    quality_scores[metric.metric_name] = 0.0
-            
+            # STEP 3: Build quality scores from cached or computed metrics
+            quality_scores = {**visual_metrics, **semantic_metrics}
+
             # Add global ImageNet prediction fields (only if EfficientNet is enabled)
             if self.enable_target_class_quality:
                 quality_scores['imagenet_predicted_class'] = global_imagenet_pred
