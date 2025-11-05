@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any
 import json
 import random
 import numpy as np
+import urllib.error
 from pathlib import Path
 from PIL import Image
 import torch
@@ -371,11 +372,37 @@ class ELEVATERDataset(BaseDataset):
             self.log_info(f"Initializing {self.dataset_name.upper()} dataset...")
             self._dataset = dataset_loaders[self.dataset_name]()
             self.log_info(f"Loaded {self.dataset_name.upper()} dataset with {len(self._dataset)} samples")
-            
+
         except ImportError:
             raise DatasetError("torchvision is required for torchvision datasets")
+        except urllib.error.HTTPError as e:
+            # Handle broken download URLs (common with academic datasets)
+            if e.code == 404:
+                error_msg = (
+                    f"Failed to download {self.dataset_name} dataset: Original download URL is broken (404 Not Found).\n\n"
+                    f"📥 Manual Download Options:\n"
+                    f"   1. Download from alternative source:\n"
+                    f"      - Caltech101: http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz\n"
+                    f"      - Extract to: {self.data_dir}/\n"
+                    f"   2. Use a different ELEVATER dataset (e.g., cifar10, cifar100, food101)\n\n"
+                    f"💡 After manual download, run the script again - torchvision will detect existing data."
+                )
+                raise DatasetError(error_msg)
+            else:
+                raise DatasetError(f"HTTP error downloading {self.dataset_name}: {e}")
         except Exception as e:
-            raise DatasetError(f"Failed to load {self.dataset_name} dataset: {e}")
+            # Check if it's a connection/download error
+            error_str = str(e).lower()
+            if 'http' in error_str or '404' in error_str or 'url' in error_str or 'download' in error_str:
+                error_msg = (
+                    f"Failed to download {self.dataset_name} dataset: {e}\n\n"
+                    f"This is likely due to broken download URLs in torchvision.\n"
+                    f"Please download the dataset manually and place it in: {self.data_dir}/\n\n"
+                    f"Alternative: Use a different ELEVATER dataset (cifar10, cifar100, mnist, food101)"
+                )
+                raise DatasetError(error_msg)
+            else:
+                raise DatasetError(f"Failed to load {self.dataset_name} dataset: {e}")
     
     def _load_metadata(self):
         """Load dataset metadata from JSON file."""
