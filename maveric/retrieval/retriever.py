@@ -144,7 +144,13 @@ class Retriever(BaseComponent):
             if cached:
                 ref_cache = cached.get('reference', {})
                 text_cache = cached.get('text', {})
-                
+
+                # Extract dict from numpy scalar if needed (numpy saves dicts as 0-dim arrays)
+                if isinstance(ref_cache, np.ndarray) and ref_cache.shape == ():
+                    ref_cache = ref_cache.item()
+                if isinstance(text_cache, np.ndarray) and text_cache.shape == ():
+                    text_cache = text_cache.item()
+
                 # Validate cache structure integrity
                 if ref_cache and text_cache:
                     try:
