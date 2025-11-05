@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### November 5, 2025 - Cross-Dataset Sample Caching
 - **Sample metadata caching**: NEW caching system for cross-dataset retrieval optimization
-  - Caches visual/semantic metrics, CLIP embeddings, and EfficientNet predictions
+  - Caches visual/semantic metrics and EfficientNet predictions (embeddings computed from cached images)
   - Reusable across multiple dataset retrievals from the same source
   - **Performance Impact**: 60-85% speedup for subsequent dataset retrievals
-  - **Storage**: ~8.4KB per sample, hierarchical directory structure
+  - **Storage**: ~500 bytes per sample (optimized by not caching embeddings), hierarchical directory structure
   - **Configuration**: `enable_sample_cache: true` (default), `sample_cache_version: 2`
   - **Cache location**: `cache_base_dir/sample_metadata_cache/{hash[:2]}/sample_{hash}_v{version}.json`
   - **Test coverage**: 16 comprehensive tests in `tests/test_sample_cache.py`
@@ -431,12 +431,12 @@ Images, embeddings, and reference data are cached in configurable directories:
 **What's Cached** (per sample):
 - Visual metrics (resolution, sharpness, color_diversity)
 - Semantic metrics (text_quality, caption_length)
-- CLIP embeddings (image + text, 512-dim each)
 - EfficientNet predictions (ImageNet class + probability)
 
-**What's NOT Cached** (dataset-specific):
-- Per-class similarity scores (`Class_{name}_img2img`, `Class_{name}_txt2txt`, etc.)
-- Class-specific quality scores
+**What's NOT Cached**:
+- CLIP embeddings - computed from cached images (~50-100ms overhead, saves ~16KB per sample)
+- Per-class similarity scores (`Class_{name}_img2img`, `Class_{name}_txt2txt`, etc.) - dataset-specific
+- Class-specific quality scores - dataset-specific
 - Dataset-specific reference comparisons
 
 **Performance Impact**:
@@ -448,8 +448,8 @@ Total for 20 datasets:                      ~10.6 hrs vs 44.4 hrs (76% savings!)
 ```
 
 **Storage**:
-- Per sample: ~8.4KB
-- 270K samples: ~2.3GB (very reasonable!)
+- Per sample: ~500 bytes (optimized from 30KB by removing embeddings)
+- 270K samples: ~135MB (very efficient!)
 
 **Configuration**:
 ```yaml
@@ -487,6 +487,7 @@ maveric_cache/
 {
   "cache_version": 2,
   "url": "https://...",
+  "url_hash": "a1b2c3d4...",
   "text": "A photo of a cat",
   "last_updated": "2025-11-05T10:30:00Z",
   "visual_metrics": {
@@ -498,16 +499,14 @@ maveric_cache/
     "text_quality_score": 0.850,
     "caption_length_score": 0.920
   },
-  "clip_embeddings": {
-    "image_embedding": [...512 floats...],
-    "text_embedding": [...512 floats...]
-  },
   "efficientnet_predictions": {
     "imagenet_predicted_class": "tabby cat",
     "imagenet_probability": 0.892
   }
 }
 ```
+
+**Note**: CLIP embeddings are NOT cached to save space (~16KB per sample). They are computed from cached images (~50-100ms overhead).
 
 Reference texts files contain:
 - `templates`: Original text templates used

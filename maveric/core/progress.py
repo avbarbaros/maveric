@@ -39,36 +39,41 @@ class RealTimeStats:
         """Display current statistics."""
         if not self.stats:
             return
-            
+
         successful = self.stats.get('downloads_successful', 0)
         failed = self.stats.get('downloads_failed', 0)
-        
+        cache_hits = self.stats.get('cache_hits', 0)
+
         # Create status line with consistent format
         status_parts = []
-        
+
         # Always show downloads with batch position if available
         batch_size = self.stats.get('batch_size', None)
         current_batch_position = self.stats.get('current_batch_position', None)
-        
+
         if batch_size and current_batch_position is not None:
             status_parts.append(f"✅ Downloads: {current_batch_position} / {batch_size}")
         elif successful > 0:
             status_parts.append(f"✅ Downloads: {successful}")
         else:
             status_parts.append(f"✅ Downloads: 0")
-        
+
+        # Show cache hits (sample metadata cache)
+        if cache_hits > 0:
+            status_parts.append(f"⚡ Cache Hits: {cache_hits}")
+
         # Always show failed count
         status_parts.append(f"❌ Failed: {failed}")
-        
+
         # Always show current index information if available
         current_index = self.stats.get('current_index', None)
         total_samples = self.stats.get('total_samples', None)
-        
+
         if current_index is not None and total_samples is not None:
             status_parts.append(f"📍 Index: {current_index} / {total_samples}")
         else:
             status_parts.append(f"📍 Index: - / -")
-            
+
         if status_parts:
             status_line = " | ".join(status_parts)
             print(f"\r[STATS] {status_line}", end="", flush=True)

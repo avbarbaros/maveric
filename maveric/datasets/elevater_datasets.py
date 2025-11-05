@@ -378,13 +378,21 @@ class ELEVATERDataset(BaseDataset):
         except urllib.error.HTTPError as e:
             # Handle broken download URLs (common with academic datasets)
             if e.code == 404:
+                # Torchvision expects: {root}/{dataset_name}/
+                expected_structure = (
+                    f"{self.root}/{self.dataset_name}/101_ObjectCategories/\n"
+                    f"                             ├── accordion/\n"
+                    f"                             ├── airplanes/\n"
+                    f"                             └── ... (102 class directories)"
+                )
                 error_msg = (
                     f"Failed to download {self.dataset_name} dataset: Original download URL is broken (404 Not Found).\n\n"
-                    f"📥 Manual Download Options:\n"
-                    f"   1. Download from alternative source:\n"
-                    f"      - Caltech101: http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz\n"
-                    f"      - Extract to: {self.data_dir}/\n"
-                    f"   2. Use a different ELEVATER dataset (e.g., cifar10, cifar100, food101)\n\n"
+                    f"📥 Manual Download & Extract:\n"
+                    f"   wget http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz\n"
+                    f"   mkdir -p {self.root}/{self.dataset_name}\n"
+                    f"   tar -xzf 101_ObjectCategories.tar.gz -C {self.root}/{self.dataset_name}/\n\n"
+                    f"📁 Expected structure:\n{expected_structure}\n\n"
+                    f"✅ Alternative: Use a working dataset (cifar10, cifar100, food101, mnist)\n\n"
                     f"💡 After manual download, run the script again - torchvision will detect existing data."
                 )
                 raise DatasetError(error_msg)

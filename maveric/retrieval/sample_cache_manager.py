@@ -107,12 +107,11 @@ class SampleCacheManager(BaseComponent):
                 'last_updated': str (ISO format),
                 'visual_metrics': {...},
                 'semantic_metrics': {...},
-                'clip_embeddings': {
-                    'image_embedding': list,
-                    'text_embedding': list
-                },
                 'efficientnet_predictions': {...} (optional)
             }
+
+        Note: CLIP embeddings are NOT cached to save space (~16KB per sample).
+              They are computed from cached images (~50-100ms overhead).
         """
         if not self.enabled:
             return None
@@ -133,8 +132,8 @@ class SampleCacheManager(BaseComponent):
                 self.stats['misses'] += 1
                 return None
 
-            # Validate required fields
-            required_fields = ['visual_metrics', 'semantic_metrics', 'clip_embeddings']
+            # Validate required fields (clip_embeddings removed to save space)
+            required_fields = ['visual_metrics', 'semantic_metrics']
             if not all(field in data for field in required_fields):
                 self.log_warning(f"Incomplete cache entry for {url[:50]}, invalidating")
                 self.stats['errors'] += 1
@@ -162,19 +161,18 @@ class SampleCacheManager(BaseComponent):
                      text: str,
                      visual_metrics: Dict[str, float],
                      semantic_metrics: Dict[str, float],
-                     image_embedding: np.ndarray,
-                     text_embedding: np.ndarray,
                      efficientnet_data: Optional[Dict[str, Any]] = None) -> bool:
         """
         Cache sample metadata and computed metrics.
+
+        Note: CLIP embeddings are NOT cached as they can be computed quickly (~50-100ms)
+        from cached images, and they take up significant space (~16KB per sample).
 
         Args:
             url: Image URL (used as cache key)
             text: Caption text
             visual_metrics: Visual quality metrics (resolution, sharpness, color)
             semantic_metrics: Semantic quality metrics (text_quality, caption_length)
-            image_embedding: CLIP image embedding (512-dim for ViT-B/32)
-            text_embedding: CLIP text embedding (512-dim for ViT-B/32)
             efficientnet_data: Optional EfficientNet predictions and metadata
 
         Returns:
@@ -187,7 +185,7 @@ class SampleCacheManager(BaseComponent):
             cache_path = self._get_cache_path(url)
             url_hash = self._get_url_hash(url)
 
-            # Build cache data structure
+            # Build cache data structure (WITHOUT embeddings - they're computed from cached images)
             data = {
                 'cache_version': self.cache_version,
                 'url': url,
@@ -195,11 +193,7 @@ class SampleCacheManager(BaseComponent):
                 'text': text,
                 'last_updated': datetime.now().isoformat(),
                 'visual_metrics': visual_metrics,
-                'semantic_metrics': semantic_metrics,
-                'clip_embeddings': {
-                    'image_embedding': image_embedding.flatten().tolist(),
-                    'text_embedding': text_embedding.flatten().tolist()
-                }
+                'semantic_metrics': semantic_metrics
             }
 
             # Add EfficientNet data if provided

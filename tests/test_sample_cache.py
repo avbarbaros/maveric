@@ -45,8 +45,6 @@ class TestSampleCacheManager:
                 'text_quality_score': 0.850,
                 'caption_length_score': 0.920
             },
-            'image_embedding': np.random.randn(512),
-            'text_embedding': np.random.randn(512),
             'efficientnet_data': {
                 'imagenet_predicted_class': 'tabby cat',
                 'imagenet_probability': 0.892
@@ -82,9 +80,7 @@ class TestSampleCacheManager:
             url='http://example.com/test.jpg',
             text='test',
             visual_metrics={},
-            semantic_metrics={},
-            image_embedding=np.zeros(512),
-            text_embedding=np.zeros(512)
+            semantic_metrics={}
         )
         assert result is False
 
@@ -98,15 +94,13 @@ class TestSampleCacheManager:
         assert cache_manager.stats['hits'] == 0
 
     def test_cache_save_and_retrieve(self, cache_manager, sample_data):
-        """Test saving and retrieving cached data."""
-        # Save to cache
+        """Test saving and retrieving cached data (without embeddings to save space)."""
+        # Save to cache (embeddings NOT cached - they're computed from cached images)
         success = cache_manager.cache_sample(
             url=sample_data['url'],
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
             semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding'],
             efficientnet_data=sample_data['efficientnet_data']
         )
 
@@ -124,13 +118,8 @@ class TestSampleCacheManager:
         assert 'cache_version' in cached
         assert cached['cache_version'] == 2
 
-        # Check embeddings
-        assert 'clip_embeddings' in cached
-        cached_img_emb = np.array(cached['clip_embeddings']['image_embedding'])
-        cached_txt_emb = np.array(cached['clip_embeddings']['text_embedding'])
-
-        np.testing.assert_array_almost_equal(cached_img_emb, sample_data['image_embedding'])
-        np.testing.assert_array_almost_equal(cached_txt_emb, sample_data['text_embedding'])
+        # Embeddings should NOT be in cache (to save space ~16KB per sample)
+        assert 'clip_embeddings' not in cached
 
         # Check EfficientNet data
         assert cached['efficientnet_predictions'] == sample_data['efficientnet_data']
@@ -151,9 +140,7 @@ class TestSampleCacheManager:
             url=sample_data['url'],
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
-            semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding']
+            semantic_metrics=sample_data['semantic_metrics']
         )
 
         # Try to retrieve with version 2 cache manager
@@ -176,9 +163,7 @@ class TestSampleCacheManager:
             url=sample_data['url'],
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
-            semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding']
+            semantic_metrics=sample_data['semantic_metrics']
         )
 
         # Retrieve with same caption
@@ -196,9 +181,7 @@ class TestSampleCacheManager:
             url=sample_data['url'],
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
-            semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding']
+            semantic_metrics=sample_data['semantic_metrics']
         )
 
         # Check that file is in subdirectory
@@ -268,9 +251,7 @@ class TestSampleCacheManager:
                 url=f'https://example.com/image{i}.jpg',
                 text=f'Image {i}',
                 visual_metrics=sample_data['visual_metrics'],
-                semantic_metrics=sample_data['semantic_metrics'],
-                image_embedding=np.random.randn(512),
-                text_embedding=np.random.randn(512)
+                semantic_metrics=sample_data['semantic_metrics']
             )
 
         # Retrieve 2 cached samples
@@ -296,9 +277,7 @@ class TestSampleCacheManager:
             url=sample_data['url'],
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
-            semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding']
+            semantic_metrics=sample_data['semantic_metrics']
         )
 
         # Verify cached
@@ -320,9 +299,7 @@ class TestSampleCacheManager:
                 url=f'https://example.com/image{i}.jpg',
                 text=f'Image {i}',
                 visual_metrics=sample_data['visual_metrics'],
-                semantic_metrics=sample_data['semantic_metrics'],
-                image_embedding=np.random.randn(512),
-                text_embedding=np.random.randn(512)
+                semantic_metrics=sample_data['semantic_metrics']
             )
 
         # Clear all
@@ -341,8 +318,6 @@ class TestSampleCacheManager:
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
             semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding'],
             efficientnet_data=None
         )
 
@@ -360,9 +335,7 @@ class TestSampleCacheManager:
             url=sample_data['url'],
             text=sample_data['text'],
             visual_metrics=sample_data['visual_metrics'],
-            semantic_metrics=sample_data['semantic_metrics'],
-            image_embedding=sample_data['image_embedding'],
-            text_embedding=sample_data['text_embedding']
+            semantic_metrics=sample_data['semantic_metrics']
         )
         cache_manager.get_cached_sample(sample_data['url'])
 
@@ -387,29 +360,25 @@ class TestSampleCacheManager:
         assert hash1 == hash2
         assert len(hash1) == 32  # MD5 hash length
 
-    def test_large_embeddings(self, cache_manager):
-        """Test caching with large embeddings."""
-        # Create large embeddings (e.g., for larger CLIP models)
-        large_embedding = np.random.randn(1024)
-
+    def test_no_embeddings_in_cache(self, cache_manager):
+        """Test that embeddings are NOT cached (to save space)."""
         success = cache_manager.cache_sample(
-            url='https://example.com/large.jpg',
-            text='Large embedding test',
+            url='https://example.com/test.jpg',
+            text='Test sample',
             visual_metrics={'resolution_score': 0.9},
-            semantic_metrics={'text_quality_score': 0.8},
-            image_embedding=large_embedding,
-            text_embedding=large_embedding
+            semantic_metrics={'text_quality_score': 0.8}
         )
 
         assert success is True
 
-        # Retrieve and verify
-        cached = cache_manager.get_cached_sample('https://example.com/large.jpg')
+        # Retrieve and verify embeddings are NOT in cache
+        cached = cache_manager.get_cached_sample('https://example.com/test.jpg')
         assert cached is not None
+        assert 'clip_embeddings' not in cached
 
-        cached_img_emb = np.array(cached['clip_embeddings']['image_embedding'])
-        assert len(cached_img_emb) == 1024
-        np.testing.assert_array_almost_equal(cached_img_emb, large_embedding)
+        # Verify other data is present
+        assert cached['visual_metrics'] == {'resolution_score': 0.9}
+        assert cached['semantic_metrics'] == {'text_quality_score': 0.8}
 
 
 if __name__ == '__main__':

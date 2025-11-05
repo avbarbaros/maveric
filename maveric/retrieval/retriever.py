@@ -359,18 +359,46 @@ class Retriever(BaseComponent):
             cached = self.sample_cache.get_cached_sample(image_url) if self.sample_cache else None
 
             if cached and cached.get('text') == text:
-                # Cache hit! Use cached data
+                # Cache hit! Use cached metrics
                 self.log_debug(f"✅ Cache HIT: {image_url[:50]}...")
 
-                # Extract cached data
+                # Report cache hit to real-time stats
+                if self.real_time_stats:
+                    current_hits = self.real_time_stats.get_current_stats().get('cache_hits', 0)
+                    self.real_time_stats.update_stats({'cache_hits': current_hits + 1})
+
+                # Extract cached metrics (but NOT embeddings - they're not cached)
                 visual_metrics = cached['visual_metrics']
                 semantic_metrics = cached['semantic_metrics']
-                img_embedding = np.array(cached['clip_embeddings']['image_embedding'])
-                text_embedding = np.array(cached['clip_embeddings']['text_embedding'])
                 efficientnet_data = cached.get('efficientnet_predictions', {})
 
-                # No need to load image for cached samples
-                image = None
+                # Load cached image to compute CLIP embeddings
+                # (embeddings not cached to save space - they're quick to compute)
+                if self.cache_manager:
+                    image = self.cache_manager.get_cached_image(image_url)
+                else:
+                    # Direct download if no cache manager
+                    import requests
+                    from io import BytesIO
+                    response = requests.get(image_url, timeout=self.request_timeout)
+                    image = Image.open(BytesIO(response.content)).convert('RGB')
+
+                if image is None:
+                    return {}, {}
+
+                # Compute CLIP embeddings from cached image (~50-100ms overhead)
+                with torch.no_grad():
+                    # Image embedding
+                    img_input = self.preprocess(image).unsqueeze(0).to(self.device)
+                    img_embedding = self.model.encode_image(img_input)
+                    img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
+                    img_embedding = img_embedding.cpu().numpy()
+
+                    # Text embedding
+                    text_tokens = clip.tokenize([text], truncate=True).to(self.device)
+                    text_embedding = self.model.encode_text(text_tokens)
+                    text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
+                    text_embedding = text_embedding.cpu().numpy()
 
             else:
                 # Cache miss! Compute everything (SLOW PATH)
@@ -453,15 +481,13 @@ class Retriever(BaseComponent):
                             'imagenet_probability': 0.0
                         }
 
-                # Cache everything for future use
+                # Cache metrics for future use (not embeddings - they're computed from cached images)
                 if self.sample_cache:
                     self.sample_cache.cache_sample(
                         url=image_url,
                         text=text,
                         visual_metrics=visual_metrics,
                         semantic_metrics=semantic_metrics,
-                        image_embedding=img_embedding,
-                        text_embedding=text_embedding,
                         efficientnet_data=efficientnet_data if efficientnet_data else None
                     )
 
