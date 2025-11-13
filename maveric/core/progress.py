@@ -27,11 +27,15 @@ class RealTimeStats:
         with self.lock:
             # Merge new stats with existing stats to preserve all fields
             self.stats.update(new_stats)
-            
+
             if self.enable_display:
                 current_time = time.time()
-                # Only display if enough time has passed
-                if current_time - self.last_update >= self.update_interval:
+                # Force immediate display if cache_hits changed (important events)
+                cache_hits_changed = 'cache_hits' in new_stats
+                time_elapsed = current_time - self.last_update >= self.update_interval
+
+                # Display if: time interval passed OR important stat changed
+                if time_elapsed or cache_hits_changed:
                     self._display_stats()
                     self.last_update = current_time
                 
@@ -47,20 +51,24 @@ class RealTimeStats:
         # Create status line with consistent format
         status_parts = []
 
-        # Always show downloads with batch position if available
+        # Show processed count with batch position if available
         batch_size = self.stats.get('batch_size', None)
         current_batch_position = self.stats.get('current_batch_position', None)
 
         if batch_size and current_batch_position is not None:
-            status_parts.append(f"✅ Downloads: {current_batch_position} / {batch_size}")
-        elif successful > 0:
-            status_parts.append(f"✅ Downloads: {successful}")
+            status_parts.append(f"✅ Processed: {current_batch_position} / {batch_size}")
+        elif current_batch_position is not None:
+            status_parts.append(f"✅ Processed: {current_batch_position}")
         else:
-            status_parts.append(f"✅ Downloads: 0")
+            status_parts.append(f"✅ Processed: 0")
 
-        # Show cache hits (sample metadata cache)
+        # Show cache hits (sample metadata cache with CLIP embeddings)
         if cache_hits > 0:
             status_parts.append(f"⚡ Cache Hits: {cache_hits}")
+
+        # Show actual downloads separately
+        if successful > 0:
+            status_parts.append(f"📥 Downloads: {successful}")
 
         # Always show failed count
         status_parts.append(f"❌ Failed: {failed}")
