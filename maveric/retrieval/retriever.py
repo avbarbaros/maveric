@@ -43,7 +43,7 @@ class Retriever(BaseComponent):
                  seed: int = 42,
                  enable_target_class_quality: bool = True,
                  max_retries: int = 3,
-                 request_timeout: int = 15,
+                 request_timeout: int = 5,
                  enable_sample_cache: bool = True,
                  sample_cache_version: int = 2):
         """

@@ -56,7 +56,7 @@ class CacheManager(BaseComponent):
         
         # Cache statistics
         self.stats = {
-            'cache_hits': 0,
+            'image_cache_hits': 0,
             'cache_misses': 0,
             'images_cached': 0,
             'bytes_saved': 0,
@@ -179,7 +179,7 @@ class CacheManager(BaseComponent):
                     image = Image.open(cache_path)
                     # Force load to verify integrity
                     image.load()
-                    self.stats['cache_hits'] += 1
+                    self.stats['image_cache_hits'] += 1
 
                     # Call stats callback if provided
                     if self.stats_callback:
@@ -204,7 +204,7 @@ class CacheManager(BaseComponent):
                     image = Image.open(cache_path)
                     # Force load to verify integrity
                     image.load()
-                    self.stats['cache_hits'] += 1
+                    self.stats['image_cache_hits'] += 1
 
                     # Call stats callback if provided
                     if self.stats_callback:

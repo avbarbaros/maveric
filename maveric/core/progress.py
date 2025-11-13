@@ -62,13 +62,11 @@ class RealTimeStats:
         else:
             status_parts.append(f"✅ Processed: 0")
 
-        # Show cache hits (sample metadata cache with CLIP embeddings)
-        if cache_hits > 0:
-            status_parts.append(f"⚡ Cache Hits: {cache_hits}")
+        # ALWAYS show cache hits (even if 0) for consistency
+        status_parts.append(f"⚡ Cache Hits: {cache_hits}")
 
-        # Show actual downloads separately
-        if successful > 0:
-            status_parts.append(f"📥 Downloads: {successful}")
+        # ALWAYS show downloads (even if 0) for consistency and to verify: Processed = Cache Hits + Downloads
+        status_parts.append(f"📥 Downloads: {successful}")
 
         # Always show failed count
         status_parts.append(f"❌ Failed: {failed}")

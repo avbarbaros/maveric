@@ -32,8 +32,8 @@ class MAVERICConfig:
     n_reference_images: int = 10
     retrieval_rotation_size: int = 1000
     max_retries: int = 3
-    request_timeout: int = 15  # Increased from 5s to 15s for large images on slow networks
-    
+    request_timeout: int = 5 
+
     # Quality metrics configuration - organized by category
     quality_metrics: List[str] = field(default_factory=lambda: [
         # Visual metrics (image-only)
