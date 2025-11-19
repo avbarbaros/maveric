@@ -135,11 +135,14 @@ class ModelCustomizer(BaseComponent):
         # Create evaluator
         self.evaluator = Evaluator(device=self.device)
         
+        # Get dataset templates for evaluation
+        templates = self._get_dataset_templates(target_dataset_name)
+
         # Get baseline performance (always use test data)
         self.log_info("Evaluating baseline model")
         if not test_loader:
             raise ValueError(f"Test data is required for evaluation but could not load test set for {target_dataset_name}")
-        baseline_accuracy, baseline_class_accuracies = self._evaluate_baseline(test_loader, class_names)
+        baseline_accuracy, baseline_class_accuracies = self._evaluate_baseline(test_loader, class_names, templates=templates)
         
         # Train model (test data is mandatory)
         self.log_info("Training customized model")
@@ -164,7 +167,8 @@ class ModelCustomizer(BaseComponent):
                 final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
                     best_model,
                     test_loader,
-                    class_names
+                    class_names,
+                    templates=templates
                 )
             else:
                 # Fallback: evaluate current model and save it
@@ -172,7 +176,8 @@ class ModelCustomizer(BaseComponent):
                 final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
                     customized_model,
                     test_loader,
-                    class_names
+                    class_names,
+                    templates=templates
                 )
                 best_checkpoint = self.trainer.save_checkpoint(
                     customized_model,
@@ -189,7 +194,8 @@ class ModelCustomizer(BaseComponent):
             final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
                 customized_model,
                 test_loader,
-                class_names
+                class_names,
+                templates=templates
             )
         
         # Create result
@@ -458,20 +464,45 @@ class ModelCustomizer(BaseComponent):
         self.log_info(f"Using simple split validation: {train_size} train, {val_size} validation samples")
         return train_loader, val_loader
     
-    def _evaluate_baseline(self, val_loader: Any, class_names: List[str]) -> Tuple[float, Dict[str, float]]:
+    def _get_dataset_templates(self, target_dataset_name: str) -> List[str]:
+        """
+        Get evaluation templates for a dataset.
+
+        Args:
+            target_dataset_name: Name of the target dataset
+
+        Returns:
+            List of prompt templates for evaluation
+        """
+        try:
+            from ..datasets import get_dataset
+            # Get dataset instance to access templates
+            dataset = get_dataset(target_dataset_name, train=False, root=str(self.cache_dir))
+            if hasattr(dataset, 'get_text_templates'):
+                templates = dataset.get_text_templates()
+                self.log_info(f"Using {len(templates)} templates for {target_dataset_name} evaluation")
+                return templates
+        except Exception as e:
+            self.log_warning(f"Could not load dataset templates: {e}")
+
+        # Fallback to default template
+        return None
+
+    def _evaluate_baseline(self, val_loader: Any, class_names: List[str], templates: List[str] = None) -> Tuple[float, Dict[str, float]]:
         """Evaluate baseline model performance."""
         baseline_model = CustomizedCLIP(
             self.model,
             self.processor,
             regularize=False
         ).to(self.device)
-        
+
         accuracy, class_accuracies = self.evaluator.evaluate_detailed(
             baseline_model,
             val_loader,
-            class_names
+            class_names,
+            templates=templates
         )
-        
+
         self.log_info(f"Baseline model accuracy: {accuracy:.2f}%")
         return accuracy, class_accuracies
     

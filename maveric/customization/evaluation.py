@@ -13,84 +13,154 @@ from ..core.base import BaseComponent
 
 class Evaluator(BaseComponent):
     """Handles model evaluation and metrics calculation."""
-    
+
     def __init__(self, device: str = "cuda"):
         """
         Initialize evaluator.
-        
+
         Args:
             device: Device for evaluation
         """
         super().__init__("Evaluator")
         self.device = device
-    
+
+    def _create_text_classifier_with_templates(self,
+                                               model: nn.Module,
+                                               class_names: List[str],
+                                               templates: List[str]) -> torch.Tensor:
+        """
+        Create text classifier with template ensembling (REACT-style).
+
+        This method follows REACT's evaluation approach:
+        1. Generate prompts for each class using all templates
+        2. Normalize each template embedding
+        3. Average across templates
+        4. Re-normalize after averaging
+
+        Args:
+            model: CLIP model
+            class_names: List of class names
+            templates: List of prompt templates (e.g., ["a photo of a {}, a type of pet."])
+
+        Returns:
+            Text classifier tensor (embedding_dim x num_classes)
+        """
+        zeroshot_weights = []
+
+        for class_name in class_names:
+            # Generate prompts for this class using all templates
+            class_prompts = [template.format(class_name) for template in templates]
+
+            # Tokenize and encode
+            text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+
+            with torch.no_grad():
+                # Get text embeddings for all templates
+                class_embeddings = model.clip_model.get_text_features(**text_inputs)
+
+                # Normalize each template embedding
+                class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
+
+                # Average across templates
+                class_embedding = class_embeddings.mean(dim=0)
+
+                # Re-normalize after averaging (important!)
+                class_embedding = class_embedding / class_embedding.norm()
+
+                zeroshot_weights.append(class_embedding)
+
+        # Stack to create classifier matrix: (embedding_dim, num_classes)
+        zeroshot_weights = torch.stack(zeroshot_weights, dim=1)
+
+        return zeroshot_weights
+
     def evaluate(self,
                  model: nn.Module,
                  data_loader: Any,
-                 class_names: List[str]) -> float:
+                 class_names: List[str],
+                 templates: List[str] = None,
+                 use_ensemble: bool = True) -> float:
         """
-        Evaluate model accuracy.
-        
+        Evaluate model accuracy with optional template ensembling.
+
         Args:
             model: Model to evaluate
             data_loader: Data loader
             class_names: List of class names
-            
+            templates: List of prompt templates (if None, uses single default template)
+            use_ensemble: Whether to use template ensembling (default: True for REACT-style evaluation)
+
         Returns:
             Overall accuracy percentage
         """
         model.eval()
-        
-        # Create text features (using same method as original code)
-        class_prompts = [f"a photo of a {name}." for name in class_names]
-        text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
-        
-        with torch.no_grad():
-            class_text_features = model.clip_model.get_text_features(**text_inputs)
-            class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
-        
+
+        # Create text features with template ensembling if enabled
+        if use_ensemble and templates is not None:
+            # REACT-style evaluation with template ensembling
+            class_text_features = self._create_text_classifier_with_templates(model, class_names, templates)
+        else:
+            # Simple single-template evaluation (backward compatibility)
+            class_prompts = [f"a photo of a {name}." for name in class_names]
+            text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+
+            with torch.no_grad():
+                class_text_features = model.clip_model.get_text_features(**text_inputs)
+                class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+                class_text_features = class_text_features.T  # Transpose to match ensemble format
+
         correct = 0
         total = 0
-        
+
         with torch.no_grad():
             for images, texts, labels in tqdm(data_loader, desc="Evaluating"):
                 labels = labels.to(self.device)
-                
+
                 # Get predictions
                 logits = model(images, class_text_features)
                 predictions = logits.argmax(dim=1)
-                
+
                 # Count correct
                 correct += (predictions == labels).sum().item()
                 total += labels.size(0)
-        
+
         accuracy = 100 * correct / total
         return accuracy
     
     def evaluate_detailed(self,
                          model: nn.Module,
                          data_loader: Any,
-                         class_names: List[str]) -> Tuple[float, Dict[str, float]]:
+                         class_names: List[str],
+                         templates: List[str] = None,
+                         use_ensemble: bool = True) -> Tuple[float, Dict[str, float]]:
         """
         Detailed evaluation with per-class metrics.
-        
+
         Args:
             model: Model to evaluate
             data_loader: Data loader
             class_names: List of class names
-            
+            templates: List of prompt templates (if None, uses single default template)
+            use_ensemble: Whether to use template ensembling (default: True)
+
         Returns:
             Tuple of (overall_accuracy, per_class_accuracies)
         """
         model.eval()
-        
-        # Create text features (using same method as original code)
-        class_prompts = [f"a photo of a {name}." for name in class_names]
-        text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
-        
-        with torch.no_grad():
-            class_text_features = model.clip_model.get_text_features(**text_inputs)
-            class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+
+        # Create text features with template ensembling if enabled
+        if use_ensemble and templates is not None:
+            # REACT-style evaluation with template ensembling
+            class_text_features = self._create_text_classifier_with_templates(model, class_names, templates)
+        else:
+            # Simple single-template evaluation (backward compatibility)
+            class_prompts = [f"a photo of a {name}." for name in class_names]
+            text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+
+            with torch.no_grad():
+                class_text_features = model.clip_model.get_text_features(**text_inputs)
+                class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+                class_text_features = class_text_features.T  # Transpose to match ensemble format
         
         all_predictions = []
         all_labels = []

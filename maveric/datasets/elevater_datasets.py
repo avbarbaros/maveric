@@ -698,40 +698,181 @@ class ELEVATERDataset(BaseDataset):
         # Dataset-specific templates
         dataset_templates = {
             'dtd': [
-                "a {} texture",
-                "a photo of a {} texture",
-                "the {} pattern"
+                "a photo of a {} texture.",
+                "a photo of a {} pattern.",
+                "a photo of a {} thing.",
+                "a photo of a {} object.",
+                "a photo of the {} texture.",
+                "a photo of the {} pattern.",
+                "a photo of the {} thing.",
+                "a photo of the {} object."
             ],
             'eurosat': [
-                "a satellite photo of {}",
-                "aerial view of {}",
-                "satellite imagery showing {}"
+                "a centered satellite photo of {}.",
+                "a centered satellite photo of a {}.",
+                "a centered satellite photo of the {}."
             ],
             'fer2013': [
-                "a face showing {}",
-                "a person feeling {}",
-                "facial expression of {}"
+                "a photo of a {} looking face.",
+                "a photo of a face showing the emotion: {}.",
+                "a photo of a face looking {}.",
+                "a face that looks {}.",
+                "they look {}.",
+                "look at how {} they are."
             ],
             'food101': [
-                "a photo of {}, a type of food",
-                "a dish called {}",
-                "food image showing {}"
+                "a photo of {}, a type of food"
             ],
             'gtsrb': [
-                "a {} traffic sign",
-                "road sign showing {}",
-                "traffic sign for {}"
+                "a zoomed in photo of a {} traffic sign.",
+                "a centered photo of a {} traffic sign.",
+                "a close up photo of a {} traffic sign."
             ],
             'oxford_flowers102': [
                 "a photo of a {}, a type of flower",
-                "a flower called {}",
-                "blooming {} flower"
+                "a photo of the {}, a type of flower"
             ],
             'oxford_pets': [
                 "a photo of a {}, a type of pet",
-                "a pet {}",
-                "an animal called {}"
+                "a photo of the {}, a type of pet"
+            ],
+            'cifar10': [
+                "a photo of a {}.",
+                "a blurry photo of a {}.",
+                "a black and white photo of a {}.",
+                "a low contrast photo of a {}.",
+                "a high contrast photo of a {}.",
+                "a bad photo of a {}.",
+                "a good photo of a {}.",
+                "a photo of a small {}.",
+                "a photo of a big {}.",
+                "a photo of the {}.",
+                "a blurry photo of the {}.",
+                "a black and white photo of the {}.",
+                "a low contrast photo of the {}.",
+                "a high contrast photo of the {}.",
+                "a bad photo of the {}.",
+                "a good photo of the {}.",
+                "a photo of the small {}.",
+                "a photo of the big {}."
+            ],
+            'cifar100': [
+                "a photo of a {}.",
+                "a blurry photo of a {}.",
+                "a black and white photo of a {}.",
+                "a low contrast photo of a {}.",
+                "a high contrast photo of a {}.",
+                "a bad photo of a {}.",
+                "a good photo of a {}.",
+                "a photo of a small {}.",
+                "a photo of a big {}.",
+                "a photo of the {}.",
+                "a blurry photo of the {}.",
+                "a black and white photo of the {}.",
+                "a low contrast photo of the {}.",
+                "a high contrast photo of the {}.",
+                "a bad photo of the {}.",
+                "a good photo of the {}.",
+                "a photo of the small {}.",
+                "a photo of the big {}."
+            ],
+            'caltech101': [
+                "a photo of a {}.",
+                "a painting of a {}.",
+                "a plastic {}.",
+                "a sculpture of a {}.",
+                "a sketch of a {}.",
+                "a tattoo of a {}.",
+                "a toy {}.",
+                "a rendition of a {}.",
+                "a embroidered {}.",
+                "a cartoon {}.",
+                "a {} in a video game.",
+                "a plushie {}.",
+                "a origami {}.",
+                "art of a {}.",
+                "graffiti of a {}.",
+                "a drawing of a {}.",
+                "a doodle of a {}.",
+                "a photo of the {}.",
+                "a painting of the {}.",
+                "the plastic {}.",
+                "a sculpture of the {}.",
+                "a sketch of the {}.",
+                "a tattoo of the {}.",
+                "the toy {}.",
+                "a rendition of the {}.",
+                "the embroidered {}.",
+                "the cartoon {}.",
+                "the {} in a video game.",
+                "the plushie {}.",
+                "the origami {}.",
+                "art of the {}.",
+                "graffiti of the {}.",
+                "a drawing of the {}.",
+                "a doodle of the {}."
+            ],
+            'country211': [
+                "a photo i took in {}.",
+                "a photo i took while visiting {}.",
+                "a photo from my home country of {}.",
+                "a photo from my visit to {}.",
+                "a photo showing the country of {}."
+            ],
+            'fgvc_aircraft': [
+                "a photo of a {}, a type of aircraft",
+                "a photo of the {}, a type of aircraft"
+            ],
+            'hateful_memes': [
+                "a {}.",
+                "the {}."
+            ],
+            'kitti_distance': [
+                "{}"
+            ],
+            'mnist': [
+                "a photo of the number: {}."
+            ],
+            'patchcamelyon': [
+                "this is a photo of {}"
+            ],
+            'rendered_sst2': [
+                "a {} review of a movie."
+            ],
+            'resisc45': [
+                "satellite imagery of {}.",
+                "aerial imagery of {}.",
+                "satellite photo of {}.",
+                "aerial photo of {}.",
+                "satellite view of {}.",
+                "aerial view of {}.",
+                "satellite imagery of a {}.",
+                "aerial imagery of a {}.",
+                "satellite photo of a {}.",
+                "aerial photo of a {}.",
+                "satellite view of a {}.",
+                "aerial view of a {}.",
+                "satellite imagery of the {}.",
+                "aerial imagery of the {}.",
+                "satellite photo of the {}.",
+                "aerial photo of the {}.",
+                "satellite view of the {}.",
+                "aerial view of the {}."
+            ],
+            'stanford_cars': [
+                "a photo of a {}.",
+                "a photo of the {}.",
+                "a photo of my {}.",
+                "i love my {}!",
+                "a photo of my dirty {}.",
+                "a photo of my clean {}.",
+                "a photo of my new {}.",
+                "a photo of my old {}."
+            ],
+            'voc2007': [
+                "a photo of a {}."
             ]
+            
         }
         
         # Return dataset-specific templates if available
