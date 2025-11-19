@@ -202,11 +202,11 @@ mypy maveric/
 The package provides a CLI tool accessible via `maveric` command:
 
 ```bash
-# Retrieve samples (via experiment script for full control)
+# Retrieve samples (default: without EfficientNet for 50-70% faster retrieval)
 python experiments/01_data_retrieval.py --config config.yaml
 
-# Retrieve samples WITHOUT EfficientNet (faster, skips Class_*_efficientNet_score)
-python experiments/01_data_retrieval.py --config config.yaml --disable-efficientnet
+# Retrieve samples WITH EfficientNet (includes Class_*_efficientNet_score fields)
+python experiments/01_data_retrieval.py --config config.yaml --enable-efficientnet
 
 # Apply quality control
 maveric quality-control --input results.json --thresholds thresholds.json --output filtered.json
@@ -653,59 +653,61 @@ MAVERIC is optimized for Google Colab environments:
 - Eliminates GPU memory usage during the data collection phase
 - Maintains high-quality assessment while reducing hardware requirements
 
-### Disabling EfficientNet for Faster Retrieval
-**NEW**: You can now disable EfficientNet-based quality metrics for significantly faster data retrieval:
+### EfficientNet Quality Metrics (Disabled by Default)
+**Default Behavior**: EfficientNet-based quality metrics are **DISABLED by default** for 50-70% faster data retrieval.
+
+**To enable EfficientNet calculations**:
 
 **Command-line flag**:
 ```bash
-python experiments/01_data_retrieval.py --config config.yaml --disable-efficientnet
+python experiments/01_data_retrieval.py --config config.yaml --enable-efficientnet
 ```
 
 **Configuration file**:
 ```yaml
-enable_target_class_quality: false  # Disable EfficientNet calculations
+enable_target_class_quality: true  # Enable EfficientNet calculations
 ```
 
-**What gets skipped when disabled**:
-- `Class_{class_name}_efficientNet_score` fields are not computed
-- `Class_{class_name}_clip_similarity_to_imagenet` fields are not computed
-- `imagenet_predicted_class` and `imagenet_probability` fields are not added
-- EfficientNet-B0 model loading and inference are skipped entirely
+**What gets computed when enabled**:
+- `Class_{class_name}_efficientNet_score` fields for per-class quality assessment
+- `Class_{class_name}_clip_similarity_to_imagenet` fields for ImageNet alignment
+- `imagenet_predicted_class` and `imagenet_probability` fields
+- Full EfficientNet-B0 model loading and inference
 
 **Performance impact**:
-- **~50-70% faster** data retrieval (depending on dataset and hardware)
-- Significantly reduced CPU usage during retrieval
-- All other quality metrics (visual, semantic, similarity-based) remain available
+- **Default (disabled)**: ~50-70% faster data retrieval
+- **Enabled**: More comprehensive quality metrics but slower processing
+- All other quality metrics (visual, semantic, similarity-based) are always computed
 
-**When to disable**:
-- Initial data exploration when you want quick results
-- When EfficientNet scores are not needed for your filtering criteria
-- Limited computational resources or time constraints
-- Working with very large datasets (>100k samples)
-
-**When to keep enabled**:
+**When to enable**:
 - Need per-class ImageNet-based quality assessment
 - Filtering based on EfficientNet scores
 - Final production data curation with comprehensive metrics
+
+**When to keep disabled (default)**:
+- Initial data exploration when you want quick results
+- EfficientNet scores not needed for your filtering criteria
+- Limited computational resources or time constraints
+- Working with very large datasets (>100k samples)
 
 ### Data Curation Compatibility
 
 The `02_data_curation.py` script **automatically handles both types of data**:
 
-**With EfficientNet metrics** (standard retrieval):
-- All quality thresholds are applied, including EfficientNet-based ones
-- Full range of filtering options available
-
-**Without EfficientNet metrics** (`--disable-efficientnet` retrieval):
+**Without EfficientNet metrics** (default retrieval):
 - Script automatically detects missing EfficientNet fields
 - Filters skip missing metrics gracefully (no errors)
 - All other thresholds (visual, semantic, similarity) are still applied
 - Quality control works identically, just with fewer metrics
 
+**With EfficientNet metrics** (`--enable-efficientnet` retrieval):
+- All quality thresholds are applied, including EfficientNet-based ones
+- Full range of filtering options available
+
 **Example workflow**:
 ```bash
-# Step 1: Fast retrieval without EfficientNet
-python experiments/01_data_retrieval.py --config config.yaml --disable-efficientnet
+# Step 1: Fast retrieval without EfficientNet (default)
+python experiments/01_data_retrieval.py --config config.yaml
 
 # Step 2: Curation works automatically (no special flags needed)
 python experiments/02_data_curation.py --input-dir results/cifar10/raw --dataset-name cifar10 --config config.yaml
@@ -713,7 +715,7 @@ python experiments/02_data_curation.py --input-dir results/cifar10/raw --dataset
 
 The curation script will display:
 ```
-ℹ️  EfficientNet metrics not present (data retrieved with --disable-efficientnet)
+ℹ️  EfficientNet metrics not present (default behavior for faster retrieval)
    Visual, semantic, and similarity metrics are still available for filtering
 ```
 

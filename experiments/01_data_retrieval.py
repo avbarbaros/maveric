@@ -200,19 +200,19 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Standard retrieval with all metrics (including EfficientNet)
+  # Fast retrieval without EfficientNet (default, 50-70%% faster)
   python 01_data_retrieval.py --config maveric_config.yaml
 
-  # Fast retrieval without EfficientNet (50-70%% faster)
-  python 01_data_retrieval.py --config maveric_config.yaml --disable-efficientnet
+  # Full retrieval with all metrics (including EfficientNet)
+  python 01_data_retrieval.py --config maveric_config.yaml --enable-efficientnet
 
   # Custom config path
   python 01_data_retrieval.py -c /path/to/config.yaml
 
 Performance Note:
-  Using --disable-efficientnet significantly speeds up retrieval by skipping
-  EfficientNet-based quality metrics (Class_*_efficientNet_score fields).
-  All other metrics (visual, semantic, similarity-based) remain available.
+  By default, EfficientNet-based quality metrics are DISABLED for faster retrieval.
+  Use --enable-efficientnet to calculate Class_*_efficientNet_score fields.
+  All other metrics (visual, semantic, similarity-based) are always computed.
         """
     )
     
@@ -231,9 +231,9 @@ Performance Note:
     )
 
     parser.add_argument(
-        '--disable-efficientnet',
+        '--enable-efficientnet',
         action='store_true',
-        help='Disable EfficientNet-based TargetClassQualityMetric calculation (speeds up retrieval)'
+        help='Enable EfficientNet-based TargetClassQualityMetric calculation (default: disabled for faster retrieval)'
     )
 
     return parser.parse_args()
@@ -312,8 +312,8 @@ def main():
     print(f"📁 Output directory: {output_dir}")
     
     try:
-        # Setup MAVERIC with optional EfficientNet disabled
-        enable_target_class_quality = not args.disable_efficientnet
+        # Setup MAVERIC with optional EfficientNet (disabled by default)
+        enable_target_class_quality = args.enable_efficientnet
         maveric = setup_maveric(config, enable_target_class_quality=enable_target_class_quality)
         if not maveric:
             print("❌ Failed to initialize MAVERIC")
