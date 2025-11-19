@@ -1468,28 +1468,57 @@ class MAVERICInteractiveQualityControl:
         def on_apply_clicked(b):
             with output:
                 clear_output()
-                
+
+                # Show progress indicator
+                print("🔄 Applying settings...")
+                progress = widgets.IntProgress(
+                    value=0,
+                    min=0,
+                    max=5,
+                    description='Progress:',
+                    bar_style='info',
+                    style={'bar_color': '#4CAF50'},
+                    layout=widgets.Layout(width='100%')
+                )
+                status_label = widgets.HTML(value="<b>Updating thresholds...</b>")
+                progress_box = widgets.VBox([progress, status_label])
+                display(progress_box)
+
                 # Update thresholds
+                progress.value = 1
+                status_label.value = "<b>Updating thresholds...</b>"
                 for metric, widget in threshold_widgets.items():
                     self.set_threshold(metric, widget.value)
-                
+
                 # Update weights (batch update to recalculate scores only once)
+                progress.value = 2
+                status_label.value = "<b>Updating metric weights...</b>"
                 weight_updates = {metric: widget.value for metric, widget in weight_widgets.items()}
                 self.set_class_weights(weight_updates)
-                
+
                 # Update balance settings
+                progress.value = 3
+                status_label.value = "<b>Updating balance settings...</b>"
                 self.balance_settings.update({
                     'balance_strategy': balance_strategy_widget.value,
                     'balance_min_samples': balance_min_samples_widget.value,
                     'balance_enable_oversampling': balance_oversampling_widget.value
                 })
-                
+
                 # Apply filters
+                progress.value = 4
+                status_label.value = "<b>Applying filters...</b>"
                 count = self.apply_thresholds()
                 filtered_count.value = f"<h4>Filtered data: {count:,} items</h4>"
-                
+
                 # Show visualizations
+                progress.value = 5
+                status_label.value = "<b>Generating visualizations...</b>"
                 self.visualize_distributions()
+
+                # Clear progress and show completion
+                progress_box.close()
+                print("\n✅ Settings applied successfully!")
         
         def on_visualize_clicked(b):
             with output:
@@ -1507,9 +1536,35 @@ class MAVERICInteractiveQualityControl:
         def on_save_data_clicked(b):
             with output:
                 clear_output()
+
+                # Show progress indicator
+                print("💾 Saving filtered data...")
+                progress = widgets.IntProgress(
+                    value=0,
+                    min=0,
+                    max=100,
+                    description='Saving:',
+                    bar_style='info',
+                    style={'bar_color': '#2196F3'},
+                    layout=widgets.Layout(width='100%')
+                )
+                status_label = widgets.HTML(value="<b>Preparing data for export...</b>")
+                progress_box = widgets.VBox([progress, status_label])
+                display(progress_box)
+
+                # Update progress as we save
+                progress.value = 20
+                status_label.value = "<b>Formatting samples...</b>"
+
                 save_path = self.save_filtered_data()
+
+                progress.value = 100
+                progress_box.close()
+
                 if save_path:
-                    print(f"✅ Data saved to: {save_path}")
+                    print(f"✅ Data saved successfully to: {save_path}")
+                else:
+                    print(f"❌ Failed to save data")
         
         def on_save_config_clicked(b):
             with output:
