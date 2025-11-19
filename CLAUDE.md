@@ -27,6 +27,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **Cache location**: `cache_base_dir/sample_metadata_cache/{hash[:2]}/sample_{hash}_v{version}.json`
   - **Test coverage**: 16 comprehensive tests in `tests/test_sample_cache.py`
 
+### November 19, 2025 - Caltech101 Torchvision Compatibility Fix
+- **Class list mismatch fixed**: Aligned class_names with torchvision's actual implementation
+  - **Issue**: Torchvision explicitly removes 'BACKGROUND_Google' category, leaving 101 classes (labels 0-100)
+  - **Root cause**: MAVERIC had 102 classes including 'background_google', causing index mismatch
+  - **Impact**: 'yin_yang' class showed 0 samples (index 101 doesn't exist in torchvision)
+  - **Fix**: Updated class_names to match torchvision's 101 sorted categories (excluding BACKGROUND_Google)
+  - **Result**: All 101 Caltech101 classes now correctly mapped to torchvision labels
+  - **Location**: [elevater_datasets.py](maveric/datasets/elevater_datasets.py)
+
+### November 18, 2025 - Caltech101 Dataset Fixes
+- **Missing "leopards" class**: Added missing class to Caltech101 dataset
+  - **Issue**: "leopards" class was completely missing from class names list
+  - **Fix**: Added "leopards" at correct position in alphabetical ordering
+  - **Location**: [elevater_datasets.py](maveric/datasets/elevater_datasets.py)
+
+### November 13, 2025 - Statistics Display Improvements
+- **Retrieval statistics fix**: Enhanced progress display for better clarity
+  - Always shows cache hits and downloads (even if 0) for consistency
+  - Improved verification: Processed = Cache Hits + Downloads
+  - Better batch position tracking and index information display
+  - **Location**: [progress.py](maveric/core/progress.py)
+
 ### November 2, 2025 - Critical Bug Fix
 - **Class name extraction bug**: Fixed GTSRB showing only 3/43 classes due to underscore parsing issue
   - All datasets with underscores in class names now work correctly (e.g., `ahead_only`, `beware_of_ice_snow`)
@@ -36,7 +58,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Critical Configuration Changes**:
 - `enable_target_class_quality`: **Default changed to `false`** (was `true`) - provides 50-70% faster retrieval
-- `request_timeout`: **Default increased to 15 seconds** (was 5s) - reduces network failures by 50-70%
 
 **New Features**:
 - **Atomic file writes**: `save_json_atomic()` in `io_utils.py` prevents corruption on Google Drive/NFS
@@ -45,13 +66,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Progress logging**: Long operations now show progress (CLIP loading, dataset loading, reference generation)
 
 **Documentation**:
-- New `docs/bugfixes/` directory with 67 KB of comprehensive bug fix documentation
+- New `docs/bugfixes/` directory with 88 KB of comprehensive bug fix documentation
 - Complete retrieval analysis and performance optimization guides
 - 10 complete CIFAR-100 experiment runs documented in `experiments/CIFAR100_Experiments.txt`
 
 **Performance Impact**:
 - 50-70% faster data retrieval (EfficientNet disabled by default)
-- 50-70% fewer network download failures
 - No more file corruption or hanging on network filesystems
 - Better debugging capabilities with enhanced logging
 
@@ -222,7 +242,7 @@ MAVERIC uses dataclass-based configuration in `config.py`:
 Key configuration options:
 - `enable_real_time_stats`: Show live download/cache statistics during retrieval (default: true)
 - `enable_target_class_quality`: Enable EfficientNet-based TargetClassQualityMetric (default: **false** for 50-70% faster retrieval, set to true for comprehensive quality assessment)
-- `request_timeout`: HTTP request timeout in seconds (default: 15, increased from 5 to reduce network failures)
+- `request_timeout`: HTTP request timeout in seconds (default: 5)
 - `clip_model`: CLIP model to use (default: "ViT-B/32")
 - `cache_base_dir`: Directory for caching downloaded images and results
 - `batch_size`: Processing batch size
@@ -521,6 +541,24 @@ MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified h
 
 Torchvision datasets benefit from automatic downloading, standardized interfaces, and optimized loading.
 
+### Caltech101 Special Notes
+
+**Torchvision Behavior**: Torchvision's Caltech101 implementation automatically:
+- Removes the 'BACKGROUND_Google' category
+- Sorts remaining 101 categories alphabetically
+- Assigns labels 0-100 to these categories
+
+**Manual Download Workaround** (if torchvision download URLs are broken):
+1. Download Caltech101 from Kaggle: https://www.kaggle.com/datasets/imbikramsaha/caltech-101
+2. Place in: `{cache_dir}/datasets/caltech101/101_ObjectCategories/`
+3. Torchvision will use the local files automatically
+4. Note: You'll get 8,677 samples (torchvision excludes BACKGROUND_Google images)
+
+**Expected Behavior**:
+- Dataset size: 8,677 samples (not 9,144 - BACKGROUND_Google excluded)
+- Number of classes: 101 (not 102)
+- All classes including 'yin_yang' will have samples
+
 ### Important Notes for Large Datasets
 
 **Food101 and Other Large Datasets**: Some torchvision datasets (particularly Food101, ~5GB with 75,750 training samples) require special handling:
@@ -568,7 +606,7 @@ Selecting FOOD101 sample data randomly...
 - Documentation: Comprehensive documentation suite
   - `README.md`: Main project documentation (16.6 KB)
   - `CLAUDE.md`: Developer guide for Claude Code (this file, 30+ KB)
-  - `docs/bugfixes/`: Bug fix documentation suite (67 KB total, 8 files)
+  - `docs/bugfixes/`: Bug fix documentation suite (88 KB total, 8 files)
   - `docs/maveric-api-docs.md`: API reference documentation (12 KB)
   - `docs/detailed_documentation.txt`: Detailed API and architecture docs (16 KB)
 
@@ -712,6 +750,17 @@ The curation script will display:
 
 ### Recent Improvements (Latest Commits)
 
+**November 18, 2025 - Caltech101 Dataset Fixes**:
+- **Missing "leopards" class**: Added complete missing class to Caltech101 (now correctly has 102 classes)
+- **Class list formatting**: Fixed trailing comma and proper alphabetical ordering
+- **Impact**: Full Caltech101 dataset support with all official classes
+
+**November 13, 2025 - Statistics Display Improvements**:
+- **Enhanced progress tracking**: Improved retrieval statistics display for better clarity
+- **Consistent reporting**: Always shows cache hits and downloads (even if 0)
+- **Verification formula**: Processed = Cache Hits + Downloads
+- **Location**: [progress.py](maveric/core/progress.py)
+
 **November 2, 2025 - Critical Bug Fix**:
 - **Class Name Extraction Bug Fix**: Fixed critical bug in `interactive.py` where class names containing underscores (e.g., GTSRB's `ahead_only`, `beware_of_ice_snow`) were incorrectly parsed
   - **Impact**: GTSRB dataset only showed 3/43 classes (pedestrians, stop, yield) - the only classes without underscores
@@ -721,7 +770,6 @@ The curation script will display:
   - **Tested**: All GTSRB class names now extracted correctly including complex names like `no_passing_for_vehicles_over_3_5_metric_tons`
 
 **October 30, 2025 - Major Performance & Reliability Updates**:
-- **Network Timeout Increase** (commit 18dcb1d): HTTP request timeout increased from 5s → 15s, reducing network failures by 50-70%
 - **EfficientNet Default Changed**: Now disabled by default (`enable_target_class_quality: false`) for 50-70% faster data retrieval
 - **Atomic File Writes**: New `save_json_atomic()` function prevents file corruption and hanging on network filesystems (Google Drive/NFS)
 - **Enhanced Cache Validation**: Automatic detection and regeneration of corrupted cache files with clear warning messages
@@ -749,8 +797,7 @@ The curation script will display:
 
 **NEW**: Comprehensive bug fix documentation available in `docs/bugfixes/` directory:
 
-- **`BUGFIX_SUMMARY.md`**: Complete summary of 6 critical bug fixes implemented on October 30, 2025
-  - Network timeout configuration (5s → 15s)
+- **`BUGFIX_SUMMARY.md`**: Complete summary of critical bug fixes implemented on October 30, 2025
   - EfficientNet default change (true → false)
   - Atomic file writes for network filesystems
   - Enhanced cache validation with corruption detection
@@ -773,7 +820,6 @@ The curation script will display:
 
 **Performance Impact**: These bug fixes collectively provide:
 - 50-70% faster data retrieval (EfficientNet disabled by default)
-- 50-70% fewer network failures (increased timeout)
 - Eliminated file corruption on Google Drive/NFS (atomic writes)
 - Better debugging capabilities (diagnostic logging)
 

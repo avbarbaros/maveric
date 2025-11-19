@@ -25,11 +25,13 @@ class ELEVATERDataset(BaseDataset):
     # Mapping of ELEVATER dataset names to their properties
     ELEVATER_DATASETS = {
         'caltech101': {
-            'num_classes': 102,
+            'num_classes': 101,  # Torchvision excludes BACKGROUND_Google, so 101 classes
             'task': 'classification',
             'type': 'torchvision',
+            # NOTE: Torchvision's Caltech101 removes 'BACKGROUND_Google' and sorts alphabetically
+            # This list matches torchvision's actual labels 0-100 (101 classes total)
             'class_names': [
-                'accordion', 'airplanes', 'anchor', 'ant', 'background_google','barrel', 'bass', 'beaver', 'binocular',
+                'accordion', 'airplanes', 'anchor', 'ant', 'barrel', 'bass', 'beaver', 'binocular',
                 'bonsai', 'brain', 'brontosaurus', 'buddha', 'butterfly', 'camera', 'cannon',
                 'car_side', 'ceiling_fan', 'cellphone', 'chair', 'chandelier', 'cougar_body',
                 'cougar_face', 'crab', 'crayfish', 'crocodile', 'crocodile_head', 'cup', 'dalmatian',
