@@ -477,7 +477,8 @@ class ModelCustomizer(BaseComponent):
         try:
             from ..datasets import get_dataset
             # Get dataset instance to access templates
-            dataset = get_dataset(target_dataset_name, train=False, root=str(self.cache_dir))
+            cache_root = str(self.cache_base_dir) if self.cache_base_dir else None
+            dataset = get_dataset(target_dataset_name, train=False, root=cache_root)
             if hasattr(dataset, 'get_text_templates'):
                 templates = dataset.get_text_templates()
                 self.log_info(f"Using {len(templates)} templates for {target_dataset_name} evaluation")

@@ -69,8 +69,8 @@ class Evaluator(BaseComponent):
 
                 zeroshot_weights.append(class_embedding)
 
-        # Stack to create classifier matrix: (embedding_dim, num_classes)
-        zeroshot_weights = torch.stack(zeroshot_weights, dim=1)
+        # Stack to create classifier matrix: (num_classes, embedding_dim)
+        zeroshot_weights = torch.stack(zeroshot_weights, dim=0)
 
         return zeroshot_weights
 
@@ -107,7 +107,7 @@ class Evaluator(BaseComponent):
             with torch.no_grad():
                 class_text_features = model.clip_model.get_text_features(**text_inputs)
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
-                class_text_features = class_text_features.T  # Transpose to match ensemble format
+                # Shape: (num_classes, embedding_dim) - matches ensemble format
 
         correct = 0
         total = 0
@@ -160,7 +160,7 @@ class Evaluator(BaseComponent):
             with torch.no_grad():
                 class_text_features = model.clip_model.get_text_features(**text_inputs)
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
-                class_text_features = class_text_features.T  # Transpose to match ensemble format
+                # Shape: (num_classes, embedding_dim) - matches ensemble format
         
         all_predictions = []
         all_labels = []
