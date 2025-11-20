@@ -235,14 +235,16 @@ class ELEVATERDataset(BaseDataset):
             'num_classes': 37,
             'task': 'classification',
             'type': 'torchvision',
+            # Note: Torchvision converts underscores to spaces and applies title() to each word
+            # e.g., 'american_bulldog' becomes 'American Bulldog'
             'class_names': [
-                'Abyssinian', 'american bulldog', 'american pit bull terrier', 'basset hound', 'beagle',
-                'Bengal', 'Birman', 'Bombay', 'boxer', 'British Shorthair', 'chihuahua', 'Egyptian Mau',
-                'english cocker spaniel', 'english setter', 'german shorthaired', 'great pyrenees',
-                'havanese', 'japanese chin', 'keeshond', 'leonberger', 'Maine Coon', 'miniature pinscher',
-                'newfoundland', 'Persian', 'pomeranian', 'pug', 'Ragdoll', 'Russian Blue', 'saint bernard',
-                'samoyed', 'scottish terrier', 'shiba inu', 'Siamese', 'Sphynx', 'staffordshire bull terrier',
-                'wheaten terrier', 'yorkshire terrier'
+                'Abyssinian', 'American Bulldog', 'American Pit Bull Terrier', 'Basset Hound', 'Beagle',
+                'Bengal', 'Birman', 'Bombay', 'Boxer', 'British Shorthair', 'Chihuahua', 'Egyptian Mau',
+                'English Cocker Spaniel', 'English Setter', 'German Shorthaired', 'Great Pyrenees',
+                'Havanese', 'Japanese Chin', 'Keeshond', 'Leonberger', 'Maine Coon', 'Miniature Pinscher',
+                'Newfoundland', 'Persian', 'Pomeranian', 'Pug', 'Ragdoll', 'Russian Blue', 'Saint Bernard',
+                'Samoyed', 'Scottish Terrier', 'Shiba Inu', 'Siamese', 'Sphynx', 'Staffordshire Bull Terrier',
+                'Wheaten Terrier', 'Yorkshire Terrier'
             ]
         },
         'patchcamelyon': {
