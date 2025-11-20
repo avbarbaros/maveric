@@ -348,12 +348,12 @@ class ModelCustomizer(BaseComponent):
                             normalized_test = self._normalize_class_name(test_class_name)
 
                             if normalized_test in normalized_training_map:
-                                # Use the test dataset class name (from ELEVATER_DATASETS) for both label and text
-                                # This ensures prompts use the correct format for CLIP embeddings
+                                # Use the test dataset class name (from ELEVATER_DATASETS) for the label
+                                # Note: Text field is not used during evaluation (templates are used in text classifier)
                                 test_samples.append({
                                     'image': image,
                                     'label': test_class_name,  # Use test dataset class name
-                                    'text': f"a photo of a {test_class_name}."  # Use test dataset class name in prompt
+                                    'text': ''  # Placeholder - not used during evaluation
                                 })
                     except Exception as e:
                         if idx < 10:  # Only log first few errors to avoid spam
