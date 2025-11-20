@@ -70,24 +70,24 @@ processing:
   
 # Training configuration (for model customization)
 training:
-  epochs: 10
-  learning_rate: 0.0000006
-  weight_decay: 0.05
+  epochs: 20
+  learning_rate: 0.0000007
+  weight_decay: 0.07
   warmup_steps: 0
 
   # Regularization settings
   use_regularization: true  # Prevent catastrophic forgetting with MSE loss to original weights
-  regularization_weight: 0.80  # Weight for regularization loss (0.0-1.0)
+  regularization_weight: 0.75  # Weight for regularization loss (0.0-1.0)
 
   # Data augmentation settings
   use_augmentation: true
-  augmentation_strength: 4  # RandAugment num_ops
-  augmentation_magnitude: 15  # RandAugment magnitude
+  augmentation_strength: 7  # RandAugment num_ops
+  augmentation_magnitude: 22  # RandAugment magnitude
 
   # Optimization settings
   optimizer: "adamw"  # adamw, adam, sgd
   scheduler: "cosine"  # cosine, linear, constant
-  gradient_clip_value: 0.5
+  gradient_clip_value: 0.75
 
   # Validation settings
   use_validation: false  # Set to false to disable validation and use all data for training
