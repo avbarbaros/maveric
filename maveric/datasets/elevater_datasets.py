@@ -236,13 +236,13 @@ class ELEVATERDataset(BaseDataset):
             'task': 'classification',
             'type': 'torchvision',
             'class_names': [
-                'abyssinian', 'american_bulldog', 'american_pit_bull_terrier', 'basset_hound', 'beagle',
-                'bengal', 'birman', 'bombay', 'boxer', 'british_shorthair', 'chihuahua', 'egyptian_mau',
-                'english_cocker_spaniel', 'english_setter', 'german_shorthaired', 'great_pyrenees',
-                'havanese', 'japanese_chin', 'keeshond', 'leonberger', 'maine_coon', 'miniature_pinscher',
-                'newfoundland', 'persian', 'pomeranian', 'pug', 'ragdoll', 'russian_blue', 'saint_bernard',
-                'samoyed', 'scottish_terrier', 'shiba_inu', 'siamese', 'sphynx', 'staffordshire_bull_terrier',
-                'wheaten_terrier', 'yorkshire_terrier'
+                'Abyssinian', 'american bulldog', 'american pit bull terrier', 'basset hound', 'beagle',
+                'Bengal', 'Birman', 'Bombay', 'boxer', 'British Shorthair', 'chihuahua', 'Egyptian Mau',
+                'english cocker spaniel', 'english setter', 'german shorthaired', 'great pyrenees',
+                'havanese', 'japanese chin', 'keeshond', 'leonberger', 'Maine Coon', 'miniature pinscher',
+                'newfoundland', 'Persian', 'pomeranian', 'pug', 'Ragdoll', 'Russian Blue', 'saint bernard',
+                'samoyed', 'scottish terrier', 'shiba inu', 'Siamese', 'Sphynx', 'staffordshire bull terrier',
+                'wheaten terrier', 'yorkshire terrier'
             ]
         },
         'patchcamelyon': {
@@ -733,8 +733,8 @@ class ELEVATERDataset(BaseDataset):
                 "a photo of the {}, a type of flower"
             ],
             'oxford_pets': [
-                "a photo of a {}, a type of pet",
-                "a photo of the {}, a type of pet"
+                "a photo of a {}, a type of pet.",
+                "a photo of the {}, a type of pet."
             ],
             'cifar10': [
                 "a photo of a {}.",
