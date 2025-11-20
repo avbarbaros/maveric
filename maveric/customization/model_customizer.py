@@ -284,25 +284,37 @@ class ModelCustomizer(BaseComponent):
         
         return train_loader, val_loader, test_loader
     
+    def _normalize_class_name(self, class_name: str) -> str:
+        """
+        Normalize class name for flexible matching.
+        Converts to lowercase and replaces spaces with underscores.
+
+        Examples:
+            'American Bulldog' -> 'american_bulldog'
+            'american bulldog' -> 'american_bulldog'
+            'Abyssinian' -> 'abyssinian'
+        """
+        return class_name.lower().replace(' ', '_')
+
     def _create_test_loader(self, target_dataset_name: str, class_names: List[str]) -> Optional[Any]:
         """Create test data loader from target dataset."""
         try:
             from ..datasets import get_dataset
             from torch.utils.data import DataLoader
             from pathlib import Path
-            
+
             # Use configured cache directory for dataset downloads with dataset name
             dataset_cache_dir = Path('./data')  # Default fallback
             if hasattr(self, 'cache_base_dir') and self.cache_base_dir:
                 dataset_cache_dir = Path(self.cache_base_dir) / target_dataset_name / 'datasets'
-            
+
             # Load test split of the target dataset
             self.log_info(f"Loading test data from {target_dataset_name}")
             test_dataset_handler = get_dataset(target_dataset_name, train=False, root=str(dataset_cache_dir))  # Get test split
-            
+
             # Create custom dataset for test data
             test_samples = []
-            
+
             # Convert dataset to samples format
             if hasattr(test_dataset_handler, '_dataset') and test_dataset_handler._dataset:
                 dataset = test_dataset_handler._dataset
@@ -311,8 +323,12 @@ class ModelCustomizer(BaseComponent):
                 full_dataset_class_names = test_dataset_handler.class_names
 
                 # Create mapping from training class names to indices
+                # Use normalized names for flexible matching
                 class_to_idx = {name: idx for idx, name in enumerate(class_names)}
                 training_class_set = set(class_names)
+
+                # Also create a normalized mapping for flexible matching
+                normalized_training_map = {self._normalize_class_name(name): name for name in class_names}
 
                 self.log_info(f"Processing {len(dataset)} test samples from {target_dataset_name}")
                 self.log_info(f"Training classes: {len(class_names)}, Full dataset classes: {len(full_dataset_class_names)}")
@@ -324,15 +340,20 @@ class ModelCustomizer(BaseComponent):
                     try:
                         image, label = dataset[idx]
                         if isinstance(label, int) and label < len(full_dataset_class_names):
-                            # Map test label to actual class name using full dataset class names
-                            class_name = full_dataset_class_names[label]
+                            # Get class name from test dataset (torchvision format, e.g., "American Bulldog")
+                            test_class_name = full_dataset_class_names[label]
 
-                            # Only include if this class exists in training data
-                            if class_name in training_class_set:
+                            # Check if this class exists in training data using normalized matching
+                            # This handles case/space/underscore differences between training and test
+                            normalized_test = self._normalize_class_name(test_class_name)
+
+                            if normalized_test in normalized_training_map:
+                                # Use the test dataset class name (from ELEVATER_DATASETS) for both label and text
+                                # This ensures prompts use the correct format for CLIP embeddings
                                 test_samples.append({
                                     'image': image,
-                                    'label': class_name,
-                                    'text': f"a photo of a {class_name}."
+                                    'label': test_class_name,  # Use test dataset class name
+                                    'text': f"a photo of a {test_class_name}."  # Use test dataset class name in prompt
                                 })
                     except Exception as e:
                         if idx < 10:  # Only log first few errors to avoid spam
@@ -344,13 +365,18 @@ class ModelCustomizer(BaseComponent):
                 return None
 
             # Log which classes are missing from training data
-            missing_classes = set(full_dataset_class_names) - training_class_set
+            # Calculate missing classes using normalized matching
+            normalized_full_classes = {self._normalize_class_name(name): name for name in full_dataset_class_names}
+            missing_normalized = set(normalized_full_classes.keys()) - set(normalized_training_map.keys())
+            missing_classes = [normalized_full_classes[norm] for norm in missing_normalized]
+
             if missing_classes:
                 self.log_info(f"Excluding {len(missing_classes)} classes not in training data: {sorted(missing_classes)[:10]}" +
                              ("..." if len(missing_classes) > 10 else ""))
 
-            # Create test dataset
-            test_dataset = TestDataset(test_samples, class_names, self.processor)
+            # Create test dataset using test dataset class names (from ELEVATER_DATASETS)
+            # This ensures evaluation uses the correct class names for CLIP embeddings
+            test_dataset = TestDataset(test_samples, full_dataset_class_names, self.processor)
             
             # Create test loader
             test_loader = DataLoader(
