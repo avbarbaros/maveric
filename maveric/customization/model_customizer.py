@@ -319,8 +319,10 @@ class ModelCustomizer(BaseComponent):
             if hasattr(test_dataset_handler, '_dataset') and test_dataset_handler._dataset:
                 dataset = test_dataset_handler._dataset
 
-                # Get full dataset class names for proper mapping
-                full_dataset_class_names = test_dataset_handler.class_names
+                # CRITICAL: Use class_names from ELEVATER_DATASETS (passed as parameter)
+                # NOT from test_dataset_handler which may have torchvision's dynamically generated names
+                # This ensures evaluation uses EXACT REACT class names
+                full_dataset_class_names = class_names  # Use parameter, not dataset handler
 
                 # Create mapping from training class names to indices
                 # Use normalized names for flexible matching
