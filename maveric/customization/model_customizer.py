@@ -664,18 +664,12 @@ class CustomizedCLIP(nn.Module):
 
         # Step 2: Try to process with appropriate parameters
         try:
-            # For PIL images, use the processor with explicit parameters
+            # For PIL images, use the processor with DEFAULT parameters
+            # This ensures correct CLIP preprocessing (resize shortest edge, then center crop)
             if isinstance(preprocessed_images[0], Image.Image):
                 inputs = processor(
                     images=preprocessed_images,
-                    return_tensors="pt",
-                    do_resize=True,
-                    size={"height": 224, "width": 224},
-                    do_center_crop=True,
-                    crop_size={"height": 224, "width": 224},
-                    do_normalize=True,
-                    do_convert_rgb=True,  # Ensure RGB conversion
-                    return_pixels_as_is=False,
+                    return_tensors="pt"
                 )
                 inputs = {k: v.to(device) for k, v in inputs.items()}
                 return inputs

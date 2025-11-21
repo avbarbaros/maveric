@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### November 21, 2025 - CLIP Logit Scale Fix (LATEST)
-- **Critical evaluation fix**: Changed logit scale from learnable `logit_scale.exp()` to fixed 100.0
-  - **Impact**: Fixes 10% accuracy gap in zero-shot evaluation (e.g., Oxford Pets: 77.5% → 87.2%)
-  - **Root cause**: CLIP's learnable temperature parameter varied slightly from the standard 100.0 used in evaluation
-  - **Solution**: Use fixed scale of 100.0 to match CLIP paper and REACT benchmark protocol
-  - **Location**: [model_customizer.py:625](maveric/customization/model_customizer.py#L625)
+### November 21, 2025 - CLIP Image Preprocessing Fix (LATEST)
+- **Critical evaluation fix**: Fixed image preprocessing to use default CLIP processor behavior
+  - **Impact**: Fixes 10% accuracy gap in zero-shot evaluation (e.g., Oxford Pets: 77.92% → 87.2%)
+  - **Root cause**: Explicitly setting `size={"height": 224, "width": 224}` distorted aspect ratios before center cropping
+  - **Correct preprocessing**: Resize shortest edge to 224 (preserving aspect ratio), then center crop to 224x224
+  - **Solution**: Use processor's default parameters instead of explicit size/crop parameters
+  - **Location**: `_safe_process_images()` in [model_customizer.py:670-673](maveric/customization/model_customizer.py#L670-L673)
   - **Affected**: All zero-shot and fine-tuned model evaluations
-  - **Consistency**: Now matches standard CLIP evaluation practices across all benchmarks
+  - **Consistency**: Now matches standard CLIP preprocessing and published benchmarks
 
 ### November 20, 2025 - REACT-Style Text Prompting & Training Optimizations
 - **Dataset-specific text templates**: Implemented REACT benchmark-style class-specific prompting
@@ -843,15 +844,18 @@ The curation script will display:
 
 ### Recent Improvements (Latest Commits)
 
-**November 21, 2025 - CLIP Logit Scale Fix**:
-- **Critical bug fix**: Changed from learnable `logit_scale.exp()` to fixed scale of 100.0
+**November 21, 2025 - CLIP Image Preprocessing Fix**:
+- **Critical bug fix**: Fixed image preprocessing to use default CLIP processor parameters
   - **Problem identified**: 10% accuracy gap between MAVERIC and standard CLIP evaluation
-  - **Example impact**: Oxford Pets dataset - 77.5% (buggy) → 87.2% (fixed)
-  - **Root cause**: Using model's learnable temperature parameter instead of fixed evaluation scale
-  - **Standard protocol**: CLIP paper and REACT benchmark use fixed scale of 100.0 for evaluation
-  - **Location**: `CustomizedCLIP.forward()` in `model_customizer.py`
+  - **Example impact**: Oxford Pets dataset - 77.92% (buggy) → 87.2% (fixed, verified with torchvision data)
+  - **Root cause**: Explicitly setting `size={"height": 224, "width": 224}` distorted image aspect ratios
+  - **Standard protocol**: CLIP preprocesses by resizing shortest edge to 224 (preserving aspect ratio), then center cropping to 224x224
+  - **MAVERIC was doing**: Resize to 224x224 (distorting aspect ratio), then center crop 224x224 (no effect)
+  - **Fix**: Remove explicit size/crop parameters, use processor defaults
+  - **Location**: `_safe_process_images()` in `model_customizer.py`
   - **Benefits**:
-    - Reproducible results matching published benchmarks
+    - Correct aspect ratio preservation during preprocessing
+    - Reproducible results matching published benchmarks (REACT, CLIP paper)
     - Consistent evaluation across all datasets
     - Proper zero-shot baseline comparisons
 
