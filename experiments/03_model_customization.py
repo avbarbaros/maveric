@@ -328,25 +328,39 @@ def main():
             print("   <dataset_name>_training_maveric_<id>.json")
             return False
         
-        # Get correct Title Case class names from the target dataset
-        # (training data may have lowercase/normalized labels, but evaluation needs proper capitalization)
-        from maveric.datasets import get_dataset
-        try:
-            target_dataset_handler = get_dataset(target_dataset, train=False, root=None)
-            if hasattr(target_dataset_handler, 'class_names'):
-                class_names = target_dataset_handler.class_names
-                print(f"📊 Number of classes: {len(class_names)} (using Title Case from dataset)")
-                print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
-            else:
-                # Fallback: extract from training data
+        # Get correct class names from ELEVATER dataset definition
+        # CRITICAL: Must use exact class names from elevater_datasets.py (as REACT uses them)
+        # DO NOT load from dataset handler as torchvision may override with its own class names
+        from maveric.datasets.elevater_datasets import ELEVATER_DATASETS
+
+        if target_dataset in ELEVATER_DATASETS:
+            # Load class names directly from ELEVATER_DATASETS dictionary
+            # This ensures we use the EXACT REACT class names with proper capitalization
+            class_names = ELEVATER_DATASETS[target_dataset]['class_names']
+            print(f"📊 Number of classes: {len(class_names)} (from ELEVATER dataset definition)")
+            print(f"📋 First 10 classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+            print(f"📋 Example prompts will use: '{class_names[0]}' (note: proper capitalization)")
+        else:
+            # Fallback: try to load from dataset handler (for non-ELEVATER datasets)
+            print(f"⚠️  Warning: {target_dataset} not found in ELEVATER_DATASETS")
+            try:
+                from maveric.datasets import get_dataset
+                target_dataset_handler = get_dataset(target_dataset, train=False, root=None)
+                if hasattr(target_dataset_handler, 'class_names'):
+                    class_names = target_dataset_handler.class_names
+                    print(f"📊 Number of classes: {len(class_names)} (from dataset handler)")
+                    print(f"📋 First 10 classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+                else:
+                    # Last resort: extract from training data
+                    class_names = get_class_names_from_data(training_data)
+                    print(f"⚠️  Number of classes: {len(class_names)} (extracted from training data - may have wrong capitalization)")
+                    print(f"📋 First 10 classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+            except Exception as e:
+                print(f"⚠️  Could not load dataset class names: {e}")
+                print(f"⚠️  Falling back to training data labels (may have wrong capitalization)")
                 class_names = get_class_names_from_data(training_data)
-                print(f"📊 Number of classes: {len(class_names)} (extracted from training data)")
-                print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
-        except Exception as e:
-            print(f"⚠️  Could not load dataset class names, using training data labels: {e}")
-            class_names = get_class_names_from_data(training_data)
-            print(f"📊 Number of classes: {len(class_names)}")
-            print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+                print(f"📊 Number of classes: {len(class_names)}")
+                print(f"📋 First 10 classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
         
         # Calculate training dataset class sizes
         training_class_sizes = get_training_class_sizes(training_data)

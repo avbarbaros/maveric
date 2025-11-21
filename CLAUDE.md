@@ -9,21 +9,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Fix 1: Class Name Capitalization Bug (COMPREHENSIVE FIX)**
 - **Critical bug**: Class names were lowercase in evaluation, causing 4-5% accuracy loss
   - **Impact**: Oxford Pets evaluation improved from 82-83% → 87%+
-  - **Root cause**: Training JSON had lowercase labels, but CLIP was trained on properly capitalized text
-  - **Example**: `"a photo of a abyssinian"` (wrong) vs `"a photo of a Abyssinian"` (correct)
-  - **Solution**: Three-part fix to ensure Title Case class names throughout the pipeline:
-    1. **Load correct class names from dataset** ([03_model_customization.py:331-349](experiments/03_model_customization.py#L331-L349))
-       - Get Title Case class names from ELEVATER dataset definition
-       - Use these for evaluation text prompts (REACT-style)
+  - **Root cause**: Training JSON had lowercase labels, AND torchvision's OxfordIIITPet dynamically generates ALL Title Case class names (e.g., "American Bulldog") which differs from REACT's mixed-case format
+  - **Example**: `"a photo of a abyssinian"` (wrong) vs `"a photo of a Abyssinian"` (correct per REACT)
+  - **Solution**: Three-part fix to ensure exact REACT class names throughout the pipeline:
+    1. **Load class names directly from ELEVATER_DATASETS** ([03_model_customization.py:331-363](experiments/03_model_customization.py#L331-L363))
+       - Load from `ELEVATER_DATASETS` dictionary, NOT from dataset handler
+       - Avoids torchvision overriding with its own dynamically-generated class names
+       - Uses EXACT REACT class names with proper mixed-case format (e.g., 'Abyssinian', 'american bulldog')
     2. **Case-insensitive label mapping in training** ([model_customizer.py:847-850](maveric/customization/model_customizer.py#L847-L850))
        - Create normalized mapping: `{'abyssinian': 0}` and `{'Abyssinian': 0}` both work
-       - Handles training JSON having lowercase while evaluation uses Title Case
+       - Handles training JSON having lowercase while evaluation uses REACT's mixed-case format
     3. **Normalized label lookup during training** ([model_customizer.py:1025-1030](maveric/customization/model_customizer.py#L1025-L1030))
        - Convert sample label to normalized form before lookup
        - Ensures correct class index even with case/space/hyphen differences
-  - **Key insight**: CLIP trained on proper English grammar with capitalized proper nouns
-  - **Testing**: Standalone code verified 87.19% (Title Case) vs 82.28% (lowercase) on same data
-  - **Consistency**: Now uses exact ELEVATER dataset class names for all operations
+  - **Key insight**: CLIP trained on proper English grammar; REACT uses specific mixed-case format that must be matched exactly
+  - **Testing**: Standalone code verified 87.19% (proper case) vs 82.28% (lowercase) on same data
+  - **Consistency**: Now uses exact ELEVATER/REACT dataset class names for all operations
 
 **Fix 2: CLIP Image Preprocessing**
 - **Critical fix**: Fixed image preprocessing to use default CLIP processor behavior
@@ -866,13 +867,13 @@ The curation script will display:
 
 **November 21, 2025 - Critical Evaluation Fixes**:
 - **Class Name Capitalization Bug Fix** (~4-5% accuracy improvement):
-  - **Problem**: Training JSON had lowercase labels, but CLIP needs proper capitalization for optimal performance
-  - **Impact**: Oxford Pets - 82-83% (lowercase) → 87%+ (Title Case)
-  - **Root cause**: `get_class_names_from_data()` extracted lowercase labels from training JSON
-  - **Fix**: Load Title Case class names from dataset definition in `03_model_customization.py`
-  - **Key insight**: CLIP was trained on properly capitalized text following English grammar rules
-  - **Testing method**: Compared standalone evaluation with Title Case (87.19%) vs lowercase (82.28%)
-  - **Location**: [03_model_customization.py:331-349](experiments/03_model_customization.py#L331-L349)
+  - **Problem**: Training JSON had lowercase labels, AND torchvision dynamically generates class names that differ from REACT
+  - **Impact**: Oxford Pets - 82-83% (lowercase) → 87%+ (proper REACT class names)
+  - **Root cause**: Loading class names from dataset handler allowed torchvision to override with its own Title Case names (e.g., "American Bulldog") instead of using REACT's mixed-case format (e.g., "american bulldog")
+  - **Fix**: Load class names DIRECTLY from `ELEVATER_DATASETS` dictionary, not from dataset handler
+  - **Key insight**: Must use EXACT REACT class names with their specific mixed-case format
+  - **Testing method**: Compared standalone evaluation with proper case (87.19%) vs lowercase (82.28%)
+  - **Location**: [03_model_customization.py:331-363](experiments/03_model_customization.py#L331-L363)
 
 - **CLIP Image Preprocessing Fix** (~6% accuracy improvement):
   - **Problem**: Explicitly setting image size distorted aspect ratios before cropping
