@@ -47,6 +47,17 @@ class Evaluator(BaseComponent):
         """
         zeroshot_weights = []
 
+        # Debug: Print template info
+        if not hasattr(self, '_template_debug_printed'):
+            print(f"\nDEBUG Text Classifier Creation:")
+            print(f"  Number of classes: {len(class_names)}")
+            print(f"  Number of templates: {len(templates)}")
+            print(f"  Templates: {templates}")
+            print(f"  Example prompts for '{class_names[0]}':")
+            for tmpl in templates:
+                print(f"    - {tmpl.format(class_names[0])}")
+            self._template_debug_printed = True
+
         for class_name in class_names:
             # Generate prompts for this class using all templates
             class_prompts = [template.format(class_name) for template in templates]
