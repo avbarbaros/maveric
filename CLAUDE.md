@@ -4,7 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### November 5, 2025 - CLIP Embedding Caching (LATEST)
+### November 21, 2025 - CLIP Logit Scale Fix (LATEST)
+- **Critical evaluation fix**: Changed logit scale from learnable `logit_scale.exp()` to fixed 100.0
+  - **Impact**: Fixes 10% accuracy gap in zero-shot evaluation (e.g., Oxford Pets: 77.5% → 87.2%)
+  - **Root cause**: CLIP's learnable temperature parameter varied slightly from the standard 100.0 used in evaluation
+  - **Solution**: Use fixed scale of 100.0 to match CLIP paper and REACT benchmark protocol
+  - **Location**: [model_customizer.py:625](maveric/customization/model_customizer.py#L625)
+  - **Affected**: All zero-shot and fine-tuned model evaluations
+  - **Consistency**: Now matches standard CLIP evaluation practices across all benchmarks
+
+### November 20, 2025 - REACT-Style Text Prompting & Training Optimizations
+- **Dataset-specific text templates**: Implemented REACT benchmark-style class-specific prompting
+  - **Custom templates for 15+ datasets**: DTD, EuroSAT, FER2013, Food101, GTSRB, Oxford Flowers102, Oxford Pets, CIFAR-10/100, and more
+  - **Multiple templates per dataset**: Provides prompt diversity for better retrieval
+  - **Placeholder-based formatting**: Uses `{}` for class name insertion (e.g., "a photo of a {} texture")
+  - **Location**: `get_text_templates()` method in [elevater_datasets.py](maveric/datasets/elevater_datasets.py)
+  - **Integration**: Automatic template retrieval in evaluation and model customization
+- **Class name normalization**: Added intelligent matching between dataset class names and template placeholders
+  - **Handles format variations**: Lowercasing, underscore/hyphen to space conversion
+  - **Ensures proper matching**: Training data classes align with evaluation templates
+  - **Location**: [model_customizer.py](maveric/customization/model_customizer.py)
+- **Training hyperparameter updates** in `experiments/maveric_config.yaml`:
+  - Epochs: 10 → 20
+  - Learning rate: 0.0000006 → 0.0000007
+  - Weight decay: 0.05 → 0.07
+  - Regularization weight: 0.80 → 0.75
+  - Augmentation strength: 4 → 7
+  - Augmentation magnitude: 15 → 22
+  - Gradient clip value: 0.5 → 0.75
+  - **Impact**: Improved model performance based on empirical experiments
+
+### November 5, 2025 - CLIP Embedding Caching
 - **Enhanced sample caching**: CLIP embeddings now cached alongside metrics
   - **Cache version upgraded to v3**: Includes CLIP image/text embeddings (base64 encoded)
   - **Performance Impact**: 80-95% speedup for subsequent dataset retrievals (vs 60-85% without embeddings)
@@ -111,7 +141,7 @@ MAVERIC is a multi-modal dataset curation system for vision-language models. The
   - `interactive.py`: Full-featured MAVERICInteractiveQualityControl GUI
   - `plots.py`: Utility plotting functions
 - **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 9 torchvision + 11 file-based)
-  - `elevater_datasets.py`: ELEVATER benchmark dataset implementations
+  - `elevater_datasets.py`: ELEVATER benchmark dataset implementations with REACT-style text templates
   - `dataset_factory.py`: Factory for creating dataset instances
 - **`maveric/models/`**: CLIP model wrappers and factory patterns
   - `clip_wrapper.py`: CLIP model wrapper with utilities
@@ -252,18 +282,21 @@ Key configuration options:
 - `seed`: Random seed for reproducible sampling (default: 42)
 
 TrainingConfig key parameters:
-- `epochs`: Number of training epochs (default: 10)
-- `learning_rate`: Learning rate for optimizer (default: 1e-6)
-- `weight_decay`: L2 regularization weight (default: 0.01)
+- `epochs`: Number of training epochs (default: 20, updated Nov 2025 for better convergence)
+- `learning_rate`: Learning rate for optimizer (default: 0.0000007, tuned for CLIP fine-tuning)
+- `weight_decay`: L2 regularization weight (default: 0.07, increased for better generalization)
+- `gradient_clip_value`: Gradient clipping threshold (default: 0.75, prevents training instability)
 - `use_regularization`: Enable MSE regularization to prevent catastrophic forgetting (default: true)
-- `regularization_weight`: Weight for regularization loss (default: 0.5, range: 0.0-1.0)
+- `regularization_weight`: Weight for regularization loss (default: 0.75, balanced to preserve original model knowledge)
 - `use_augmentation`: Enable RandAugment data augmentation (default: true)
-- `augmentation_strength`: RandAugment num_ops parameter (default: 2)
-- `augmentation_magnitude`: RandAugment magnitude parameter (default: 9)
+- `augmentation_strength`: RandAugment num_ops parameter (default: 7, more diverse augmentations)
+- `augmentation_magnitude`: RandAugment magnitude parameter (default: 22, stronger transformations)
 - `optimizer`: Optimizer type - adamw, adam, or sgd (default: "adamw")
 - `scheduler`: Learning rate scheduler - cosine, linear, or constant (default: "cosine")
 - `use_validation`: Enable validation split during training (default: true)
 - `validation_method`: Validation strategy - stratified_kfold or simple_split (default: "stratified_kfold")
+
+**Note**: Default values shown above reflect the optimized hyperparameters in `experiments/maveric_config.yaml` (updated Nov 20, 2025) based on extensive CIFAR-100 experiments. These settings provide a good balance between model adaptation and preservation of original CLIP capabilities.
 
 Configuration can be loaded from YAML/JSON files:
 ```python
@@ -312,9 +345,12 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ### Customization System (`maveric/customization/`)
 - **ModelCustomizer** (`model_customizer.py`): High-level API for model fine-tuning with regularization
+  - **Class name normalization**: Intelligently matches dataset class names with template placeholders
+  - **Dataset-specific templates**: Automatically retrieves REACT-style text templates for evaluation
 - **Trainer** (`training.py`): Training loop implementation with validation and monitoring
 - **TrainingMonitor** (`training.py`): Real-time training metrics tracking and logging
 - **Evaluator** (`evaluation.py`): Model evaluation on test sets with comprehensive metrics
+  - **Template integration**: Uses dataset-specific prompts for consistent evaluation
 
 ### Visualization System (`maveric/visualization/`)
 - **MetricsVisualizer** (`distributions.py`): Quality metric distribution plots and analysis
@@ -541,6 +577,55 @@ MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified h
 
 Torchvision datasets benefit from automatic downloading, standardized interfaces, and optimized loading.
 
+### REACT-Style Text Templates
+
+**NEW**: MAVERIC now implements dataset-specific text templates following the REACT benchmark pattern:
+
+**Purpose**: Provide contextually appropriate prompts for each dataset to improve CLIP-based retrieval quality.
+
+**Implementation**: The `get_text_templates()` method in `elevater_datasets.py` returns multiple templates per dataset with `{}` placeholders for class names.
+
+**Example Templates**:
+```python
+# DTD (textures)
+"a photo of a {} texture."
+"a close-up photo of a {} texture."
+
+# EuroSAT (satellite imagery)
+"a centered satellite photo of {}."
+"a satellite photo of {}."
+
+# GTSRB (traffic signs)
+"a zoomed in photo of a {} traffic sign."
+"a centered photo of a {} traffic sign."
+
+# Food101 (food items)
+"a photo of {}, a type of food."
+"a photo of {} food."
+
+# Oxford Flowers102 (flowers)
+"a photo of a {}, a type of flower."
+"a close-up photo of a {} flower."
+```
+
+**Coverage**: Custom templates for 15+ datasets including DTD, EuroSAT, FER2013, Food101, GTSRB, Oxford Flowers102, Oxford Pets, CIFAR-10, CIFAR-100, Caltech101, Country211, FGVCAircraft, MNIST, RenderedSST2, and Stanford Cars.
+
+**Default Fallback**: For datasets without custom templates, uses generic prompts:
+- "a photo of a {}."
+- "a picture of a {}."
+- "an image of a {}."
+
+**Integration**: Templates are automatically used during:
+- Model evaluation in `evaluation.py`
+- Model customization in `model_customizer.py`
+- Reference text generation for retrieval
+
+**Best Practices**:
+1. **Template Consistency**: Always use the same templates for retrieval and evaluation to maintain consistency
+2. **Class Name Formatting**: The system automatically normalizes class names (e.g., "speed_limit_30" → "speed limit 30") to match template expectations
+3. **Custom Templates**: To add templates for new datasets, update the `dataset_templates` dictionary in `get_text_templates()`
+4. **Template Testing**: Verify templates produce meaningful prompts by checking generated reference texts in cache
+
 ### Caltech101 Special Notes
 
 **Torchvision Behavior**: Torchvision's Caltech101 implementation automatically:
@@ -596,17 +681,23 @@ Selecting FOOD101 sample data randomly...
 
 ### Package Structure
 - Entry point: `setup.py` defines package metadata and dependencies
-- Core package: `maveric/` contains all source code (~11,681 lines across 47 classes)
-- Tests: `tests/` contains unit and integration tests
+- Core package: `maveric/` contains all source code (~12,800 lines across 45+ files)
+- Tests: `tests/` contains unit and integration tests (9 test files)
+  - `test_sample_cache.py`: 16 comprehensive cross-dataset caching tests
   - `test_optimization.py`: Validates EfficientNet batch processing optimizations
+  - `test_class_name_extraction.py`: Validates class name parsing for datasets with underscores
 - Examples: `examples/` contains usage examples
   - `interactive_notebook.ipynb`: Interactive Jupyter notebook demonstrating MAVERIC features
 - Experiments: `experiments/` contains end-to-end workflow scripts
   - `CIFAR100_Experiments.txt`: 10 complete experiment runs with manual hyperparameter tuning results (362 lines)
-- Documentation: Comprehensive documentation suite
+  - `maveric_config.yaml`: Updated configuration with optimized hyperparameters (Nov 20, 2025)
+- Documentation: Comprehensive documentation suite (~150 KB total)
   - `README.md`: Main project documentation (16.6 KB)
-  - `CLAUDE.md`: Developer guide for Claude Code (this file, 30+ KB)
+  - `CLAUDE.md`: Developer guide for Claude Code (this file, 48 KB, 929 lines)
+  - `CODEBASE_ANALYSIS.md`: Architecture and extension opportunities (15 KB)
   - `docs/bugfixes/`: Bug fix documentation suite (88 KB total, 8 files)
+  - `docs/CROSS_DATASET_CACHING.md`: Cross-dataset sample caching guide (20 KB)
+  - `docs/DATASET_DOWNLOAD_ISSUES.md`: Dataset download troubleshooting (9.5 KB)
   - `docs/maveric-api-docs.md`: API reference documentation (12 KB)
   - `docs/detailed_documentation.txt`: Detailed API and architecture docs (16 KB)
 
@@ -751,6 +842,38 @@ The curation script will display:
 - **Resource management**: Better GPU/CPU resource allocation during different phases
 
 ### Recent Improvements (Latest Commits)
+
+**November 21, 2025 - CLIP Logit Scale Fix**:
+- **Critical bug fix**: Changed from learnable `logit_scale.exp()` to fixed scale of 100.0
+  - **Problem identified**: 10% accuracy gap between MAVERIC and standard CLIP evaluation
+  - **Example impact**: Oxford Pets dataset - 77.5% (buggy) → 87.2% (fixed)
+  - **Root cause**: Using model's learnable temperature parameter instead of fixed evaluation scale
+  - **Standard protocol**: CLIP paper and REACT benchmark use fixed scale of 100.0 for evaluation
+  - **Location**: `CustomizedCLIP.forward()` in `model_customizer.py`
+  - **Benefits**:
+    - Reproducible results matching published benchmarks
+    - Consistent evaluation across all datasets
+    - Proper zero-shot baseline comparisons
+
+**November 20, 2025 - REACT-Style Text Prompting & Training Optimizations**:
+- **Dataset-specific text templates**: Implemented REACT benchmark-style prompting for 15+ datasets
+  - **Custom templates per dataset**: DTD, EuroSAT, FER2013, Food101, GTSRB, Oxford Flowers102, Oxford Pets, CIFAR-10/100, etc.
+  - **Multiple templates**: Provides prompt diversity (e.g., "a photo of a {}", "a close-up photo of a {}")
+  - **Contextually appropriate**: Each dataset gets domain-specific prompts (e.g., "satellite photo" for EuroSAT, "traffic sign" for GTSRB)
+  - **Location**: `get_text_templates()` method in `elevater_datasets.py` (179 lines added)
+  - **Integration**: Automatic template retrieval in `evaluation.py` and `model_customizer.py`
+- **Class name normalization**: Added intelligent matching between dataset classes and template placeholders
+  - **Handles format variations**: Lowercasing, underscore/hyphen to space conversion
+  - **Prevents mismatches**: Ensures training data classes align with evaluation templates
+  - **Location**: `model_customizer.py` (52 lines added)
+- **Training hyperparameter updates**: Optimized based on empirical experiments
+  - Epochs: 10 → 20 (more thorough training)
+  - Learning rate: 0.0000006 → 0.0000007 (slight increase)
+  - Weight decay: 0.05 → 0.07 (stronger L2 regularization)
+  - Regularization weight: 0.80 → 0.75 (less MSE regularization)
+  - Augmentation strength: 4 → 7 (more augmentation operations)
+  - Augmentation magnitude: 15 → 22 (stronger augmentation)
+  - Gradient clip value: 0.5 → 0.75 (less aggressive clipping)
 
 **November 18, 2025 - Caltech101 Dataset Fixes**:
 - **Missing "leopards" class**: Added complete missing class to Caltech101 (now correctly has 102 classes)

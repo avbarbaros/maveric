@@ -618,11 +618,12 @@ class CustomizedCLIP(nn.Module):
         
         if text_features is None:
             return image_embeds
-        
-        # Compute logits
-        logit_scale = self.clip_model.logit_scale.exp()
-        logits = logit_scale * (image_embeds @ text_features.T)
-        
+
+        # Compute logits with fixed scale (standard CLIP evaluation protocol)
+        # Using fixed scale of 100.0 matches the CLIP paper and REACT benchmark
+        # This ensures reproducible results and matches zero-shot evaluation practices
+        logits = 100.0 * (image_embeds @ text_features.T)
+
         return logits
     
     def _safe_process_images(self, processor, images, device):
