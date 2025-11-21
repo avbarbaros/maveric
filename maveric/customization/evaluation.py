@@ -56,6 +56,8 @@ class Evaluator(BaseComponent):
             print(f"  Example prompts for '{class_names[0]}':")
             for tmpl in templates:
                 print(f"    - {tmpl.format(class_names[0])}")
+            print(f"\n  NOTE: If your standalone code uses different templates (e.g., just 'a photo of a {{}}'),")
+            print(f"        that could explain accuracy differences!")
             self._template_debug_printed = True
 
         for class_name in class_names:

@@ -786,36 +786,38 @@ class CustomizedCLIP(nn.Module):
 
 class TestDataset(torch.utils.data.Dataset):
     """Dataset for test data evaluation."""
-    
+
     def __init__(self, test_samples: List[Dict], class_names: List[str], processor):
         """
         Initialize test dataset.
-        
+
         Args:
             test_samples: List of test sample dictionaries
-            class_names: List of class names
+            class_names: List of class names (Title Case from dataset definition)
             processor: CLIP processor
         """
         self.test_samples = test_samples
         self.class_names = class_names
+        # Direct mapping for Title Case names (test data already has correct names from dataset)
         self.class_to_idx = {name: i for i, name in enumerate(class_names)}
         self.processor = processor
-    
+
     def __len__(self):
         return len(self.test_samples)
-    
+
     def __getitem__(self, idx):
         sample = self.test_samples[idx]
-        
+
         # Get image (already PIL Image from dataset)
         image = sample['image']
-        
-        # Get label
+
+        # Get label - test samples already have Title Case labels from dataset
+        # (assigned in _create_test_loader using test_class_name from torchvision)
         label = self.class_to_idx.get(sample['label'], 0)
-        
+
         # Get text
         text = sample.get('text', f"a photo of a {sample['label']}.")
-        
+
         return image, text, label
 
 
@@ -844,7 +846,10 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         """
         self.samples = samples
         self.class_names = class_names
+        # Create case-insensitive mapping: normalized_name -> index
+        # This handles training JSON having lowercase/normalized labels while evaluation uses Title Case
         self.class_to_idx = {name: i for i, name in enumerate(class_names)}
+        self.normalized_to_idx = {self._normalize_label(name): i for i, name in enumerate(class_names)}
         self.processor = processor
 
         # Setup augmentation configuration
@@ -878,7 +883,19 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
     
     def __len__(self):
         return len(self.valid_samples)
-    
+
+    def _normalize_label(self, label: str) -> str:
+        """
+        Normalize label for case-insensitive matching.
+        Converts to lowercase and replaces spaces/hyphens with underscores.
+
+        Examples:
+            'American Bulldog' -> 'american_bulldog'
+            'american bulldog' -> 'american_bulldog'
+            'Abyssinian' -> 'abyssinian'
+        """
+        return label.lower().replace(' ', '_').replace('-', '_')
+
     def _filter_valid_samples(self):
         """Filter samples to only include those with cached images or that can be downloaded.
         This prevents training on placeholder images which can hurt performance."""
@@ -999,17 +1016,21 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         sample = self.valid_samples[idx]  # Use pre-filtered valid samples
-        
+
         # Get image using cached approach - since we pre-filtered, this should always work
         url = sample.get('url')
         image = self._safe_get_image(url)
-        
+
         # Apply transforms (augmentation or just resize)
         image = self._apply_transforms(image)
-        
-        # Get label
-        label = self.class_to_idx.get(sample['label'], 0)
-        
+
+        # Get label with case-insensitive matching
+        # Training JSON may have lowercase/normalized labels (e.g., "abyssinian")
+        # while class_names uses Title Case (e.g., "Abyssinian")
+        sample_label = sample['label']
+        normalized_label = self._normalize_label(sample_label)
+        label = self.normalized_to_idx.get(normalized_label, 0)
+
         return image, sample.get('text', ''), label
 
 

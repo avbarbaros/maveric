@@ -328,10 +328,25 @@ def main():
             print("   <dataset_name>_training_maveric_<id>.json")
             return False
         
-        # Extract class names from training data
-        class_names = get_class_names_from_data(training_data)
-        print(f"📊 Number of classes: {len(class_names)}")
-        print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+        # Get correct Title Case class names from the target dataset
+        # (training data may have lowercase/normalized labels, but evaluation needs proper capitalization)
+        from maveric.datasets import get_dataset
+        try:
+            target_dataset_handler = get_dataset(target_dataset, train=False, root=None)
+            if hasattr(target_dataset_handler, 'class_names'):
+                class_names = target_dataset_handler.class_names
+                print(f"📊 Number of classes: {len(class_names)} (using Title Case from dataset)")
+                print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+            else:
+                # Fallback: extract from training data
+                class_names = get_class_names_from_data(training_data)
+                print(f"📊 Number of classes: {len(class_names)} (extracted from training data)")
+                print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
+        except Exception as e:
+            print(f"⚠️  Could not load dataset class names, using training data labels: {e}")
+            class_names = get_class_names_from_data(training_data)
+            print(f"📊 Number of classes: {len(class_names)}")
+            print(f"📋 Classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
         
         # Calculate training dataset class sizes
         training_class_sizes = get_training_class_sizes(training_data)

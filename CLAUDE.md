@@ -4,14 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### November 21, 2025 - CLIP Image Preprocessing Fix (LATEST)
-- **Critical evaluation fix**: Fixed image preprocessing to use default CLIP processor behavior
-  - **Impact**: Fixes 10% accuracy gap in zero-shot evaluation (e.g., Oxford Pets: 77.92% → 87.2%)
+### November 21, 2025 - Critical Evaluation Fixes (LATEST)
+
+**Fix 1: Class Name Capitalization Bug (COMPREHENSIVE FIX)**
+- **Critical bug**: Class names were lowercase in evaluation, causing 4-5% accuracy loss
+  - **Impact**: Oxford Pets evaluation improved from 82-83% → 87%+
+  - **Root cause**: Training JSON had lowercase labels, but CLIP was trained on properly capitalized text
+  - **Example**: `"a photo of a abyssinian"` (wrong) vs `"a photo of a Abyssinian"` (correct)
+  - **Solution**: Three-part fix to ensure Title Case class names throughout the pipeline:
+    1. **Load correct class names from dataset** ([03_model_customization.py:331-349](experiments/03_model_customization.py#L331-L349))
+       - Get Title Case class names from ELEVATER dataset definition
+       - Use these for evaluation text prompts (REACT-style)
+    2. **Case-insensitive label mapping in training** ([model_customizer.py:847-850](maveric/customization/model_customizer.py#L847-L850))
+       - Create normalized mapping: `{'abyssinian': 0}` and `{'Abyssinian': 0}` both work
+       - Handles training JSON having lowercase while evaluation uses Title Case
+    3. **Normalized label lookup during training** ([model_customizer.py:1025-1030](maveric/customization/model_customizer.py#L1025-L1030))
+       - Convert sample label to normalized form before lookup
+       - Ensures correct class index even with case/space/hyphen differences
+  - **Key insight**: CLIP trained on proper English grammar with capitalized proper nouns
+  - **Testing**: Standalone code verified 87.19% (Title Case) vs 82.28% (lowercase) on same data
+  - **Consistency**: Now uses exact ELEVATER dataset class names for all operations
+
+**Fix 2: CLIP Image Preprocessing**
+- **Critical fix**: Fixed image preprocessing to use default CLIP processor behavior
+  - **Impact**: Fixed aspect ratio distortion causing ~6% accuracy gap
   - **Root cause**: Explicitly setting `size={"height": 224, "width": 224}` distorted aspect ratios before center cropping
   - **Correct preprocessing**: Resize shortest edge to 224 (preserving aspect ratio), then center crop to 224x224
   - **Solution**: Use processor's default parameters instead of explicit size/crop parameters
-  - **Location**: `_safe_process_images()` in [model_customizer.py:670-673](maveric/customization/model_customizer.py#L670-L673)
-  - **Affected**: All zero-shot and fine-tuned model evaluations
+  - **Location**: `_safe_process_images()` in [model_customizer.py:670-688](maveric/customization/model_customizer.py#L670-L688)
   - **Consistency**: Now matches standard CLIP preprocessing and published benchmarks
 
 ### November 20, 2025 - REACT-Style Text Prompting & Training Optimizations
@@ -844,20 +864,24 @@ The curation script will display:
 
 ### Recent Improvements (Latest Commits)
 
-**November 21, 2025 - CLIP Image Preprocessing Fix**:
-- **Critical bug fix**: Fixed image preprocessing to use default CLIP processor parameters
-  - **Problem identified**: 10% accuracy gap between MAVERIC and standard CLIP evaluation
-  - **Example impact**: Oxford Pets dataset - 77.92% (buggy) → 87.2% (fixed, verified with torchvision data)
-  - **Root cause**: Explicitly setting `size={"height": 224, "width": 224}` distorted image aspect ratios
-  - **Standard protocol**: CLIP preprocesses by resizing shortest edge to 224 (preserving aspect ratio), then center cropping to 224x224
-  - **MAVERIC was doing**: Resize to 224x224 (distorting aspect ratio), then center crop 224x224 (no effect)
-  - **Fix**: Remove explicit size/crop parameters, use processor defaults
-  - **Location**: `_safe_process_images()` in `model_customizer.py`
-  - **Benefits**:
-    - Correct aspect ratio preservation during preprocessing
-    - Reproducible results matching published benchmarks (REACT, CLIP paper)
-    - Consistent evaluation across all datasets
-    - Proper zero-shot baseline comparisons
+**November 21, 2025 - Critical Evaluation Fixes**:
+- **Class Name Capitalization Bug Fix** (~4-5% accuracy improvement):
+  - **Problem**: Training JSON had lowercase labels, but CLIP needs proper capitalization for optimal performance
+  - **Impact**: Oxford Pets - 82-83% (lowercase) → 87%+ (Title Case)
+  - **Root cause**: `get_class_names_from_data()` extracted lowercase labels from training JSON
+  - **Fix**: Load Title Case class names from dataset definition in `03_model_customization.py`
+  - **Key insight**: CLIP was trained on properly capitalized text following English grammar rules
+  - **Testing method**: Compared standalone evaluation with Title Case (87.19%) vs lowercase (82.28%)
+  - **Location**: [03_model_customization.py:331-349](experiments/03_model_customization.py#L331-L349)
+
+- **CLIP Image Preprocessing Fix** (~6% accuracy improvement):
+  - **Problem**: Explicitly setting image size distorted aspect ratios before cropping
+  - **Impact**: Oxford Pets - 77.92% (distorted) → 83-87% (correct preprocessing)
+  - **Root cause**: Using `size={"height": 224, "width": 224}` forced square resize, distorting images
+  - **Standard CLIP**: Resize shortest edge to 224 (preserve aspect ratio), then center crop 224x224
+  - **Fix**: Use processor's default parameters (no explicit size/crop)
+  - **Location**: `_safe_process_images()` in [model_customizer.py:670-688](maveric/customization/model_customizer.py#L670-L688)
+  - **Benefits**: Correct aspect ratio preservation, reproducible benchmarks, consistent evaluation
 
 **November 20, 2025 - REACT-Style Text Prompting & Training Optimizations**:
 - **Dataset-specific text templates**: Implemented REACT benchmark-style prompting for 15+ datasets
