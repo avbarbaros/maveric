@@ -667,10 +667,26 @@ class CustomizedCLIP(nn.Module):
             # For PIL images, use the processor with DEFAULT parameters
             # This ensures correct CLIP preprocessing (resize shortest edge, then center crop)
             if isinstance(preprocessed_images[0], Image.Image):
+                # Debug: Check input image sizes
+                if hasattr(self, '_debug_counter'):
+                    self._debug_counter += 1
+                else:
+                    self._debug_counter = 1
+
+                if self._debug_counter == 1:  # Only print for first batch
+                    print(f"DEBUG: Processing batch of {len(preprocessed_images)} PIL images")
+                    print(f"DEBUG: First image size: {preprocessed_images[0].size}")
+                    print(f"DEBUG: First image mode: {preprocessed_images[0].mode}")
+
                 inputs = processor(
                     images=preprocessed_images,
                     return_tensors="pt"
                 )
+
+                if self._debug_counter == 1:  # Only print for first batch
+                    print(f"DEBUG: Output tensor shape: {inputs['pixel_values'].shape}")
+                    print(f"DEBUG: Using DEFAULT processor parameters (no explicit size/crop)")
+
                 inputs = {k: v.to(device) for k, v in inputs.items()}
                 return inputs
             else:
