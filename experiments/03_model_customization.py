@@ -331,12 +331,12 @@ def main():
         # Get correct class names from ELEVATER dataset definition
         # CRITICAL: Must use exact class names from elevater_datasets.py (as REACT uses them)
         # DO NOT load from dataset handler as torchvision may override with its own class names
-        from maveric.datasets.elevater_datasets import ELEVATER_DATASETS
+        from maveric.datasets.elevater_datasets import ELEVATERDataset
 
-        if target_dataset in ELEVATER_DATASETS:
+        if target_dataset in ELEVATERDataset.ELEVATER_DATASETS:
             # Load class names directly from ELEVATER_DATASETS dictionary
             # This ensures we use the EXACT REACT class names with proper capitalization
-            class_names = ELEVATER_DATASETS[target_dataset]['class_names']
+            class_names = ELEVATERDataset.ELEVATER_DATASETS[target_dataset]['class_names']
             print(f"📊 Number of classes: {len(class_names)} (from ELEVATER dataset definition)")
             print(f"📋 First 10 classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
             print(f"📋 Example prompts will use: '{class_names[0]}' (note: proper capitalization)")
