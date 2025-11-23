@@ -65,8 +65,7 @@ class MAVERICConfig:
         # Multimodal metrics
         'target_class_quality': 0.493,    # Target class quality using CLIP mappings
         'consistency': 0.796,             # Multimodal consistency
-        # Legacy
-        'weighted_class_score': 0.493     # Kept for backwards compatibility
+        'weighted_class_score': 0.493     # Weighted similarity score across modalities
     })
     
     # Dataset balancing configuration
@@ -126,11 +125,6 @@ class MAVERICConfig:
             valid_fields = set(cls.__dataclass_fields__.keys())
             filtered_config = {k: v for k, v in config_dict.items() if k in valid_fields}
 
-            # Map legacy field names
-            if 'quality_thresholds' in config_dict and 'quality_thresholds' not in valid_fields:
-                if 'default_thresholds' in valid_fields:
-                    filtered_config['default_thresholds'] = config_dict['quality_thresholds']
-
             # Fix problematic cache paths
             if 'cache_base_dir' in filtered_config:
                 cache_path = filtered_config['cache_base_dir']
@@ -140,7 +134,7 @@ class MAVERICConfig:
                     print(f"⚠️ Replaced inaccessible cache path {cache_path} with ./maveric_cache")
 
             # Log which fields were ignored for debugging
-            ignored_fields = set(config_dict.keys()) - valid_fields - {'quality_thresholds'}
+            ignored_fields = set(config_dict.keys()) - valid_fields
             if ignored_fields:
                 print(f"⚠️ Ignoring unknown config fields: {sorted(ignored_fields)}")
 

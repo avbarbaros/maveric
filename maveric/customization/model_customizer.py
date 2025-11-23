@@ -795,12 +795,12 @@ class TestDataset(torch.utils.data.Dataset):
 
         Args:
             test_samples: List of test sample dictionaries
-            class_names: List of class names (Title Case from dataset definition)
+            class_names: List of class names (REACT's exact mixed-case format from ELEVATER_DATASETS)
             processor: CLIP processor
         """
         self.test_samples = test_samples
         self.class_names = class_names
-        # Direct mapping for Title Case names (test data already has correct names from dataset)
+        # Direct mapping for REACT class names (test data already has correct names from ELEVATER_DATASETS)
         self.class_to_idx = {name: i for i, name in enumerate(class_names)}
         self.processor = processor
 
@@ -813,8 +813,8 @@ class TestDataset(torch.utils.data.Dataset):
         # Get image (already PIL Image from dataset)
         image = sample['image']
 
-        # Get label - test samples already have Title Case labels from dataset
-        # (assigned in _create_test_loader using test_class_name from torchvision)
+        # Get label - test samples already have REACT class names from ELEVATER_DATASETS
+        # (assigned in _create_test_loader using class_names parameter from ELEVATER_DATASETS)
         label = self.class_to_idx.get(sample['label'], 0)
 
         # Get text
@@ -849,7 +849,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         self.samples = samples
         self.class_names = class_names
         # Create case-insensitive mapping: normalized_name -> index
-        # This handles training JSON having lowercase/normalized labels while evaluation uses Title Case
+        # This handles training JSON having lowercase/normalized labels while evaluation uses REACT's mixed-case format
         self.class_to_idx = {name: i for i, name in enumerate(class_names)}
         self.normalized_to_idx = {self._normalize_label(name): i for i, name in enumerate(class_names)}
         self.processor = processor

@@ -105,8 +105,9 @@ retrieval_result = maveric.retrieve(
     num_samples=100000
 )
 
-# Launch interactive dashboard
-dashboard = maveric.launch_dashboard(retrieval_result)
+# Launch interactive dashboard (for Jupyter/Colab)
+from maveric.visualization import start_interactive_gui
+gui = start_interactive_gui('cifar100', config_file=None)
 
 # Apply quality control
 quality_result = maveric.quality_control(

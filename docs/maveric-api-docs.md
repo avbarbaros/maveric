@@ -90,12 +90,15 @@ customization_result = maveric.customize_model(
 
 **Returns:** `CustomizationResult` object
 
-##### launch_dashboard()
+##### Interactive GUI
+For interactive quality control in Jupyter notebooks, use the visualization package:
+
 ```python
-dashboard = maveric.launch_dashboard(data)
+from maveric.visualization import start_interactive_gui
+gui = start_interactive_gui('cifar100', config_file=None)
 ```
 
-Launches interactive quality control dashboard in Jupyter notebooks.
+This launches a full-featured interactive dashboard with threshold adjustment, sample galleries, and quality visualization.
 
 ## Configuration
 
@@ -353,29 +356,30 @@ fig = sample_viz.create_quality_grid(
 
 ## Interactive Components
 
-### InteractiveThresholdSelector
+### MAVERICInteractiveQualityControl
 
-For Jupyter notebooks:
-
-```python
-from maveric.interactive import InteractiveThresholdSelector
-
-selector = InteractiveThresholdSelector(quality_controller)
-gui = selector.create_gui()
-display(gui)
-```
-
-### QualityDashboard
-
-Comprehensive dashboard with multiple tabs:
+Full-featured interactive GUI for Jupyter/Colab notebooks:
 
 ```python
-from maveric.interactive import QualityDashboard
+from maveric.visualization import start_interactive_gui
 
-dashboard = QualityDashboard()
-dashboard_widget = dashboard.launch(data)
-display(dashboard_widget)
+# Launch interactive quality control
+gui = start_interactive_gui(
+    dataset_name='cifar100',
+    config_file=None  # Or path to config YAML
+)
+
+# Display the GUI
+gui
 ```
+
+The interactive GUI provides:
+- Real-time threshold adjustment with live filtering
+- Quality metric distribution visualization
+- Sample gallery with filtering capabilities
+- Class distribution analysis
+- Dataset balancing controls
+- EfficientNet prediction visualization (if available)
 
 ## Utilities
 
@@ -480,8 +484,10 @@ print(f"Improvement: {customization_result.improvement:+.2f}%")
 ### Interactive Threshold Selection
 
 ```python
-# Launch dashboard
-dashboard = maveric.launch_dashboard(retrieval_result)
+from maveric.visualization import start_interactive_gui
+
+# Launch interactive GUI
+gui = start_interactive_gui('cifar100', config_file=None)
 
 # After finding optimal thresholds in GUI
 optimal_config = {

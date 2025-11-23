@@ -4,7 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### November 21, 2025 - Critical Evaluation Fixes (LATEST)
+### November 23, 2025 - Architecture Cleanup (LATEST)
+
+**Deprecated Code Removal**:
+- **Removed**: `maveric/interactive/` folder entirely (redundant components)
+  - Deleted: `threshold_selector.py`, `quality_dashboard.py`, `widgets.py`, `__init__.py`
+  - **Reason**: `maveric.visualization.interactive.py` provides superior full-featured GUI
+  - **Impact**: Simplified codebase, single source of truth for interactive features
+- **Removed**: `MAVERIC.launch_dashboard()` method
+  - **Replacement**: Use `from maveric.visualization import start_interactive_gui` directly
+  - No backward compatibility layer - clean break for better maintainability
+- **Removed**: `create_interactive_gui()` legacy wrapper in `visualization/__init__.py`
+  - **Replacement**: Use `start_interactive_gui()` directly
+- **Removed**: Legacy `quality_thresholds` field mapping in `config.py`
+  - **Current**: Use `default_thresholds` parameter directly
+- **Fixed**: Incorrect "Legacy" comment for `weighted_class_score` in `config.py`
+  - **Clarification**: `weighted_class_score` is an active metric, not deprecated
+
+**Migration Guide**:
+```python
+# OLD (no longer works):
+dashboard = maveric.launch_dashboard(retrieval_result)
+# or
+from maveric.visualization import create_interactive_gui
+gui = create_interactive_gui('cifar10')
+
+# NEW (correct):
+from maveric.visualization import start_interactive_gui
+gui = start_interactive_gui('cifar10', config_file=None)
+```
+
+### November 21, 2025 - Critical Evaluation Fixes
 
 **Fix 1: Class Name Capitalization Bug (COMPREHENSIVE FIX)**
 - **Critical bug**: Class names were lowercase in evaluation, causing 4-5% accuracy loss
@@ -159,15 +189,12 @@ MAVERIC is a multi-modal dataset curation system for vision-language models. The
   - `model_customizer.py`: High-level fine-tuning API
   - `training.py`: Training loop with Trainer and TrainingMonitor
   - `evaluation.py`: Model evaluation on test sets
-- **`maveric/interactive/`**: Jupyter widgets for threshold selection and quality dashboards
-  - `threshold_selector.py`: Interactive threshold tuning widget
-  - `quality_dashboard.py`: Quality distribution visualization dashboard
-  - `widgets.py`: Reusable UI components
-- **`maveric/visualization/`**: Data distribution plots and sample galleries
+- **`maveric/visualization/`**: Comprehensive visualization and interactive GUI system
   - `distributions.py`: MetricsVisualizer for distribution plots
   - `samples.py`: SampleVisualizer for image galleries
-  - `interactive.py`: Full-featured MAVERICInteractiveQualityControl GUI
+  - `interactive.py`: Full-featured MAVERICInteractiveQualityControl GUI (primary interactive interface)
   - `plots.py`: Utility plotting functions
+  - **Note**: The `maveric/interactive/` folder has been removed (redundant components)
 - **`maveric/datasets/`**: Unified ELEVATER benchmark dataset handler (official 20 datasets: 9 torchvision + 11 file-based)
   - `elevater_datasets.py`: ELEVATER benchmark dataset implementations with REACT-style text templates
   - `dataset_factory.py`: Factory for creating dataset instances

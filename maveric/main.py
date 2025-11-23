@@ -17,7 +17,6 @@ from .retrieval.dataset_handlers import REACTDatasetHandler
 from .quality import QualityController
 from .customization import ModelCustomizer
 from .visualization import MetricsVisualizer, SampleVisualizer
-from .interactive import QualityDashboard
 from .utils import setup_logging
 
 
@@ -391,23 +390,6 @@ class MAVERIC(BaseComponent):
             figures['class_distribution'] = fig
         
         return figures
-    
-    def launch_dashboard(self,
-                        data: Union[str, RetrievalResult, QualityResult, pd.DataFrame]) -> Any:
-        """
-        Launch interactive quality control dashboard.
-        
-        Args:
-            data: Data source (file path, result object, or DataFrame)
-            
-        Returns:
-            Interactive dashboard widget (for Jupyter environments)
-        """
-        dashboard = QualityDashboard(
-            cache_dir=self.config.cache_base_dir,
-            cache_manager=self.cache_manager
-        )
-        return dashboard.launch(data)
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """

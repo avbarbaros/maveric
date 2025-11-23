@@ -29,12 +29,7 @@ try:
             print("📦 Please install: pip install ipywidgets")
             print("🔧 For Colab: !pip install ipywidgets")
             return False
-    
-    # Legacy compatibility
-    def create_interactive_gui(dataset_name, config_file=None):
-        """Legacy function - use start_interactive_gui instead"""
-        return start_interactive_gui(dataset_name, config_file)
-    
+
 except ImportError as e:
     INTERACTIVE_AVAILABLE = False
     MAVERICInteractiveQualityControl = None
@@ -51,11 +46,7 @@ except ImportError as e:
     def start_interactive_gui(*args, **kwargs):
         """Fallback function when interactive GUI is not available"""
         return create_quality_control(*args, **kwargs)
-    
-    def create_interactive_gui(*args, **kwargs):
-        """Fallback function when interactive GUI is not available"""
-        return create_quality_control(*args, **kwargs)
-    
+
     def check_interactive_requirements():
         return False
 
@@ -69,7 +60,6 @@ __all__ = [
     "MAVERICInteractiveQualityControl",
     "create_quality_control",
     "start_interactive_gui",
-    "create_interactive_gui",
     "check_interactive_requirements",
     "INTERACTIVE_AVAILABLE"
 ]
