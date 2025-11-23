@@ -262,25 +262,30 @@ class MAVERIC(BaseComponent):
                        quality_result: QualityResult,
                        model_name: str = None,
                        training_config: Optional[TrainingConfig] = None,
-                       target_dataset: str = None) -> CustomizationResult:
+                       target_dataset: str = None,
+                       class_names: Optional[List[str]] = None) -> CustomizationResult:
         """
         Customize pre-trained model using filtered samples.
-        
+
         Args:
             quality_result: Result from quality_control() method
             model_name: Pre-trained model to customize (uses config default if None)
             training_config: Training configuration (uses defaults if None)
             target_dataset: Target dataset name for customization (REQUIRED for test evaluation)
-            
+            class_names: List of class names from ELEVATER_DATASETS (uses training data labels if None)
+
         Returns:
             CustomizationResult with trained model and metrics
-            
+
         Note:
             Test data evaluation is mandatory for reliable model selection. The target_dataset
-            must be a valid ELEVATER dataset name that supports test splits (e.g., 'cifar10', 
+            must be a valid ELEVATER dataset name that supports test splits (e.g., 'cifar10',
             'cifar100', 'food101', etc.). The model will be evaluated on the actual test set
             at each epoch, and the best model will be selected based on test performance.
-            
+
+            IMPORTANT: For accurate evaluation, pass class_names from ELEVATER_DATASETS to ensure
+            exact REACT class names are used in text prompts (not normalized training labels).
+
         Raises:
             ValueError: If target_dataset is None or test data cannot be loaded
         """
@@ -320,13 +325,20 @@ class MAVERIC(BaseComponent):
                 cache_base_dir=self.config.cache_base_dir
             )
         
-        # Get class names from the data
-        import pandas as pd
-        df = pd.DataFrame(quality_result.filtered_samples)
-        if 'label' not in df.columns:
-            raise ValueError("No 'label' column found in filtered data")
-        
-        class_names = sorted(df['label'].unique())
+        # Get class names - prefer passed parameter (from ELEVATER_DATASETS) over training data labels
+        if class_names is None:
+            # Fallback: extract from training data (may have normalized/lowercase labels)
+            import pandas as pd
+            df = pd.DataFrame(quality_result.filtered_samples)
+            if 'label' not in df.columns:
+                raise ValueError("No 'label' column found in filtered data")
+
+            class_names = sorted(df['label'].unique())
+            self.log_warning(
+                "Using class names from training data labels. "
+                "For accurate evaluation, pass class_names from ELEVATER_DATASETS to ensure "
+                "exact REACT class names are used in text prompts."
+            )
         
         # Perform customization
         result = self.customizer.customize(

@@ -411,7 +411,8 @@ def main():
             quality_result=quality_result,
             model_name=config.get('clip_model', 'ViT-B/32'),
             training_config=training_config,
-            target_dataset=target_dataset
+            target_dataset=target_dataset,
+            class_names=class_names  # Pass ELEVATER_DATASETS class names for accurate evaluation
         )
         
         if customization_result is None:

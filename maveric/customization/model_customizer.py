@@ -1027,8 +1027,6 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         image = self._apply_transforms(image)
 
         # Get label with case-insensitive matching
-        # Training JSON may have lowercase/normalized labels (e.g., "abyssinian")
-        # while class_names uses Title Case (e.g., "Abyssinian")
         sample_label = sample['label']
         normalized_label = self._normalize_label(sample_label)
         label = self.normalized_to_idx.get(normalized_label, 0)

@@ -11,17 +11,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **Impact**: Oxford Pets evaluation improved from 82-83% → 87%+
   - **Root cause**: Training JSON had lowercase labels, AND torchvision's OxfordIIITPet dynamically generates ALL Title Case class names (e.g., "American Bulldog") which differs from REACT's mixed-case format
   - **Example**: `"a photo of a abyssinian"` (wrong) vs `"a photo of a Abyssinian"` (correct per REACT)
-  - **Solution**: Three-part fix to ensure exact REACT class names throughout the pipeline:
+  - **Solution**: Four-part fix to ensure exact REACT class names throughout the pipeline:
     1. **Load class names directly from ELEVATER_DATASETS** ([03_model_customization.py:331-363](experiments/03_model_customization.py#L331-L363))
        - Load from `ELEVATER_DATASETS` dictionary, NOT from dataset handler
        - Avoids torchvision overriding with its own dynamically-generated class names
        - Uses EXACT REACT class names with proper mixed-case format (e.g., 'Abyssinian', 'american bulldog')
-    2. **Case-insensitive label mapping in training** ([model_customizer.py:847-850](maveric/customization/model_customizer.py#L847-L850))
+    2. **Pass class names to customize_model()** ([03_model_customization.py:415](experiments/03_model_customization.py#L415), [main.py:266-341](maveric/main.py#L266-L341))
+       - Added `class_names` parameter to `customize_model()` method
+       - Ensures ELEVATER class names flow through to evaluation (not training data labels)
+       - Previously extracted class names from training data (normalized/lowercase)
+    3. **Use class names in test loader** ([model_customizer.py:325](maveric/customization/model_customizer.py#L325))
+       - Changed `_create_test_loader` to use passed `class_names` parameter
+       - Previously used `test_dataset_handler.class_names` (torchvision's dynamic names)
+       - Now uses EXACT REACT class names for test sample creation and evaluation
+    4. **Case-insensitive label mapping in training** ([model_customizer.py:847-850](maveric/customization/model_customizer.py#L847-L850))
        - Create normalized mapping: `{'abyssinian': 0}` and `{'Abyssinian': 0}` both work
        - Handles training JSON having lowercase while evaluation uses REACT's mixed-case format
-    3. **Normalized label lookup during training** ([model_customizer.py:1025-1030](maveric/customization/model_customizer.py#L1025-L1030))
-       - Convert sample label to normalized form before lookup
-       - Ensures correct class index even with case/space/hyphen differences
+       - Normalized label lookup during training ([model_customizer.py:1025-1030](maveric/customization/model_customizer.py#L1025-L1030))
   - **Key insight**: CLIP trained on proper English grammar; REACT uses specific mixed-case format that must be matched exactly
   - **Testing**: Standalone code verified 87.19% (proper case) vs 82.28% (lowercase) on same data
   - **Consistency**: Now uses exact ELEVATER/REACT dataset class names for all operations
