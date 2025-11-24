@@ -4,7 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### November 23, 2025 - Architecture Cleanup (LATEST)
+### November 24, 2025 - Documentation & Visualization (LATEST)
+
+**New Documentation**:
+- **Pipeline Visualization**: Created comprehensive SVG diagram of MAVERIC architecture
+  - **Location**: [docs/maveric_pipeline.svg](docs/maveric_pipeline.svg)
+  - **Content**: Complete 4-stage pipeline with reference generation subsystem
+  - **Style**: White background, clear color coding for components/data/cache flows
+- **Reference Generation Guide**: Complete documentation of reference system
+  - **Location**: [docs/REFERENCE_GENERATION.md](docs/REFERENCE_GENERATION.md)
+  - **Coverage**: Sample selection, REACT templates, CLIP embeddings, caching, usage
+  - **Details**: 4-step process with examples, troubleshooting, and best practices
+
+### November 23, 2025 - Architecture Cleanup
 
 **Deprecated Code Removal**:
 - **Removed**: `maveric/interactive/` folder entirely (redundant components)
@@ -167,7 +179,11 @@ See the "Recent Improvements" section below for detailed information.
 
 ## Architecture Overview
 
-MAVERIC is a multi-modal dataset curation system for vision-language models. The codebase follows a modular architecture:
+MAVERIC is a multi-modal dataset curation system for vision-language models. The codebase follows a modular architecture.
+
+**Visual Architecture**: See [docs/maveric_pipeline.svg](docs/maveric_pipeline.svg) for a comprehensive diagram of the complete pipeline including reference generation.
+
+**Key Components**:
 
 - **`maveric/main.py`**: Main MAVERIC class providing high-level API for retrieval, quality control, and model customization
 - **`maveric/config.py`**: Dataclass-based configuration system (MAVERICConfig, TrainingConfig, ExperimentConfig)
@@ -426,10 +442,15 @@ maveric = MAVERIC.from_config_file('config.yaml')
 
 ## Data Flow
 
-1. **Retrieval**: Load source dataset → Generate CLIP embeddings → Match against target dataset embeddings
+**Visual Diagram**: See [docs/maveric_pipeline.svg](docs/maveric_pipeline.svg) for a complete visualization of the 4-stage pipeline.
+
+**Pipeline Stages**:
+1. **Retrieval**: Load source dataset → Generate reference embeddings (one-time) → Generate CLIP embeddings → Match against target dataset embeddings
 2. **Quality Assessment**: Apply visual/semantic metrics → Score each sample → Calculate composite quality scores per class
 3. **Filtering**: Apply thresholds → Balance dataset → Export filtered results
 4. **Customization**: Fine-tune model on filtered data → Evaluate performance
+
+**Reference Generation**: See [docs/REFERENCE_GENERATION.md](docs/REFERENCE_GENERATION.md) for detailed documentation on the reference generation subsystem (sample selection, REACT templates, CLIP embeddings, and caching).
 
 ### Data Formats and Outputs
 

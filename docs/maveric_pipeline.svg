@@ -1,0 +1,365 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">
+  <defs>
+    <style>
+      .title { font: bold 24px sans-serif; fill: #1a1a1a; }
+      .subtitle { font: bold 16px sans-serif; fill: #2c3e50; }
+      .text { font: 14px sans-serif; fill: #2c3e50; }
+      .small-text { font: 12px sans-serif; fill: #5a6c7d; }
+      .box { fill: #ffffff; stroke: #34495e; stroke-width: 2; }
+      .stage-box { fill: #f0f4f8; stroke: #2c5aa0; stroke-width: 3; }
+      .component-box { fill: #ffffff; stroke: #3498db; stroke-width: 2.5; }
+      .data-box { fill: #fffef8; stroke: #e67e22; stroke-width: 2; stroke-dasharray: 6,4; }
+      .cache-box { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; }
+      .arrow { fill: none; stroke: #34495e; stroke-width: 2.5; marker-end: url(#arrowhead); }
+      .data-arrow { fill: none; stroke: #e67e22; stroke-width: 2.5; marker-end: url(#data-arrowhead); stroke-dasharray: 6,4; }
+      .cache-arrow { fill: none; stroke: #16a34a; stroke-width: 2.5; marker-end: url(#cache-arrowhead); }
+      .label-text { font: bold 13px sans-serif; fill: #1a1a1a; }
+      .metric-text { font: 11px monospace; fill: #2c3e50; }
+      .highlight-box { fill: #fef3c7; stroke: #f59e0b; stroke-width: 2.5; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#34495e" />
+    </marker>
+    <marker id="data-arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#e67e22" />
+    </marker>
+    <marker id="cache-arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#16a34a" />
+    </marker>
+  </defs>
+
+  <!-- White Background -->
+  <rect width="1200" height="1600" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="600" y="30" text-anchor="middle" class="title">MAVERIC Pipeline Architecture</text>
+  <text x="600" y="55" text-anchor="middle" class="small-text">Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency</text>
+
+  <!-- ============================================ -->
+  <!-- STAGE 1: DATA RETRIEVAL -->
+  <!-- ============================================ -->
+  <g id="stage1">
+    <rect x="50" y="80" width="1100" height="340" rx="5" class="stage-box"/>
+    <text x="600" y="105" text-anchor="middle" class="label-text">STAGE 1: DATA RETRIEVAL &amp; REFERENCE GENERATION</text>
+
+    <!-- Source Dataset -->
+    <rect x="70" y="130" width="200" height="80" rx="3" class="data-box"/>
+    <text x="170" y="155" text-anchor="middle" class="subtitle">Source Dataset</text>
+    <text x="170" y="175" text-anchor="middle" class="small-text">REACT/ImageNet</text>
+    <text x="170" y="195" text-anchor="middle" class="small-text">270K+ samples</text>
+
+    <!-- Target Dataset -->
+    <rect x="70" y="230" width="200" height="100" rx="3" class="data-box"/>
+    <text x="170" y="255" text-anchor="middle" class="subtitle">Target Dataset</text>
+    <text x="170" y="275" text-anchor="middle" class="small-text">ELEVATER Datasets</text>
+    <text x="170" y="295" text-anchor="middle" class="small-text">(CIFAR-10/100, Pets,</text>
+    <text x="170" y="315" text-anchor="middle" class="small-text">EuroSAT, Food101, etc.)</text>
+
+    <!-- Reference Generation (HIGHLIGHTED) -->
+    <rect x="70" y="350" width="200" height="50" rx="3" class="highlight-box"/>
+    <text x="170" y="370" text-anchor="middle" class="subtitle">Reference Generation</text>
+    <text x="170" y="390" text-anchor="middle" class="small-text">→ Details below</text>
+
+    <!-- Retriever Component -->
+    <rect x="320" y="180" width="240" height="140" rx="3" class="component-box"/>
+    <text x="440" y="205" text-anchor="middle" class="subtitle">Retriever</text>
+    <text x="440" y="225" text-anchor="middle" class="metric-text">• CLIP embeddings</text>
+    <text x="440" y="245" text-anchor="middle" class="metric-text">• Similarity matching</text>
+    <text x="440" y="265" text-anchor="middle" class="metric-text">• Per-class scoring</text>
+    <text x="440" y="285" text-anchor="middle" class="metric-text">• 4-way consistency</text>
+    <text x="440" y="310" text-anchor="middle" class="small-text">retriever.py</text>
+
+    <!-- Cache Manager -->
+    <rect x="610" y="130" width="200" height="100" rx="3" class="cache-box"/>
+    <text x="710" y="155" text-anchor="middle" class="subtitle">Cache Manager</text>
+    <text x="710" y="175" text-anchor="middle" class="metric-text">• Image cache (JPEG)</text>
+    <text x="710" y="195" text-anchor="middle" class="metric-text">• Sample metadata v3</text>
+    <text x="710" y="215" text-anchor="middle" class="metric-text">  (with CLIP embeddings)</text>
+    <text x="710" y="230" text-anchor="middle" class="small-text">cache_manager.py</text>
+
+    <!-- Quality Metrics Computation -->
+    <rect x="610" y="250" width="200" height="130" rx="3" class="component-box"/>
+    <text x="710" y="275" text-anchor="middle" class="subtitle">Quality Metrics</text>
+    <text x="710" y="295" text-anchor="middle" class="metric-text">Visual: resolution, sharpness,</text>
+    <text x="710" y="315" text-anchor="middle" class="metric-text">  color_diversity</text>
+    <text x="710" y="335" text-anchor="middle" class="metric-text">Semantic: text_quality,</text>
+    <text x="710" y="355" text-anchor="middle" class="metric-text">  caption_length</text>
+    <text x="710" y="375" text-anchor="middle" class="small-text">quality/metrics/</text>
+
+    <!-- Retrieval Result -->
+    <rect x="860" y="200" width="260" height="120" rx="3" class="data-box"/>
+    <text x="990" y="225" text-anchor="middle" class="subtitle">Retrieval Result</text>
+    <text x="990" y="245" text-anchor="middle" class="metric-text">• Matched samples</text>
+    <text x="990" y="265" text-anchor="middle" class="metric-text">• Quality scores per class</text>
+    <text x="990" y="285" text-anchor="middle" class="metric-text">• Similarity metrics (4-way)</text>
+    <text x="990" y="305" text-anchor="middle" class="metric-text">• CLIP embeddings (cached)</text>
+    <text x="990" y="320" text-anchor="middle" class="small-text">rotation files (JSON/pickle)</text>
+
+    <!-- Arrows -->
+    <path d="M 270 170 L 320 210" class="arrow"/>
+    <path d="M 270 280 L 320 250" class="arrow"/>
+    <path d="M 270 375 L 320 300" class="arrow"/>
+    <path d="M 560 240 L 610 170" class="cache-arrow"/>
+    <path d="M 560 240 L 610 315" class="arrow"/>
+    <path d="M 810 170 L 860 240" class="cache-arrow"/>
+    <path d="M 810 315 L 860 270" class="data-arrow"/>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- REFERENCE GENERATION DETAIL -->
+  <!-- ============================================ -->
+  <g id="reference-detail">
+    <rect x="50" y="450" width="1100" height="240" rx="5" class="highlight-box"/>
+    <text x="600" y="475" text-anchor="middle" class="label-text">REFERENCE GENERATION SUBSYSTEM (One-Time Setup Per Dataset)</text>
+
+    <!-- Step 1: Sample Selection -->
+    <rect x="70" y="500" width="220" height="110" rx="3" class="component-box"/>
+    <text x="180" y="520" text-anchor="middle" class="subtitle">1. Sample Selection</text>
+    <text x="180" y="540" text-anchor="middle" class="metric-text">• Load target dataset</text>
+    <text x="180" y="560" text-anchor="middle" class="metric-text">• Random sampling</text>
+    <text x="180" y="580" text-anchor="middle" class="metric-text">  (n_reference_images</text>
+    <text x="180" y="600" text-anchor="middle" class="metric-text">  per class, default: 10)</text>
+
+    <!-- Step 2: Text Template Generation -->
+    <rect x="320" y="500" width="240" height="110" rx="3" class="component-box"/>
+    <text x="440" y="520" text-anchor="middle" class="subtitle">2. Text Template Gen</text>
+    <text x="440" y="540" text-anchor="middle" class="metric-text">• Dataset-specific templates</text>
+    <text x="440" y="560" text-anchor="middle" class="metric-text">  (REACT-style prompting)</text>
+    <text x="440" y="580" text-anchor="middle" class="metric-text">• Class name formatting</text>
+    <text x="440" y="600" text-anchor="middle" class="small-text">get_text_templates()</text>
+
+    <!-- Step 3: CLIP Embedding -->
+    <rect x="590" y="500" width="240" height="110" rx="3" class="component-box"/>
+    <text x="710" y="520" text-anchor="middle" class="subtitle">3. CLIP Embedding</text>
+    <text x="710" y="540" text-anchor="middle" class="metric-text">• Image embeddings</text>
+    <text x="710" y="560" text-anchor="middle" class="metric-text">  (ref images → 512-d)</text>
+    <text x="710" y="580" text-anchor="middle" class="metric-text">• Text embeddings</text>
+    <text x="710" y="600" text-anchor="middle" class="metric-text">  (templates → 512-d)</text>
+
+    <!-- Step 4: Cache Storage -->
+    <rect x="860" y="500" width="260" height="110" rx="3" class="cache-box"/>
+    <text x="990" y="520" text-anchor="middle" class="subtitle">4. Cache Storage</text>
+    <text x="990" y="540" text-anchor="middle" class="metric-text">reference_images/</text>
+    <text x="990" y="560" text-anchor="middle" class="metric-text">  {dataset}/{class}/ref_*.jpg</text>
+    <text x="990" y="580" text-anchor="middle" class="metric-text">reference_texts/</text>
+    <text x="990" y="600" text-anchor="middle" class="metric-text">  {dataset}_texts.json</text>
+    <text x="990" y="620" text-anchor="middle" class="metric-text">embeddings/</text>
+    <text x="990" y="640" text-anchor="middle" class="metric-text">  {dataset}_ref_embeddings.npz</text>
+
+    <!-- REACT Template Examples -->
+    <rect x="70" y="630" width="490" height="50" rx="3" class="data-box"/>
+    <text x="70" y="650" class="small-text">  REACT Templates: "a photo of a {}" | "a satellite photo of {}" (EuroSAT)</text>
+    <text x="70" y="670" class="small-text">  "a zoomed in photo of a {} traffic sign" (GTSRB) | "a photo of {}, a type of food" (Food101)</text>
+
+    <!-- Cache Info -->
+    <rect x="590" y="630" width="530" height="50" rx="3" class="cache-box"/>
+    <text x="600" y="650" class="small-text">  Cached embeddings enable fast retrieval: No re-computation needed</text>
+    <text x="600" y="670" class="small-text">  Reference embeddings reused across multiple retrieval runs (80-95% speedup)</text>
+
+    <!-- Arrows -->
+    <path d="M 290 555 L 320 555" class="arrow"/>
+    <path d="M 560 555 L 590 555" class="arrow"/>
+    <path d="M 830 555 L 860 555" class="cache-arrow"/>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- STAGE 2: QUALITY CONTROL -->
+  <!-- ============================================ -->
+  <g id="stage2">
+    <rect x="50" y="720" width="1100" height="320" rx="5" class="stage-box"/>
+    <text x="600" y="745" text-anchor="middle" class="label-text">STAGE 2: QUALITY CONTROL &amp; FILTERING</text>
+
+    <!-- Quality Controller -->
+    <rect x="70" y="770" width="240" height="140" rx="3" class="component-box"/>
+    <text x="190" y="795" text-anchor="middle" class="subtitle">Quality Controller</text>
+    <text x="190" y="815" text-anchor="middle" class="metric-text">• Threshold filtering</text>
+    <text x="190" y="835" text-anchor="middle" class="metric-text">• Class balancing</text>
+    <text x="190" y="855" text-anchor="middle" class="metric-text">• Weighted scoring</text>
+    <text x="190" y="875" text-anchor="middle" class="metric-text">• Dataset statistics</text>
+    <text x="190" y="900" text-anchor="middle" class="small-text">quality_controller.py</text>
+
+    <!-- Interactive GUI -->
+    <rect x="70" y="930" width="240" height="90" rx="3" class="component-box"/>
+    <text x="190" y="955" text-anchor="middle" class="subtitle">Interactive GUI</text>
+    <text x="190" y="975" text-anchor="middle" class="metric-text">• Real-time threshold tuning</text>
+    <text x="190" y="995" text-anchor="middle" class="metric-text">• Visual exploration</text>
+    <text x="190" y="1015" text-anchor="middle" class="small-text">visualization/interactive.py</text>
+
+    <!-- Filters -->
+    <rect x="360" y="810" width="200" height="100" rx="3" class="component-box"/>
+    <text x="460" y="835" text-anchor="middle" class="subtitle">Filters</text>
+    <text x="460" y="855" text-anchor="middle" class="metric-text">• ThresholdFilter</text>
+    <text x="460" y="875" text-anchor="middle" class="metric-text">• BalancedFilter</text>
+    <text x="460" y="895" text-anchor="middle" class="metric-text">• PercentileFilter</text>
+    <text x="460" y="910" text-anchor="middle" class="small-text">filters.py</text>
+
+    <!-- Visualizers -->
+    <rect x="360" y="930" width="200" height="90" rx="3" class="component-box"/>
+    <text x="460" y="955" text-anchor="middle" class="subtitle">Visualizers</text>
+    <text x="460" y="975" text-anchor="middle" class="metric-text">• Distribution plots</text>
+    <text x="460" y="995" text-anchor="middle" class="metric-text">• Sample galleries</text>
+    <text x="460" y="1015" text-anchor="middle" class="small-text">visualization/</text>
+
+    <!-- Quality Thresholds -->
+    <rect x="610" y="770" width="220" height="140" rx="3" class="data-box"/>
+    <text x="720" y="795" text-anchor="middle" class="subtitle">Quality Thresholds</text>
+    <text x="720" y="815" text-anchor="middle" class="metric-text">weighted_class_score: 0.493</text>
+    <text x="720" y="835" text-anchor="middle" class="metric-text">consistency: 0.796</text>
+    <text x="720" y="855" text-anchor="middle" class="metric-text">sharpness_score: 0.880</text>
+    <text x="720" y="875" text-anchor="middle" class="metric-text">resolution_score: 0.370</text>
+    <text x="720" y="895" text-anchor="middle" class="metric-text">color_score: 0.768</text>
+    <text x="720" y="910" text-anchor="middle" class="small-text">maveric_config.yaml</text>
+
+    <!-- Curated Dataset -->
+    <rect x="880" y="820" width="240" height="160" rx="3" class="data-box"/>
+    <text x="1000" y="845" text-anchor="middle" class="subtitle">Curated Dataset</text>
+    <text x="1000" y="865" text-anchor="middle" class="metric-text">• Filtered samples</text>
+    <text x="1000" y="885" text-anchor="middle" class="metric-text">• Balanced classes</text>
+    <text x="1000" y="905" text-anchor="middle" class="metric-text">• Hierarchical structure:</text>
+    <text x="1000" y="925" text-anchor="middle" class="metric-text">  training_data/</text>
+    <text x="1000" y="945" text-anchor="middle" class="metric-text">    class_XXX/</text>
+    <text x="1000" y="965" text-anchor="middle" class="metric-text">      batch_XXX/</text>
+    <text x="1000" y="985" text-anchor="middle" class="metric-text">        sample_XXX.jpg</text>
+
+    <!-- Arrows -->
+    <path d="M 310 840 L 360 860" class="arrow"/>
+    <path d="M 310 975 L 360 975" class="arrow"/>
+    <path d="M 560 860 L 610 830" class="arrow"/>
+    <path d="M 830 850 L 880 890" class="data-arrow"/>
+  </g>
+
+  <!-- Connection between stages -->
+  <path d="M 990 320 L 990 390 L 190 390 L 190 500" class="data-arrow"/>
+  <text x="500" y="405" text-anchor="middle" class="small-text">retrieval_result.json → Reference Generation</text>
+
+  <path d="M 990 640 L 990 690 L 190 690 L 190 770" class="data-arrow"/>
+  <text x="500" y="705" text-anchor="middle" class="small-text">References cached → Quality Control</text>
+
+  <!-- ============================================ -->
+  <!-- STAGE 3: MODEL CUSTOMIZATION -->
+  <!-- ============================================ -->
+  <g id="stage3">
+    <rect x="50" y="1070" width="1100" height="300" rx="5" class="stage-box"/>
+    <text x="600" y="1095" text-anchor="middle" class="label-text">STAGE 3: MODEL CUSTOMIZATION</text>
+
+    <!-- Model Customizer -->
+    <rect x="70" y="1120" width="260" height="160" rx="3" class="component-box"/>
+    <text x="200" y="1145" text-anchor="middle" class="subtitle">Model Customizer</text>
+    <text x="200" y="1165" text-anchor="middle" class="metric-text">• CLIP fine-tuning</text>
+    <text x="200" y="1185" text-anchor="middle" class="metric-text">• Vision encoder adaptation</text>
+    <text x="200" y="1205" text-anchor="middle" class="metric-text">• MSE regularization (0.75)</text>
+    <text x="200" y="1225" text-anchor="middle" class="metric-text">• Text encoder frozen</text>
+    <text x="200" y="1245" text-anchor="middle" class="metric-text">• RandAugment(7, 22)</text>
+    <text x="200" y="1270" text-anchor="middle" class="small-text">model_customizer.py</text>
+
+    <!-- Training Config -->
+    <rect x="70" y="1300" width="260" height="50" rx="3" class="data-box"/>
+    <text x="200" y="1320" text-anchor="middle" class="metric-text">epochs:20, lr:7e-7, wd:0.07</text>
+    <text x="200" y="1340" text-anchor="middle" class="metric-text">AdamW, cosine scheduler</text>
+
+    <!-- Trainer -->
+    <rect x="380" y="1150" width="180" height="100" rx="3" class="component-box"/>
+    <text x="470" y="1175" text-anchor="middle" class="subtitle">Trainer</text>
+    <text x="470" y="1195" text-anchor="middle" class="metric-text">• Training loop</text>
+    <text x="470" y="1215" text-anchor="middle" class="metric-text">• Validation (k-fold)</text>
+    <text x="470" y="1235" text-anchor="middle" class="metric-text">• Loss monitoring</text>
+    <text x="470" y="1250" text-anchor="middle" class="small-text">training.py</text>
+
+    <!-- Evaluator -->
+    <rect x="380" y="1270" width="180" height="80" rx="3" class="component-box"/>
+    <text x="470" y="1295" text-anchor="middle" class="subtitle">Evaluator</text>
+    <text x="470" y="1315" text-anchor="middle" class="metric-text">• Test set evaluation</text>
+    <text x="470" y="1335" text-anchor="middle" class="metric-text">• REACT templates</text>
+    <text x="470" y="1350" text-anchor="middle" class="small-text">evaluation.py</text>
+
+    <!-- REACT Templates -->
+    <rect x="610" y="1120" width="220" height="100" rx="3" class="data-box"/>
+    <text x="720" y="1145" text-anchor="middle" class="subtitle">REACT Templates</text>
+    <text x="720" y="1165" text-anchor="middle" class="metric-text">"a photo of a {}"</text>
+    <text x="720" y="1185" text-anchor="middle" class="metric-text">"a satellite photo of {}"</text>
+    <text x="720" y="1205" text-anchor="middle" class="small-text">ELEVATER_DATASETS</text>
+    <text x="720" y="1220" text-anchor="middle" class="small-text">get_text_templates()</text>
+
+    <!-- Test Dataset -->
+    <rect x="610" y="1240" width="220" height="110" rx="3" class="data-box"/>
+    <text x="720" y="1265" text-anchor="middle" class="subtitle">Test Dataset</text>
+    <text x="720" y="1285" text-anchor="middle" class="metric-text">• ELEVATER test splits</text>
+    <text x="720" y="1305" text-anchor="middle" class="metric-text">• REACT class names</text>
+    <text x="720" y="1325" text-anchor="middle" class="metric-text">  (mixed-case format)</text>
+    <text x="720" y="1345" text-anchor="middle" class="small-text">torchvision/elevater</text>
+
+    <!-- Fine-tuned Model -->
+    <rect x="880" y="1150" width="240" height="140" rx="3" class="data-box"/>
+    <text x="1000" y="1175" text-anchor="middle" class="subtitle">Fine-tuned Model</text>
+    <text x="1000" y="1195" text-anchor="middle" class="metric-text">• Adapted vision encoder</text>
+    <text x="1000" y="1215" text-anchor="middle" class="metric-text">• Preserved text encoder</text>
+    <text x="1000" y="1235" text-anchor="middle" class="metric-text">• Training history</text>
+    <text x="1000" y="1255" text-anchor="middle" class="metric-text">• Per-class accuracies</text>
+    <text x="1000" y="1280" text-anchor="middle" class="small-text">best_model.pth</text>
+
+    <!-- Arrows -->
+    <path d="M 330 1190 L 380 1200" class="arrow"/>
+    <path d="M 330 1325 L 380 1310" class="arrow"/>
+    <path d="M 560 1200 L 610 1165" class="arrow"/>
+    <path d="M 560 1310 L 610 1295" class="arrow"/>
+    <path d="M 830 1165 L 880 1200" class="data-arrow"/>
+  </g>
+
+  <!-- Connection between stages -->
+  <path d="M 1000 980 L 1000 1040 L 200 1040 L 200 1120" class="data-arrow"/>
+  <text x="500" y="1055" text-anchor="middle" class="small-text">curated training_data/ + metadata</text>
+
+  <!-- ============================================ -->
+  <!-- STAGE 4: RESULTS & ANALYSIS -->
+  <!-- ============================================ -->
+  <g id="stage4">
+    <rect x="50" y="1400" width="1100" height="180" rx="5" class="stage-box"/>
+    <text x="600" y="1425" text-anchor="middle" class="label-text">STAGE 4: RESULTS &amp; ANALYSIS</text>
+
+    <!-- Customization Result -->
+    <rect x="70" y="1450" width="240" height="110" rx="3" class="data-box"/>
+    <text x="190" y="1475" text-anchor="middle" class="subtitle">Customization Result</text>
+    <text x="190" y="1495" text-anchor="middle" class="metric-text">• Test accuracy</text>
+    <text x="190" y="1515" text-anchor="middle" class="metric-text">• Improvement metrics</text>
+    <text x="190" y="1535" text-anchor="middle" class="metric-text">• Class-wise performance</text>
+    <text x="190" y="1555" text-anchor="middle" class="small-text">CustomizationResult</text>
+
+    <!-- Analysis Tools -->
+    <rect x="360" y="1460" width="220" height="90" rx="3" class="component-box"/>
+    <text x="470" y="1485" text-anchor="middle" class="subtitle">Analysis Tools</text>
+    <text x="470" y="1505" text-anchor="middle" class="metric-text">• Performance plots</text>
+    <text x="470" y="1525" text-anchor="middle" class="metric-text">• Confusion matrices</text>
+    <text x="470" y="1545" text-anchor="middle" class="small-text">04_results_analysis.py</text>
+
+    <!-- Visualization -->
+    <rect x="630" y="1460" width="220" height="90" rx="3" class="component-box"/>
+    <text x="740" y="1485" text-anchor="middle" class="subtitle">Visualization</text>
+    <text x="740" y="1505" text-anchor="middle" class="metric-text">• Training curves</text>
+    <text x="740" y="1525" text-anchor="middle" class="metric-text">• Quality comparisons</text>
+    <text x="740" y="1545" text-anchor="middle" class="small-text">visualization/plots.py</text>
+
+    <!-- Final Reports -->
+    <rect x="900" y="1450" width="220" height="110" rx="3" class="data-box"/>
+    <text x="1010" y="1475" text-anchor="middle" class="subtitle">Final Reports</text>
+    <text x="1010" y="1495" text-anchor="middle" class="metric-text">• Accuracy improvements</text>
+    <text x="1010" y="1515" text-anchor="middle" class="metric-text">• Dataset statistics</text>
+    <text x="1010" y="1535" text-anchor="middle" class="metric-text">• Quality distributions</text>
+    <text x="1010" y="1555" text-anchor="middle" class="small-text">results/</text>
+
+    <!-- Arrows -->
+    <path d="M 310 1505 L 360 1505" class="arrow"/>
+    <path d="M 580 1505 L 630 1505" class="arrow"/>
+    <path d="M 850 1505 L 900 1505" class="data-arrow"/>
+  </g>
+
+  <!-- Connection between stages -->
+  <path d="M 1000 1290 L 1000 1360 L 190 1360 L 190 1450" class="data-arrow"/>
+  <text x="500" y="1375" text-anchor="middle" class="small-text">model + evaluation metrics</text>
+
+  <!-- ============================================ -->
+  <!-- LEGEND -->
+  <!-- ============================================ -->
+  <g id="legend">
+    <rect x="50" y="1590" width="1100" height="3" fill="#d1d5db"/>
+  </g>
+</svg>
