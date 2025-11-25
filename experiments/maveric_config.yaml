@@ -15,8 +15,8 @@ max_memory_gb: 14       # Leave 2GB for system
 # Retrieval settings
 retrieval_rotation_size: 1000   # Samples per file when saving intermediate results
 n_reference_images: 10         # Number of reference images for similarity matching
-max_retries: 1                 # Maximum download retry attempts
-request_timeout: 2             # Request timeout in seconds
+max_retries: 0                 # Maximum download retry attempts
+request_timeout: 1             # Request timeout in seconds
 enable_target_class_quality: false  # Disable EfficientNet
 
 # Quality metrics to compute - organized by category

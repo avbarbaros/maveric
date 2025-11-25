@@ -261,13 +261,17 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
             enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
             retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
             seed=config.get('processing', {}).get('seed', 42),
-            enable_target_class_quality=enable_target_class_quality
+            enable_target_class_quality=enable_target_class_quality,
+            max_retries=config.get('max_retries', 3),
+            request_timeout=config.get('request_timeout', 5)
         )
 
         # Initialize MAVERIC (real-time stats are enabled by default)
         maveric = MAVERIC(maveric_config)
         print("✅ MAVERIC initialized successfully")
         print(f"🔄 Rotation size configured: {maveric_config.retrieval_rotation_size}")
+        print(f"🔁 Max retries configured: {maveric_config.max_retries}")
+        print(f"⏱️  Request timeout configured: {maveric_config.request_timeout}s")
 
         if not enable_target_class_quality:
             print("⚡ EfficientNet-based TargetClassQualityMetric DISABLED (faster retrieval)")
