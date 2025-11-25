@@ -206,6 +206,9 @@ Examples:
   # Full retrieval with all metrics (including EfficientNet)
   python 01_data_retrieval.py --config maveric_config.yaml --enable-efficientnet
 
+  # Debug retrieval with detailed timing per sample
+  python 01_data_retrieval.py --config maveric_config.yaml --debug-timing
+
   # Custom config path
   python 01_data_retrieval.py -c /path/to/config.yaml
 
@@ -213,6 +216,14 @@ Performance Note:
   By default, EfficientNet-based quality metrics are DISABLED for faster retrieval.
   Use --enable-efficientnet to calculate Class_*_efficientNet_score fields.
   All other metrics (visual, semantic, similarity-based) are always computed.
+
+Debugging:
+  Use --debug-timing to see detailed per-sample timing breakdowns showing:
+    - Cache hits/misses
+    - Download times
+    - CLIP inference times
+    - Quality metric computation times
+    - Per-class similarity scoring times
         """
     )
     
@@ -234,6 +245,12 @@ Performance Note:
         '--enable-efficientnet',
         action='store_true',
         help='Enable EfficientNet-based TargetClassQualityMetric calculation (default: disabled for faster retrieval)'
+    )
+
+    parser.add_argument(
+        '--debug-timing',
+        action='store_true',
+        help='Enable detailed timing instrumentation for performance debugging (shows per-sample breakdowns)'
     )
 
     return parser.parse_args()
@@ -291,7 +308,14 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
 def main():
     """Main data retrieval function."""
     args = parse_arguments()
-    
+
+    # Enable timing instrumentation if requested
+    if args.debug_timing:
+        print("🔧 Enabling detailed timing instrumentation...")
+        import debug_retrieval_timing
+        print("✅ Timing instrumentation applied!")
+        print("    You'll see detailed per-sample timing breakdowns.\n")
+
     # Load configuration first to check progress bar settings
     config = load_config_file(args.config)
     if not config:
