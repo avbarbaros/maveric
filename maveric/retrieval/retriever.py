@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from tqdm import tqdm
 from datetime import datetime
 import time
+from sklearn.metrics.pairwise import cosine_similarity
 
 from ..core.base import BaseComponent
 from ..core.interfaces import RetrievalResult, ProgressCallback
@@ -553,8 +554,6 @@ class Retriever(BaseComponent):
             
             for class_name in target_classes:
                 # Similarity computations
-                from sklearn.metrics.pairwise import cosine_similarity
-                
                 img2img = cosine_similarity(
                     img_embedding,
                     self.reference_embeddings[class_name]

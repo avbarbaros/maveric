@@ -396,9 +396,6 @@ class TargetClassQualityMetric(BaseQualityMetric):
             imagenet_probability = probabilities[best_imagenet_idx].item()
             
             # Step 2 & 3: For each target class, calculate CLIP similarity and final score
-            import clip
-            from sklearn.metrics.pairwise import cosine_similarity
-            
             # Pre-encode the predicted ImageNet class once
             imagenet_prompt = f"a photo of a {predicted_imagenet_class}"
             imagenet_tokens = clip.tokenize([imagenet_prompt], truncate=True).to(self.device)
@@ -483,9 +480,6 @@ class TargetClassQualityMetric(BaseQualityMetric):
         try:
             if not target_class or not imagenet_class:
                 return 0.0
-
-            import clip
-            from sklearn.metrics.pairwise import cosine_similarity
 
             # Encode target class
             target_prompt = f"a photo of a {target_class}"
