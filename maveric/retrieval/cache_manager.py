@@ -222,23 +222,25 @@ class CacheManager(BaseComponent):
         self.stats['cache_misses'] += 1
         return None
     
-    def download_and_cache_image(self, url: str, max_retries: int = 3, 
-                               timeout: int = 5) -> Optional[Image.Image]:
+    def download_and_cache_image(self, url: str, max_retries: int = 3,
+                               timeout: int = 5, skip_cache_check: bool = False) -> Optional[Image.Image]:
         """
         Download image with caching support.
-        
+
         Args:
             url: Image URL
             max_retries: Maximum number of download attempts
             timeout: Request timeout in seconds
-            
+            skip_cache_check: If True, skip cache check (optimization when caller already checked)
+
         Returns:
             PIL Image if successful, None otherwise
         """
-        # Check cache first
-        cached_image = self.get_cached_image(url)
-        if cached_image is not None:
-            return cached_image
+        # Check cache first (unless caller already checked via sample cache)
+        if not skip_cache_check:
+            cached_image = self.get_cached_image(url)
+            if cached_image is not None:
+                return cached_image
         
         # Download image
         for attempt in range(max_retries):

@@ -424,10 +424,13 @@ class Retriever(BaseComponent):
 
                 # Get image
                 if download_image and self.cache_manager:
+                    # Skip cache check since we already checked sample cache above
+                    # This avoids redundant 10s Google Drive file existence checks
                     image = self.cache_manager.download_and_cache_image(
                         image_url,
                         max_retries=self.max_retries,
-                        timeout=self.request_timeout
+                        timeout=self.request_timeout,
+                        skip_cache_check=True
                     )
                 else:
                     # Direct download without caching

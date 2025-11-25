@@ -258,7 +258,8 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
             clip_model=config.get('clip_model', 'ViT-B/32'),
             batch_size=config.get('batch_size', 32),
             device=config.get('device', 'auto'),
-            enable_image_cache=config.get('caching', {}).get('enable_image_cache', True),
+            enable_image_cache=config.get('enable_image_cache', True),
+            enable_sample_cache=config.get('enable_sample_cache', True),
             retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
             seed=config.get('processing', {}).get('seed', 42),
             enable_target_class_quality=enable_target_class_quality,
@@ -272,6 +273,8 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
         print(f"🔄 Rotation size configured: {maveric_config.retrieval_rotation_size}")
         print(f"🔁 Max retries configured: {maveric_config.max_retries}")
         print(f"⏱️  Request timeout configured: {maveric_config.request_timeout}s")
+        print(f"💾 Image cache: {'ENABLED' if maveric_config.enable_image_cache else 'DISABLED'}")
+        print(f"📦 Sample cache: {'ENABLED' if maveric_config.enable_sample_cache else 'DISABLED'}")
 
         if not enable_target_class_quality:
             print("⚡ EfficientNet-based TargetClassQualityMetric DISABLED (faster retrieval)")

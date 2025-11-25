@@ -55,6 +55,7 @@ quality_thresholds:
 # Caching settings for efficiency
 caching:
   enable_image_cache: true
+  enable_sample_cache: true
   enable_embedding_cache: true
   enable_results_cache: true
   cache_compression: true
