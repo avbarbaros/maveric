@@ -14,6 +14,51 @@ from ..core.base import BaseComponent
 from ..core.exceptions import CacheError
 
 
+def sanitize_filename(name: str) -> str:
+    r"""
+    Sanitize a string to be safe for use as a filename or directory name.
+
+    Replaces characters that are problematic in file paths:
+    - Forward slash (/) → underscore (_)
+    - Backslash (\) → underscore (_)
+    - Colon (:) → underscore (_)
+    - Asterisk (*) → underscore (_)
+    - Question mark (?) → underscore (_)
+    - Quote (") → underscore (_)
+    - Less than (<) → underscore (_)
+    - Greater than (>) → underscore (_)
+    - Pipe (|) → underscore (_)
+
+    Args:
+        name: Original string (e.g., class name)
+
+    Returns:
+        Sanitized string safe for filesystem use
+
+    Example:
+        >>> sanitize_filename("end / de-restriction of 80 kph speed limit")
+        "end _ de-restriction of 80 kph speed limit"
+    """
+    # Replace problematic characters with underscore
+    replacements = {
+        '/': '_',
+        '\\': '_',
+        ':': '_',
+        '*': '_',
+        '?': '_',
+        '"': '_',
+        '<': '_',
+        '>': '_',
+        '|': '_'
+    }
+
+    sanitized = name
+    for old_char, new_char in replacements.items():
+        sanitized = sanitized.replace(old_char, new_char)
+
+    return sanitized
+
+
 class CacheManager(BaseComponent):
     """
     Manages caching of images and results.
@@ -378,9 +423,10 @@ class CacheManager(BaseComponent):
         
         try:
             for class_name, images in reference_samples.items():
-                # Create class subdirectory
-                class_dir = ref_images_dir / class_name
-                class_dir.mkdir(exist_ok=True)
+                # Create class subdirectory (sanitize class name for filesystem)
+                sanitized_class_name = sanitize_filename(class_name)
+                class_dir = ref_images_dir / sanitized_class_name
+                class_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Save each image
                 for idx, image in enumerate(images):

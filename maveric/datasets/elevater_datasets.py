@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 
 from ..core.base import BaseDataset
 from ..core.exceptions import DatasetError
+from ..retrieval.cache_manager import sanitize_filename
 
 
 class ELEVATERDataset(BaseDataset):
@@ -1639,7 +1640,14 @@ class ELEVATERDataset(BaseDataset):
                 # Look for class subdirectories
                 found_classes = 0
                 for class_name in self.class_names:
-                    class_dir = split_dir / class_name
+                    # Try sanitized class name first (for datasets with problematic characters)
+                    sanitized_name = sanitize_filename(class_name)
+                    class_dir = split_dir / sanitized_name
+
+                    # If sanitized version doesn't exist, try original class name
+                    if not class_dir.exists():
+                        class_dir = split_dir / class_name
+
                     if class_dir.exists() and class_dir.is_dir():
                         # Get image files
                         image_files = list(class_dir.glob('*.jpg')) + \
