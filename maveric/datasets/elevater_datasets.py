@@ -1411,6 +1411,14 @@ class ELEVATERDataset(BaseDataset):
                     root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'oxford_pets': lambda: torchvision.datasets.OxfordIIITPet(
                     root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=convert_transform),
+                'mnist': lambda: torchvision.datasets.MNIST(
+                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
+                'dtd': lambda: torchvision.datasets.DTD(
+                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
+                'fer2013': lambda: torchvision.datasets.FER2013(
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
+                'fgvc_aircraft': lambda: torchvision.datasets.FGVCAircraft(
+                    root=self.root, split='trainval' if self.train else 'test', download=self.download, transform=convert_transform),
             }
 
             if self.dataset_name not in dataset_loaders:
