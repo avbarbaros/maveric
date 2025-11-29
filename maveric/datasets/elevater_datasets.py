@@ -26,7 +26,7 @@ class ELEVATERDataset(BaseDataset):
     # Mapping of ELEVATER dataset names to their properties
     ELEVATER_DATASETS = {
         'caltech101': {
-            'num_classes': 102,
+            'num_classes': 101,
             'task': 'classification',
             'type': 'torchvision',
             'class_names': [
@@ -34,7 +34,6 @@ class ELEVATERDataset(BaseDataset):
                 'airplane',
                 'anchor',
                 'ant',
-                'background',
                 'barrel',
                 'bass',
                 'beaver',
