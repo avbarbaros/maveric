@@ -479,7 +479,7 @@ class ELEVATERDataset(BaseDataset):
         'dtd': {
             'num_classes': 47,
             'task': 'classification',
-            'type': 'file_based',
+            'type': 'torchvision',
             'class_names': [
                 'banded',
                 'blotchy',
@@ -550,7 +550,7 @@ class ELEVATERDataset(BaseDataset):
         'fer2013': {
             'num_classes': 7,
             'task': 'classification',
-            'type': 'file_based',
+            'type': 'torchvision',
             'class_names': [
                 ['angry'],
                 ['disgusted'],
@@ -564,7 +564,7 @@ class ELEVATERDataset(BaseDataset):
         'fgvc_aircraft': {
             'num_classes': 100,
             'task': 'classification',
-            'type': 'file_based',
+            'type': 'torchvision',
             'class_names':[
                 '707-320',
                 '727-200',
@@ -849,7 +849,7 @@ class ELEVATERDataset(BaseDataset):
         'mnist': {
             'num_classes': 10,
             'task': 'classification',
-            'type': 'file_based',
+            'type': 'torchvision',
             'class_names': [
                 '0',
                 '1',
