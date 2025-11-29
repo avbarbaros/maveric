@@ -26,7 +26,7 @@ class ELEVATERDataset(BaseDataset):
     # Mapping of ELEVATER dataset names to their properties
     ELEVATER_DATASETS = {
         'caltech101': {
-            'num_classes': 101,  # Torchvision excludes BACKGROUND_Google, so 101 classes
+            'num_classes': 102,
             'task': 'classification',
             'type': 'torchvision',
             'class_names': [
