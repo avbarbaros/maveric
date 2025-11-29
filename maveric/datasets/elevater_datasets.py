@@ -1414,7 +1414,7 @@ class ELEVATERDataset(BaseDataset):
                 'mnist': lambda: torchvision.datasets.MNIST(
                     root=self.root, train=self.train, download=self.download, transform=convert_transform),
                 'dtd': lambda: torchvision.datasets.DTD(
-                    root=self.root, train=self.train, download=self.download, transform=convert_transform),
+                    root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'fer2013': lambda: torchvision.datasets.FER2013(
                     root=self.root, split='train' if self.train else 'test', download=self.download, transform=convert_transform),
                 'fgvc_aircraft': lambda: torchvision.datasets.FGVCAircraft(
