@@ -1578,14 +1578,17 @@ class ELEVATERDataset(BaseDataset):
 
         # Now process each class using pre-built index map (much faster!)
         for class_idx, class_name in enumerate(self.class_names):
+            # Extract canonical name for dictionary key (FER2013 uses lists)
+            canonical_name = class_name[0] if isinstance(class_name, list) else class_name
+
             class_indices = class_indices_map.get(class_idx, [])
 
             if not class_indices:
-                print(f"    ⚠️  No samples found for class '{class_name}'")
-                reference_samples[class_name] = []
+                print(f"    ⚠️  No samples found for class '{canonical_name}'")
+                reference_samples[canonical_name] = []
                 continue
 
-            print(f"  [{class_idx+1}/{len(self.class_names)}] Class '{class_name}': {len(class_indices)} samples")
+            print(f"  [{class_idx+1}/{len(self.class_names)}] Class '{canonical_name}': {len(class_indices)} samples")
 
             # Use np.random.choice exactly like the original code
             sampled_indices = np.random.choice(
@@ -1611,7 +1614,7 @@ class ELEVATERDataset(BaseDataset):
                     print(f"    ⚠️  Failed to load image at index {idx}: {e}")
                     continue
 
-            reference_samples[class_name] = images
+            reference_samples[canonical_name] = images
 
         print(f"✅ Reference sampling complete: {len(reference_samples)} classes, {sum(len(imgs) for imgs in reference_samples.values())} total images")
         return reference_samples
@@ -1645,13 +1648,16 @@ class ELEVATERDataset(BaseDataset):
                 # Look for class subdirectories
                 found_classes = 0
                 for class_name in self.class_names:
+                    # Extract canonical name for dictionary key (FER2013 uses lists)
+                    canonical_name = class_name[0] if isinstance(class_name, list) else class_name
+
                     # Try sanitized class name first (for datasets with problematic characters)
-                    sanitized_name = sanitize_filename(class_name)
+                    sanitized_name = sanitize_filename(canonical_name)
                     class_dir = split_dir / sanitized_name
 
                     # If sanitized version doesn't exist, try original class name
                     if not class_dir.exists():
-                        class_dir = split_dir / class_name
+                        class_dir = split_dir / canonical_name
 
                     if class_dir.exists() and class_dir.is_dir():
                         # Get image files
@@ -1660,7 +1666,7 @@ class ELEVATERDataset(BaseDataset):
                                     list(class_dir.glob('*.jpeg'))
 
                         if len(image_files) == 0:
-                            print(f"    ⚠️  Class '{class_name}': directory exists but no images found")
+                            print(f"    ⚠️  Class '{canonical_name}': directory exists but no images found")
                             continue
 
                         # Sample images using np.random.choice for consistency
@@ -1681,11 +1687,11 @@ class ELEVATERDataset(BaseDataset):
                                 self.log_warning(f"Failed to load {img_file}: {e}")
 
                         if images:
-                            reference_samples[class_name] = images
+                            reference_samples[canonical_name] = images
                             found_classes += 1
-                            print(f"    ✓ Class '{class_name}': loaded {len(images)} images")
+                            print(f"    ✓ Class '{canonical_name}': loaded {len(images)} images")
                     else:
-                        print(f"    ✗ Class '{class_name}': directory not found at {class_dir}")
+                        print(f"    ✗ Class '{canonical_name}': directory not found at {class_dir}")
 
                 print(f"  Summary: Found {found_classes}/{len(self.class_names)} classes with images")
 

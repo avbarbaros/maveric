@@ -14,12 +14,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Applied**: Reference image caching and file-based dataset loading
 - **Affected datasets**: GTSRB, any future datasets with filesystem-reserved characters
 
-**Bug Fix: FER2013 List-Based Class Names**:
-- **Issue**: FER2013 uses lists of synonyms for class names (e.g., `['happy', 'smiling']`) instead of single strings
-- **Impact**: `sanitize_filename()` received a list and failed with `AttributeError: 'list' object has no attribute 'replace'`
-- **Fix**: Updated `sanitize_filename()` to handle both strings and lists (uses first element as canonical name)
-- **Example**: `['happy', 'smiling']` → `'happy'`, `['sad', 'depressed']` → `'sad'`
-- **Location**: [cache_manager.py:46-51](maveric/retrieval/cache_manager.py#L46-L51)
+**Bug Fix: FER2013 List-Based Class Names (Multiple Fixes)**:
+- **Issue 1**: FER2013 uses lists of synonyms for class names (e.g., `['happy', 'smiling']`) instead of single strings
+  - **Impact**: `sanitize_filename()` received a list and failed with `AttributeError: 'list' object has no attribute 'replace'`
+  - **Fix**: Updated `sanitize_filename()` to handle both strings and lists (uses first element as canonical name)
+  - **Example**: `['happy', 'smiling']` → `'happy'`, `['sad', 'depressed']` → `'sad'`
+  - **Location**: [cache_manager.py:46-51](maveric/retrieval/cache_manager.py#L46-L51)
+
+- **Issue 2**: Dictionary keys cannot be lists (unhashable type)
+  - **Impact**: Code attempted to use list class names as dictionary keys: `reference_samples[class_name]` where `class_name = ['happy', 'smiling']`
+  - **Error**: `TypeError: unhashable type: 'list'`
+  - **Fix**: Extract canonical name (first element) before using as dictionary key at all assignment locations
+  - **Pattern**: `canonical_name = class_name[0] if isinstance(class_name, list) else class_name`
+  - **Locations**:
+    - [elevater_datasets.py:1581-1582](maveric/datasets/elevater_datasets.py#L1581-L1582) - Torchvision reference samples
+    - [elevater_datasets.py:1651-1652](maveric/datasets/elevater_datasets.py#L1651-L1652) - File-based reference samples
+
 - **Affected datasets**: FER2013 (only dataset with list-based class names)
 
 ### November 24, 2025 - Documentation & Visualization
