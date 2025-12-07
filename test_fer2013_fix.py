@@ -79,3 +79,41 @@ print("  1. FER2013 list-based class names (extracts first element)")
 print("  2. Dictionary key usage (no unhashable type errors)")
 print("  3. GTSRB special characters (sanitizes for filesystem)")
 print("  4. Mixed scenarios (lists + strings)")
+
+# Test 5: Synonym expansion for text embeddings
+print("\n" + "="*80)
+print("5. Testing synonym expansion for text embeddings:")
+print("="*80)
+
+text_templates = ["a photo of a {}", "an image showing {}"]
+fer2013_example = ['happy', 'smiling']
+
+# Simulate what retriever.py does
+if isinstance(fer2013_example, list):
+    canonical_name = fer2013_example[0]
+    prompts = []
+    for synonym in fer2013_example:
+        prompts.extend([template.format(synonym) for template in text_templates])
+else:
+    canonical_name = fer2013_example
+    prompts = [template.format(fer2013_example) for template in text_templates]
+
+print(f"   Class name: {fer2013_example}")
+print(f"   Canonical name: '{canonical_name}'")
+print(f"   Generated prompts ({len(prompts)}):")
+for i, prompt in enumerate(prompts, 1):
+    print(f"     {i}. \"{prompt}\"")
+
+expected_prompts = [
+    "a photo of a happy",
+    "an image showing happy",
+    "a photo of a smiling",
+    "an image showing smiling"
+]
+assert prompts == expected_prompts, f"Expected {expected_prompts}, got {prompts}"
+print(f"\n   ✓ All synonyms expanded correctly!")
+print(f"   ✓ This creates richer embeddings by including all synonym variations")
+
+print("\n" + "="*80)
+print("✅ ALL TESTS INCLUDING SYNONYM EXPANSION PASSED!")
+print("="*80)

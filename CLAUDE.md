@@ -26,9 +26,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **Error**: `TypeError: unhashable type: 'list'`
   - **Fix**: Extract canonical name (first element) before using as dictionary key at all assignment locations
   - **Pattern**: `canonical_name = class_name[0] if isinstance(class_name, list) else class_name`
-  - **Locations**:
-    - [elevater_datasets.py:1581-1582](maveric/datasets/elevater_datasets.py#L1581-L1582) - Torchvision reference samples
-    - [elevater_datasets.py:1651-1652](maveric/datasets/elevater_datasets.py#L1651-L1652) - File-based reference samples
+  - **Locations in elevater_datasets.py**:
+    - [Line 1581-1582](maveric/datasets/elevater_datasets.py#L1581-L1582) - Torchvision reference samples initialization
+    - [Line 1617](maveric/datasets/elevater_datasets.py#L1617) - Torchvision reference samples assignment
+    - [Line 1651-1652](maveric/datasets/elevater_datasets.py#L1651-L1652) - File-based reference samples initialization
+    - [Line 1687](maveric/datasets/elevater_datasets.py#L1687) - File-based reference samples assignment
+  - **Location in retriever.py**:
+    - [Line 242-258](maveric/retrieval/retriever.py#L242-L258) - Text embedding creation with synonym expansion
+    - **Special handling**: For FER2013 lists like `['happy', 'smiling']`, creates prompts for ALL synonyms to get richer embeddings
+    - **Example**: `['happy', 'smiling']` with template `"a photo of a {}"` generates prompts: `["a photo of a happy", "a photo of a smiling"]`
 
 - **Affected datasets**: FER2013 (only dataset with list-based class names)
 

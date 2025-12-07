@@ -238,15 +238,24 @@ class Retriever(BaseComponent):
         
         # Log target class to ImageNet class mappings at the beginning
         self._log_class_mappings(target_dataset, dataset.class_names)
-        
+
         for class_name in tqdm(dataset.class_names, desc="Encoding text templates"):
-            prompts = [template.format(class_name) for template in text_templates]
-            
+            # Handle list-based class names (e.g., FER2013: ['happy', 'smiling'])
+            # Create prompts for ALL synonyms to get richer embeddings
+            if isinstance(class_name, list):
+                canonical_name = class_name[0]  # Use first as canonical for dict key
+                prompts = []
+                for synonym in class_name:
+                    prompts.extend([template.format(synonym) for template in text_templates])
+            else:
+                canonical_name = class_name
+                prompts = [template.format(class_name) for template in text_templates]
+
             with torch.no_grad():
                 tokens = clip.tokenize(prompts).to(self.device)
                 text_features = self.model.encode_text(tokens)
                 text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-                self.text_embeddings[class_name] = text_features.cpu().numpy()
+                self.text_embeddings[canonical_name] = text_features.cpu().numpy()
         
         # Save to cache
         if save_cache and self.cache_manager:
