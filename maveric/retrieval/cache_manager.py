@@ -14,7 +14,7 @@ from ..core.base import BaseComponent
 from ..core.exceptions import CacheError
 
 
-def sanitize_filename(name: str) -> str:
+def sanitize_filename(name) -> str:
     r"""
     Sanitize a string to be safe for use as a filename or directory name.
 
@@ -30,15 +30,30 @@ def sanitize_filename(name: str) -> str:
     - Pipe (|) → underscore (_)
 
     Args:
-        name: Original string (e.g., class name)
+        name: Original string or list of strings (e.g., class name).
+              If list, uses the first element (canonical name).
 
     Returns:
         Sanitized string safe for filesystem use
 
-    Example:
+    Examples:
         >>> sanitize_filename("end / de-restriction of 80 kph speed limit")
         "end _ de-restriction of 80 kph speed limit"
+
+        >>> sanitize_filename(["happy", "smiling"])
+        "happy"
     """
+    # Handle list of class name variants (e.g., FER2013: ['happy', 'smiling'])
+    # Use the first element as the canonical name
+    if isinstance(name, list):
+        if not name:
+            raise ValueError("Cannot sanitize empty list")
+        name = name[0]  # Use first element as canonical class name
+
+    # Ensure we have a string
+    if not isinstance(name, str):
+        name = str(name)
+
     # Replace problematic characters with underscore
     replacements = {
         '/': '_',

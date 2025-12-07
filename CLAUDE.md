@@ -4,7 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### November 24, 2025 - Documentation & Visualization (LATEST)
+### December 7, 2025 - Critical Bug Fixes (LATEST)
+
+**Bug Fix: Class Names with Special Characters in File Paths**:
+- **Issue**: GTSRB class name `"end / de-restriction of 80 kph speed limit"` contains `/` which Linux interprets as directory separator
+- **Impact**: Reference image caching failed with `FileNotFoundError` for datasets with special characters in class names
+- **Fix**: Added `sanitize_filename()` function to replace problematic characters (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) with underscores
+- **Location**: [cache_manager.py:17-74](maveric/retrieval/cache_manager.py#L17-L74)
+- **Applied**: Reference image caching and file-based dataset loading
+- **Affected datasets**: GTSRB, any future datasets with filesystem-reserved characters
+
+**Bug Fix: FER2013 List-Based Class Names**:
+- **Issue**: FER2013 uses lists of synonyms for class names (e.g., `['happy', 'smiling']`) instead of single strings
+- **Impact**: `sanitize_filename()` received a list and failed with `AttributeError: 'list' object has no attribute 'replace'`
+- **Fix**: Updated `sanitize_filename()` to handle both strings and lists (uses first element as canonical name)
+- **Example**: `['happy', 'smiling']` → `'happy'`, `['sad', 'depressed']` → `'sad'`
+- **Location**: [cache_manager.py:46-51](maveric/retrieval/cache_manager.py#L46-L51)
+- **Affected datasets**: FER2013 (only dataset with list-based class names)
+
+### November 24, 2025 - Documentation & Visualization
 
 **New Documentation**:
 - **Pipeline Visualization**: Created comprehensive SVG diagram of MAVERIC architecture
