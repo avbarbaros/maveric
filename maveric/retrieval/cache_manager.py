@@ -498,8 +498,18 @@ class CacheManager(BaseComponent):
             
             # Generate all prompts for each class
             for class_name in class_names:
-                prompts = [template.format(class_name) for template in text_templates]
-                text_data['generated_prompts'][class_name] = prompts
+                # Handle list-based class names (e.g., FER2013: ['happy', 'smiling'])
+                # Create prompts for ALL synonyms to match retriever.py behavior
+                if isinstance(class_name, list):
+                    canonical_name = class_name[0]  # Use first as canonical for dict key
+                    prompts = []
+                    for synonym in class_name:
+                        prompts.extend([template.format(synonym) for template in text_templates])
+                else:
+                    canonical_name = class_name
+                    prompts = [template.format(class_name) for template in text_templates]
+
+                text_data['generated_prompts'][canonical_name] = prompts
             
             # Save to JSON
             with open(filepath, 'w') as f:

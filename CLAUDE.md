@@ -31,8 +31,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - [Line 1617](maveric/datasets/elevater_datasets.py#L1617) - Torchvision reference samples assignment
     - [Line 1651-1652](maveric/datasets/elevater_datasets.py#L1651-L1652) - File-based reference samples initialization
     - [Line 1687](maveric/datasets/elevater_datasets.py#L1687) - File-based reference samples assignment
-  - **Location in retriever.py**:
-    - [Line 242-258](maveric/retrieval/retriever.py#L242-L258) - Text embedding creation with synonym expansion
+  - **Locations with synonym expansion**:
+    - **retriever.py** [Line 242-258](maveric/retrieval/retriever.py#L242-L258) - Text embedding creation with synonym expansion
+    - **cache_manager.py** [Line 500-512](maveric/retrieval/cache_manager.py#L500-L512) - Reference text caching with synonym expansion
     - **Special handling**: For FER2013 lists like `['happy', 'smiling']`, creates prompts for ALL synonyms to get richer embeddings
     - **Example**: `['happy', 'smiling']` with template `"a photo of a {}"` generates prompts: `["a photo of a happy", "a photo of a smiling"]`
 
