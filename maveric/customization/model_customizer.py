@@ -151,7 +151,9 @@ class ModelCustomizer(BaseComponent):
             val_loader=val_loader,
             test_loader=test_loader,
             training_config=training_config,
-            class_names=class_names
+            class_names=class_names,
+            templates=templates,
+            evaluator=self.evaluator
         )
         
         # Load and evaluate the best model from training

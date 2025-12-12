@@ -41,33 +41,50 @@ class Trainer(BaseComponent):
               val_loader: Any,
               test_loader: Any,
               training_config: TrainingConfig,
-              class_names: List[str]) -> Dict[str, List[float]]:
+              class_names: List[str],
+              templates: Optional[List[str]] = None,
+              evaluator: Optional[Any] = None) -> Dict[str, List[float]]:
         """
         Train the model.
-        
+
         Args:
             train_loader: Training data loader
             val_loader: Validation data loader
             test_loader: Test data loader (mandatory for proper evaluation)
             training_config: Training configuration
             class_names: List of class names
-            
+            templates: Optional list of text templates for REACT-style evaluation
+            evaluator: Optional evaluator instance for template ensembling
+
         Returns:
             Training history dictionary
-            
+
         Note:
             Test data evaluation is mandatory at each epoch for reliable model selection.
+            If templates and evaluator are provided, uses REACT-style template ensembling
+            for consistent evaluation between training and final evaluation.
         """
         # Validate test loader is provided
         if test_loader is None:
             raise ValueError("Test data loader is required for training. Test evaluation is mandatory for reliable model selection.")
-        
-        # Create text features for all classes (using same method as original code)
-        class_prompts = [f"a photo of a {name}." for name in class_names]
-        text_inputs = self.model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
-        with torch.no_grad():
-            class_text_features = self.model.clip_model.get_text_features(**text_inputs)
-            class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+
+        # Create text features for all classes
+        # Use template ensembling if available (REACT-style), otherwise single template
+        if templates is not None and evaluator is not None:
+            # REACT-style evaluation with template ensembling (consistent with final evaluation)
+            self.log_info(f"Using REACT-style template ensembling with {len(templates)} templates for evaluation")
+            with torch.no_grad():
+                class_text_features = evaluator._create_text_classifier_with_templates(
+                    self.model, class_names, templates
+                )
+        else:
+            # Fast single-template evaluation (legacy behavior)
+            self.log_info("Using single-template evaluation (fast but less accurate)")
+            class_prompts = [f"a photo of a {name}." for name in class_names]
+            text_inputs = self.model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+            with torch.no_grad():
+                class_text_features = self.model.clip_model.get_text_features(**text_inputs)
+                class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
         
         # Setup optimizer
         optimizer = self._create_optimizer(training_config)

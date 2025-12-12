@@ -4,7 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 7, 2025 - Critical Bug Fixes (LATEST)
+### December 12, 2025 - Training Evaluation Consistency Fix (LATEST)
+
+**Enhancement: REACT-Style Template Ensembling in Training Loop**:
+- **Issue**: Training loop used single-template evaluation while final evaluation used REACT-style template ensembling
+  - **Impact**: Accuracy reported during training (e.g., 91.82%) differed from final evaluation (92.06%)
+  - **Example gap**: 0.24% difference (24 samples out of 10,000 for CIFAR-10)
+  - **Root cause**: Training used `"a photo of a {}"` while final used 18 templates with ensembling
+- **Fix**: Training loop now uses same REACT-style template ensembling as final evaluation
+  - **Location**: [training.py:39-87](maveric/customization/training.py#L39-L87)
+  - **Integration**: [model_customizer.py:149-157](maveric/customization/model_customizer.py#L149-L157)
+  - **Benefits**:
+    - Consistent accuracy numbers between epochs and final evaluation
+    - More accurate progress monitoring during training
+    - Same evaluation method (REACT-style) used throughout
+  - **Tradeoff**: Slightly slower per-epoch evaluation (~18x for CIFAR-10 with 18 templates)
+- **Backward compatibility**: Falls back to single-template if templates not provided
+
+### December 7, 2025 - Critical Bug Fixes
 
 **Bug Fix: Class Names with Special Characters in File Paths**:
 - **Issue**: GTSRB class name `"end / de-restriction of 80 kph speed limit"` contains `/` which Linux interprets as directory separator
