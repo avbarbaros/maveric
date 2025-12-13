@@ -882,18 +882,25 @@ class MAVERICInteractiveQualityControl:
             results_dir = os.path.join(output_dir, 'curationResults')
             os.makedirs(results_dir, exist_ok=True)
 
-            total_samples = len(self.filtered_data)
+            # Sort data by class (label) for organized grids
+            sorted_data = self.filtered_data.sort_values('label')
+
+            # Get class distribution
+            class_counts = sorted_data['label'].value_counts().sort_index()
+            total_samples = len(sorted_data)
             num_grids = (total_samples + samples_per_grid - 1) // samples_per_grid  # Ceiling division
 
             print(f"📊 Creating {num_grids} grid visualization(s) for {total_samples} samples...")
             print(f"   Grid size: 10x10 ({samples_per_grid} images per grid)")
+            print(f"   Organization: Class by class (sorted by label)")
+            print(f"   Class distribution: {dict(class_counts)}")
             print(f"   Source: {images_dir}")
             print(f"   Output: {results_dir}")
 
             for grid_idx in range(num_grids):
                 start_idx = grid_idx * samples_per_grid
                 end_idx = min((grid_idx + 1) * samples_per_grid, total_samples)
-                grid_samples = self.filtered_data.iloc[start_idx:end_idx]
+                grid_samples = sorted_data.iloc[start_idx:end_idx]
 
                 # Create 10x10 grid
                 fig, axes = plt.subplots(10, 10, figsize=(30, 30))
@@ -943,9 +950,16 @@ class MAVERICInteractiveQualityControl:
                 for i in range(len(grid_samples), samples_per_grid):
                     axes[i].axis('off')
 
-                # Add overall title
+                # Get class range in this grid
+                classes_in_grid = sorted(grid_samples['label'].unique())
+                class_range_str = ', '.join(classes_in_grid[:3])  # Show first 3 classes
+                if len(classes_in_grid) > 3:
+                    class_range_str += f' ... ({len(classes_in_grid)} classes)'
+
+                # Add overall title with class information
                 fig.suptitle(f'{self.dataset_name.upper()} Curation Results - Grid {grid_idx + 1}/{num_grids}\n'
-                           f'Samples {start_idx + 1}-{end_idx} (Total: {total_samples})',
+                           f'Samples {start_idx + 1}-{end_idx} (Total: {total_samples})\n'
+                           f'Classes: {class_range_str}',
                            fontsize=16, fontweight='bold')
 
                 plt.tight_layout()

@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **Integration**: [interactive.py:1706-1714](maveric/visualization/interactive.py#L1706-L1714)
 - **Functionality**:
   - Automatically generates 10×10 image grids when "Save Data" button is clicked
+  - **Organized by class**: Images sorted by label for easy class-by-class inspection
   - Each grid contains 100 images with labels and quality scores
   - Saves to `curationResults/` folder alongside training JSON files
   - File naming: `{dataset_name}_grid_{number:03d}.png`
@@ -36,6 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   # → Returns path to curationResults folder
   ```
 - **Benefits**:
+  - **Class-organized**: All images of same class grouped together for easy inspection
   - Quick quality check without loading all images individually
   - Easy sharing/documentation of curation results
   - Visual confirmation of data quality before training
