@@ -4,7 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 12, 2025 - Training Evaluation Consistency Fix (LATEST)
+### December 13, 2025 - Visual Grid Export for Data Curation (LATEST)
+
+**New Feature: Automatic Grid Visualization on Save**:
+- **Purpose**: Enable visual inspection of curated data without loading individual images
+- **Implementation**: Added `save_sample_grids()` method to interactive GUI
+  - **Location**: [interactive.py:852-995](maveric/visualization/interactive.py#L852-L995)
+  - **Integration**: [interactive.py:1706-1714](maveric/visualization/interactive.py#L1706-L1714)
+- **Functionality**:
+  - Automatically generates 10×10 image grids when "Save Data" button is clicked
+  - Each grid contains 100 images with labels and quality scores
+  - Saves to `curationResults/` folder alongside training JSON files
+  - File naming: `{dataset_name}_grid_{number:03d}.png`
+- **Features**:
+  - **OPTIMIZED**: Loads from dataset-specific `images/` folder (local, fast)
+  - **NOT** from global cache (avoids Google Drive/NFS latency)
+  - Uses same images copied by `_copy_training_images()`
+  - Displays compact info: ID, label, weighted score, consistency
+  - Creates multiple grids for >100 samples (e.g., 53 grids for 5,250 samples)
+  - 30×30 inch figure size with 150 DPI for high-quality output
+- **Usage**:
+  ```python
+  # Automatic: Click "Save Data" button in GUI
+  from maveric.visualization import start_interactive_gui
+  gui = start_interactive_gui('cifar10')
+  # → Saves both JSON and PNG grids
+
+  # Manual: Programmatic call
+  gui.apply_thresholds()
+  grid_path = gui.save_sample_grids()
+  # → Returns path to curationResults folder
+  ```
+- **Benefits**:
+  - Quick quality check without loading all images individually
+  - Easy sharing/documentation of curation results
+  - Visual confirmation of data quality before training
+  - Compact format: 100 images per PNG file
+  - **Fast on network drives**: Local I/O only, no global cache access
+
+### December 12, 2025 - Training Evaluation Consistency Fix
 
 **Enhancement: REACT-Style Template Ensembling in Training Loop**:
 - **Issue**: Training loop used single-template evaluation while final evaluation used REACT-style template ensembling

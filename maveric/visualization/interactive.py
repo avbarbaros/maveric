@@ -849,6 +849,154 @@ class MAVERICInteractiveQualityControl:
             print(f"❌ Error saving data: {e}")
             return None
 
+    def save_sample_grids(self, output_dir=None, grid_size=100, samples_per_grid=100):
+        """
+        Save visual grid outputs (10x10 images with labels) to PNG files.
+
+        Args:
+            output_dir: Directory to save grid images (defaults to same location as save_filtered_data)
+            grid_size: Number of samples per grid (default: 100 for 10x10)
+            samples_per_grid: Same as grid_size (for clarity)
+
+        Returns:
+            Path to curationResults folder or None if error
+        """
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("❌ No filtered data available")
+            return None
+
+        try:
+            # Determine output directory
+            if output_dir is None:
+                if self.data_path.endswith('/raw'):
+                    base_dir = os.path.dirname(self.data_path)
+                else:
+                    base_dir = self.data_path
+                output_dir = base_dir
+
+            # Get images directory (where _copy_training_images saves images)
+            from pathlib import Path
+            images_dir = Path(output_dir) / 'images'
+
+            # Create curationResults folder
+            results_dir = os.path.join(output_dir, 'curationResults')
+            os.makedirs(results_dir, exist_ok=True)
+
+            total_samples = len(self.filtered_data)
+            num_grids = (total_samples + samples_per_grid - 1) // samples_per_grid  # Ceiling division
+
+            print(f"📊 Creating {num_grids} grid visualization(s) for {total_samples} samples...")
+            print(f"   Grid size: 10x10 ({samples_per_grid} images per grid)")
+            print(f"   Source: {images_dir}")
+            print(f"   Output: {results_dir}")
+
+            for grid_idx in range(num_grids):
+                start_idx = grid_idx * samples_per_grid
+                end_idx = min((grid_idx + 1) * samples_per_grid, total_samples)
+                grid_samples = self.filtered_data.iloc[start_idx:end_idx]
+
+                # Create 10x10 grid
+                fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+                axes = axes.flatten()
+
+                for i, (_, row) in enumerate(grid_samples.iterrows()):
+                    if i >= samples_per_grid:
+                        break
+
+                    ax = axes[i]
+
+                    try:
+                        # Load image from local images directory (fast, no network latency)
+                        url = row.get('url', '')
+                        if url:
+                            # Load from dataset-specific images folder (already copied by _copy_training_images)
+                            image = self._load_image_from_local(url, images_dir)
+                            if image:
+                                ax.imshow(image)
+
+                                # Display compact metrics
+                                label = row.get('label', 'unknown')
+                                sample_id = row.get('id', start_idx + i)
+                                score = row.get('weighted_class_score', 0)
+                                consistency = row.get('consistency', 0)
+
+                                # Compact title with key info
+                                title_text = f"ID:{sample_id}\n{label}\nS:{score:.2f} C:{consistency:.2f}"
+                                ax.set_title(title_text, fontsize=8, pad=2)
+                            else:
+                                ax.text(0.5, 0.5, "Image\nUnavailable",
+                                       ha='center', va='center', fontsize=8)
+                                ax.set_title(f"ID:{row.get('id', i)}", fontsize=8)
+                        else:
+                            ax.text(0.5, 0.5, "No URL", ha='center', va='center', fontsize=8)
+                            ax.set_title(f"ID:{row.get('id', i)}", fontsize=8)
+
+                    except Exception as e:
+                        ax.text(0.5, 0.5, f"Error:\n{str(e)[:20]}",
+                               ha='center', va='center', fontsize=7,
+                               transform=ax.transAxes)
+                        ax.set_title(f"ID:{row.get('id', i)}", fontsize=8)
+
+                    ax.axis('off')
+
+                # Hide unused cells
+                for i in range(len(grid_samples), samples_per_grid):
+                    axes[i].axis('off')
+
+                # Add overall title
+                fig.suptitle(f'{self.dataset_name.upper()} Curation Results - Grid {grid_idx + 1}/{num_grids}\n'
+                           f'Samples {start_idx + 1}-{end_idx} (Total: {total_samples})',
+                           fontsize=16, fontweight='bold')
+
+                plt.tight_layout()
+
+                # Save to PNG
+                output_file = os.path.join(results_dir, f'{self.dataset_name}_grid_{grid_idx + 1:03d}.png')
+                plt.savefig(output_file, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+
+                print(f"   ✓ Saved grid {grid_idx + 1}/{num_grids}: {output_file}")
+
+            print(f"\n✅ All grids saved to: {results_dir}")
+            return results_dir
+
+        except Exception as e:
+            print(f"❌ Error creating sample grids: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _load_image_from_local(self, url, images_dir):
+        """
+        Load image from local dataset-specific images directory.
+        This is much faster than loading from global cache on network drives.
+
+        Args:
+            url: Image URL (used to calculate hash for filename)
+            images_dir: Path to local images directory
+
+        Returns:
+            PIL Image or None
+        """
+        import hashlib
+        from pathlib import Path
+
+        try:
+            # Calculate image hash (same as _copy_training_images)
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            img_filename = f"img_{url_hash}.jpg"
+
+            # Load from dataset-specific images folder
+            img_path = Path(images_dir) / img_filename
+
+            if img_path.exists():
+                return Image.open(img_path).convert('RGB')
+
+        except Exception:
+            pass  # Silently fail for grid generation
+
+        return None
+
     def _copy_training_images(self, output_dir):
         """
         Copy training images from global cache to dataset-specific images folder.
@@ -1552,17 +1700,29 @@ class MAVERICInteractiveQualityControl:
                 progress_box = widgets.VBox([progress, status_label])
                 display(progress_box)
 
-                # Update progress as we save
+                # Update progress as we save JSON data
                 progress.value = 20
                 status_label.value = "<b>Formatting samples...</b>"
 
                 save_path = self.save_filtered_data()
 
+                # Generate visual grid outputs
+                progress.value = 50
+                status_label.value = "<b>Generating visual grids...</b>"
+
+                grid_path = None
+                if save_path:
+                    print(f"✅ Data saved successfully to: {save_path}")
+                    print()
+                    grid_path = self.save_sample_grids()
+
                 progress.value = 100
                 progress_box.close()
 
                 if save_path:
-                    print(f"✅ Data saved successfully to: {save_path}")
+                    if grid_path:
+                        print(f"\n📊 Visual grids saved to: {grid_path}")
+                    print(f"\n✨ All outputs saved successfully!")
                 else:
                     print(f"❌ Failed to save data")
         
