@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 13, 2025 - Visual Grid Export for Data Curation (LATEST)
+### December 13, 2025 - Visual Grid Export & Manual Balancing CLI (LATEST)
 
-**New Feature: Automatic Grid Visualization on Save**:
+**New Feature 1: Automatic Grid Visualization on Save**:
 - **Purpose**: Enable visual inspection of curated data without loading individual images
 - **Implementation**: Added `save_sample_grids()` method to interactive GUI
   - **Location**: [interactive.py:852-995](maveric/visualization/interactive.py#L852-L995)
@@ -43,6 +43,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Visual confirmation of data quality before training
   - Compact format: 100 images per PNG file
   - **Fast on network drives**: Local I/O only, no global cache access
+
+**New Feature 2: CLI for Manual Dataset Balancing**:
+- **Purpose**: Balance manually cleaned training datasets after visual inspection
+- **Implementation**: New CLI tool for post-curation dataset balancing
+  - **Location**: [balance_cli.py](maveric/utils/balance_cli.py) (main implementation)
+  - **Standalone script**: [balance_dataset.py](balance_dataset.py) (wrapper for easy execution)
+  - **Test suite**: [test_balance_cli.py](test_balance_cli.py) (comprehensive testing)
+- **Workflow Integration**:
+  1. Curate data using interactive GUI (Save Data)
+  2. Manually inspect grids in `curationResults/`
+  3. Remove bad samples from JSON files
+  4. **Balance cleaned data using this CLI tool** ← NEW
+  5. Use balanced data for model customization
+- **Balancing Strategies**:
+  - `min`: Balance to smallest class (pure undersampling)
+  - `max`: Balance to largest class (pure oversampling)
+  - `mean`: Balance to average class size (mixed sampling)
+  - `median`: Balance to median class size (mixed sampling)
+  - `custom`: Balance to user-specified target per class
+- **Features**:
+  - Accepts single JSON file or directory with multiple rotation files
+  - Independent control over undersampling and oversampling
+  - Rotation file support (splits large datasets into chunks)
+  - Dry run mode for preview without saving
+  - Detailed progress reporting per class
+- **Usage Examples**:
+  ```bash
+  # Balance using minimum class size (pure undersampling)
+  python balance_dataset.py \
+      --input ./curated_data \
+      --output ./balanced_data \
+      --strategy min
+
+  # Balance to 500 samples per class (custom target)
+  python balance_dataset.py \
+      --input ./curated_data \
+      --strategy custom \
+      --target-per-class 500 \
+      --enable-oversampling \
+      --output ./balanced_data
+
+  # Balance using mean with rotation files
+  python balance_dataset.py \
+      --input ./curated_data \
+      --strategy mean \
+      --enable-oversampling \
+      --rotation-size 1000 \
+      --output ./balanced_data
+
+  # Dry run to preview changes
+  python balance_dataset.py \
+      --input ./curated_data \
+      --strategy median \
+      --dry-run \
+      --output ./balanced_data
+
+  # Alternative: Run via module
+  python -m maveric.utils.balance_cli --input ./data --strategy min --output ./balanced
+  ```
+- **Benefits**:
+  - Complete control over dataset balancing after manual cleanup
+  - Flexible strategies matching interactive GUI capabilities
+  - Handles imbalanced datasets from manual inspection
+  - Maintains data quality while ensuring class balance
 
 ### December 12, 2025 - Training Evaluation Consistency Fix
 
