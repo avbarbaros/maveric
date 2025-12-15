@@ -62,12 +62,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `mean`: Balance to average class size (mixed sampling)
   - `median`: Balance to median class size (mixed sampling)
   - `custom`: Balance to user-specified target per class
+- **Intelligent Sample Selection** (matches `interactive.apply_balance()` behavior):
+  - **Sorts by consistency score**: Samples ranked by quality (higher = better)
+  - **Undersampling**: Keeps TOP N samples with highest consistency (not random)
+  - **Oversampling**: Duplicates best samples cyclically (not random)
+  - **Shuffling**: Final dataset shuffled with fixed seed for reproducibility
+  - **Result**: Balanced datasets maintain highest quality samples
 - **Features**:
   - Accepts single JSON file or directory with multiple rotation files
   - Independent control over undersampling and oversampling
   - Rotation file support (splits large datasets into chunks)
   - Dry run mode for preview without saving
   - Detailed progress reporting per class
+  - Warning if 'consistency' column missing
 - **Usage Examples**:
   ```bash
   # Balance using minimum class size (pure undersampling)
@@ -103,10 +110,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   python -m maveric.utils.balance_cli --input ./data --strategy min --output ./balanced
   ```
 - **Benefits**:
+  - **Quality-preserving**: Always keeps best samples based on consistency scores
+  - **Predictable results**: Not random - highest quality samples always selected
+  - **Effective balancing**: Same proven algorithm as interactive GUI
   - Complete control over dataset balancing after manual cleanup
   - Flexible strategies matching interactive GUI capabilities
   - Handles imbalanced datasets from manual inspection
-  - Maintains data quality while ensuring class balance
 
 ### December 12, 2025 - Training Evaluation Consistency Fix
 
@@ -159,6 +168,116 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **Example**: `['happy', 'smiling']` with template `"a photo of a {}"` generates prompts: `["a photo of a happy", "a photo of a smiling"]`
 
 - **Affected datasets**: FER2013 (only dataset with list-based class names)
+
+### November 20, 2025 - Critical Performance & Evaluation Fixes
+
+**Performance Fix 1: sklearn Import Bottleneck (10-20x Speedup)**:
+- **Issue**: `sklearn.metrics.pairwise.cosine_similarity` imported inside retrieval loop
+  - **Impact**: 10-20 seconds per sample overhead (importing on every class iteration)
+  - **For CIFAR-10**: 10 classes × 1-2s import = 10-20s per sample
+  - **Root cause**: Import statement inside `compute_sample_scores()` method
+- **Fix**: Moved import to module level
+  - **Location**: [retriever.py:11](maveric/retrieval/retriever.py#L11) (module level)
+  - **Removed from**: Line 556 (inside loop - deleted)
+  - **Impact**: Eliminated 10-20s overhead per sample
+- **Performance improvement**: 10-20x faster data retrieval
+
+**Performance Fix 2: Google Drive Cache Bottleneck (Critical)**:
+- **Issue**: Google Drive FUSE/NFS makes `.exists()` file checks take 10+ seconds each
+  - **Symptom**: Every sample took 10-20 seconds regardless of cache hit/miss or CPU/GPU usage
+  - **Debug output**: Cache check taking 10.8s-12.5s (99.7% of total time)
+  - **Impact**: 2-3 file checks per sample = 20-30+ seconds overhead
+- **Root cause**: Google Drive network filesystem latency for file existence checks
+- **Solutions implemented**:
+  1. **Configuration fix**: Added cache disable options
+     - `enable_sample_cache: false` to skip sample metadata cache
+     - `enable_image_cache: false` to skip image cache
+  2. **Redundant check optimization**: Skip image cache check after sample cache miss
+     - **User discovery**: "Why do we need another .exists() check at Cache MISS?"
+     - Added `skip_cache_check=True` parameter to `download_and_cache_image()`
+     - **Location**: [cache_manager.py:225, 240-243](maveric/retrieval/cache_manager.py#L225)
+     - **Integration**: [retriever.py:433](maveric/retrieval/retriever.py#L433)
+- **Recommendation**: Use local disk for cache instead of Google Drive when possible
+- **Performance improvement**: 10-20x faster when caches disabled on Google Drive
+
+**Configuration Bug Fixes (Multiple Critical Issues)**:
+- **Issue**: Configuration values not propagated from YAML to MAVERIC initialization
+  - **Symptoms**:
+    - Timeouts not working (15s downloads despite `request_timeout: 1`)
+    - Retries not applied (stuck on failed downloads)
+    - Cache settings ignored
+- **Fixes in 01_data_retrieval.py**:
+  1. **max_retries**: Now properly passed from config
+     - **Location**: [01_data_retrieval.py:265](experiments/01_data_retrieval.py#L265)
+     - Previous: Used default value (3) always
+  2. **request_timeout**: Now properly passed from config
+     - **Location**: [01_data_retrieval.py:266](experiments/01_data_retrieval.py#L266)
+     - Previous: Used default value (5) always
+  3. **enable_sample_cache**: Now properly passed from config
+     - **Location**: [01_data_retrieval.py:262](experiments/01_data_retrieval.py#L262)
+     - Previous: Missing parameter (always enabled)
+  4. **enable_image_cache**: Fixed path to read from top-level config
+     - **Location**: [01_data_retrieval.py:261](experiments/01_data_retrieval.py#L261)
+     - Previous: Read from wrong nested path
+  5. **Added logging**: Cache and timeout settings now logged at startup
+     - **Location**: [01_data_retrieval.py:276-277](experiments/01_data_retrieval.py#L276-L277)
+- **Testing**: Confirmed all config values now applied correctly
+
+**REACT-Style Evaluation Implementation**:
+- **Issue**: Oxford Pets showing 75.99% accuracy vs REACT's 87.1%
+  - **Root causes**: Missing template ensembling, wrong class name format, tensor shape bugs
+- **Fix 1: Template Ensembling with Double Normalization**
+  - Implemented REACT-style template ensembling in evaluation
+  - **Method**: `_create_text_classifier_with_templates()`
+  - **Location**: [evaluation.py:27-75](maveric/customization/evaluation.py#L27-L75)
+  - **Process**:
+    1. Generate prompts for each class using all templates
+    2. Compute embeddings for each prompt
+    3. Normalize each embedding (L2 norm)
+    4. Average embeddings for the class
+    5. Re-normalize the averaged embedding
+  - **Integration**: Updated `evaluate()` and `evaluate_detailed()` to accept templates
+  - **Tensor shape fix**: Changed `torch.stack(dim=1)` to `dim=0` (line 73)
+    - Previous: Created (embedding_dim, num_classes) → mat mul error
+    - Fixed: Creates (num_classes, embedding_dim) → correct for `image_embeds @ text_features.T`
+
+- **Fix 2: Class Name Normalization System**
+  - **Problem**: Training data had lowercase/underscores, test data had Title Case/spaces
+  - **Impact**: "Excluding 27 classes not in training data" error
+  - **Solution**: Normalized matching with proper ELEVATER class names for embeddings
+  - **Implementation**:
+    - `_normalize_class_name()` helper for flexible matching
+    - **Location**: [model_customizer.py:287-297](maveric/customization/model_customizer.py#L287-L297)
+    - Normalizes to lowercase with underscores for comparison only
+    - **Key insight**: Use ELEVATER_DATASETS class names for CLIP embeddings (not normalized)
+  - **Template retrieval**: `_get_dataset_templates()` method
+    - **Location**: [model_customizer.py:467-490](maveric/customization/model_customizer.py#L467-L490)
+    - Loads dataset and extracts templates automatically
+
+- **Fix 3: Oxford Pets Class Names Updated**
+  - **Problem**: Torchvision uses Title Case for all classes, not mixed case
+  - **Impact**: Class name mismatch between REACT format and torchvision
+  - **Solution**: Updated class names to match torchvision exactly
+  - **Location**: [elevater_datasets.py:239-247](maveric/datasets/elevater_datasets.py#L239-L247)
+  - **Example**: 'Abyssinian', 'American Bulldog', 'British Shorthair' (all Title Case)
+  - **Templates updated**: Added periods to Oxford Pets templates (line 736-737)
+
+- **Expected improvement**: 75.99% → ~87.1% (matching REACT benchmark)
+
+**Debug Tools Created**:
+- **debug_retrieval_timing.py**: Comprehensive timing instrumentation
+  - Patches `compute_sample_scores()` with detailed step-by-step timing
+  - Shows percentage breakdown of time spent in each operation
+  - Identifies bottlenecks with warnings (>50% time in single step)
+- **test_cache_performance.py**: Standalone cache I/O performance testing
+  - Tests JSON read/write/decode performance
+  - Bypasses MAVERIC to isolate cache issues
+  - Provides baseline performance measurements
+- **POTENTIAL_BOTTLENECKS_CHECKLIST.md**: Investigation guide
+  - Lists all potential performance issues
+  - Prioritized by likelihood
+  - Includes solutions for each issue
+- **DEBUG_TIMING_INSTRUCTIONS.md**: Usage instructions for debug tools
 
 ### November 24, 2025 - Documentation & Visualization
 

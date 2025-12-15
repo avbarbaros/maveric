@@ -4,6 +4,14 @@ Command-line interface for balancing manually cleaned training datasets.
 
 This tool allows you to balance training JSON files after manual inspection
 and cleanup, using the same strategies available in the interactive GUI.
+
+IMPORTANT: This tool uses INTELLIGENT SAMPLE SELECTION based on consistency scores:
+- Samples are sorted by 'consistency' score (higher = better quality)
+- Undersampling: Keeps the TOP N samples with highest consistency
+- Oversampling: Duplicates the best samples cyclically
+- This ensures balanced datasets maintain the highest quality samples
+
+This matches the behavior of maveric.visualization.interactive.apply_balance().
 """
 
 import argparse
@@ -66,17 +74,23 @@ def balance_dataset(df: pd.DataFrame,
                    enable_undersampling: bool = True,
                    enable_oversampling: bool = False) -> pd.DataFrame:
     """
-    Balance dataset using specified strategy.
+    Balance dataset using specified strategy with intelligent sample selection.
+
+    This function matches the behavior of interactive.apply_balance():
+    - Sorts samples by 'consistency' score (higher is better)
+    - Undersampling: Keeps top N samples with highest consistency
+    - Oversampling: Duplicates best samples cyclically
+    - Final shuffle with fixed random seed for reproducibility
 
     Args:
-        df: DataFrame with training samples
+        df: DataFrame with training samples (must have 'label' and 'consistency' columns)
         strategy: Balancing strategy ('min', 'max', 'mean', 'median', 'custom')
         target_per_class: Target samples per class (for 'custom' strategy)
         enable_undersampling: Whether to allow reducing samples
         enable_oversampling: Whether to allow duplicating samples
 
     Returns:
-        Balanced DataFrame
+        Balanced DataFrame with samples sorted by quality
     """
     # Get class distribution
     class_counts = df['label'].value_counts()
@@ -111,8 +125,15 @@ def balance_dataset(df: pd.DataFrame,
 
     print(f"\n⚖️  Balancing classes...")
     for class_name in sorted(df['label'].unique()):
-        class_df = df[df['label'] == class_name]
+        class_df = df[df['label'] == class_name].copy()
         current_count = len(class_df)
+
+        # Sort by consistency score for intelligent sample selection
+        # (same as interactive GUI - keeps best samples)
+        if 'consistency' in class_df.columns:
+            class_df = class_df.sort_values('consistency', ascending=False)
+        else:
+            print(f"   ⚠️  Warning: No 'consistency' column found, samples will not be sorted by quality")
 
         if current_count == target_count:
             # Already balanced
@@ -120,24 +141,31 @@ def balance_dataset(df: pd.DataFrame,
             print(f"   ✓ {class_name}: {current_count} → {target_count} (no change)")
 
         elif current_count > target_count:
-            # Undersample (reduce)
+            # Undersample (reduce) - take TOP samples sorted by consistency
             if enable_undersampling:
-                # Sample without replacement
-                sampled = class_df.sample(n=target_count, random_state=42)
+                # Take top N samples (highest consistency)
+                sampled = class_df.head(target_count)
                 balanced_samples.extend(sampled.to_dict('records'))
-                print(f"   ↓ {class_name}: {current_count} → {target_count} (undersampled -{current_count - target_count})")
+                print(f"   ↓ {class_name}: {current_count} → {target_count} (undersampled -{current_count - target_count}, kept best)")
             else:
                 # Keep all samples
                 balanced_samples.extend(class_df.to_dict('records'))
                 print(f"   ⚠️ {class_name}: {current_count} → {current_count} (undersampling disabled)")
 
         else:  # current_count < target_count
-            # Oversample (duplicate)
+            # Oversample (duplicate) - duplicate best samples cyclically
             if enable_oversampling:
-                # Sample with replacement
-                sampled = class_df.sample(n=target_count, replace=True, random_state=42)
-                balanced_samples.extend(sampled.to_dict('records'))
-                print(f"   ↑ {class_name}: {current_count} → {target_count} (oversampled +{target_count - current_count})")
+                # Start with all samples
+                sampled_list = class_df.to_dict('records')
+                needed = target_count - current_count
+
+                # Duplicate samples cyclically starting from best (highest consistency)
+                for i in range(needed):
+                    duplicate_idx = i % current_count
+                    sampled_list.append(class_df.iloc[duplicate_idx].to_dict())
+
+                balanced_samples.extend(sampled_list)
+                print(f"   ↑ {class_name}: {current_count} → {target_count} (oversampled +{needed}, duplicated best)")
             else:
                 # Keep all samples
                 balanced_samples.extend(class_df.to_dict('records'))
@@ -145,13 +173,17 @@ def balance_dataset(df: pd.DataFrame,
 
     balanced_df = pd.DataFrame(balanced_samples)
 
+    # Shuffle the data to randomize sample order
+    # (same as interactive GUI - ensures balanced classes are mixed)
+    balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
+
     # Show final distribution
     final_counts = balanced_df['label'].value_counts()
     print(f"\n📊 Balanced class distribution:")
     for class_name, count in final_counts.sort_index().items():
         print(f"   {class_name}: {count} samples")
 
-    print(f"\n✅ Total balanced: {len(balanced_df)} samples")
+    print(f"\n✅ Total balanced: {len(balanced_df)} samples (shuffled)")
 
     return balanced_df
 
