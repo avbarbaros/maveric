@@ -4,7 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 13, 2025 - Visual Grid Export & Manual Balancing CLI (LATEST)
+### December 18, 2025 - CIFAR-100 Class Name Fix & Intelligent Balancing (LATEST)
+
+**Bug Fix: CIFAR-100 Missing 9 Classes with Spaces**:
+- **Issue**: Interactive GUI only detected 91 out of 100 CIFAR-100 classes
+  - **Root cause**: Predefined class names used underscores (`'aquarium_fish'`, `'sweet_pepper'`) but JSON columns have spaces (`"Class_aquarium fish_img2img"`, `"Class_sweet pepper_txt2txt"`)
+  - **Impact**: 9 classes with spaces were not recognized: `'aquarium fish'`, `'lawn mower'`, `'maple tree'`, `'oak tree'`, `'palm tree'`, `'pickup truck'`, `'pine tree'`, `'sweet pepper'`, `'willow tree'`
+- **Fix**: Updated `cifar100_class_names` to match ELEVATER_DATASETS exactly (with spaces)
+  - **Location**: [interactive.py:55-69](maveric/visualization/interactive.py#L55-L69)
+  - **Result**: All 100 CIFAR-100 classes now correctly detected
+- **Key insight**: Column names in JSON files preserve spaces from ELEVATER class names
+
+**Enhancement: Intelligent Sample Selection in Balance CLI**:
+- **Issue**: `balance_cli.py` used random sampling, making results unpredictable and ineffective
+  - **Impact**: Could keep low-quality samples while discarding high-quality ones
+- **Fix**: Implemented consistency-based sample selection matching `interactive.apply_balance()`
+  - **Location**: [balance_cli.py:63-174](maveric/utils/balance_cli.py#L63-L174)
+  - **Algorithm**:
+    1. Sort samples by `consistency` score (higher = better quality)
+    2. Undersampling: Keep top N samples with highest consistency
+    3. Oversampling: Duplicate best samples cyclically
+    4. Shuffle final dataset with fixed seed (42) for reproducibility
+- **Benefits**:
+  - Quality-preserving: Always keeps best samples based on consistency scores
+  - Predictable results: Not random - highest quality samples always selected
+  - Effective balancing: Same proven algorithm as interactive GUI
+
+### December 13, 2025 - Visual Grid Export & Manual Balancing CLI
 
 **New Feature 1: Automatic Grid Visualization on Save**:
 - **Purpose**: Enable visual inspection of curated data without loading individual images
