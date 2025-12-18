@@ -6,7 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### December 18, 2025 - CIFAR-100 Class Name Fix & Intelligent Balancing (LATEST)
 
-**Bug Fix: CIFAR-100 Missing 9 Classes with Spaces**:
+**Bug Fix 1: CIFAR-100 Class Ordering Mismatch (CRITICAL - Baseline Accuracy 1.15% → 65.1%)**:
+- **Issue**: Baseline model evaluation showed 1.15% accuracy instead of expected 65.1% for CIFAR-100
+  - **Root cause**: ELEVATER class_names list was in custom order (`['chimpanzee', 'trout', 'skunk', ...]`) but torchvision's CIFAR-100 uses alphabetically sorted order (`['apple', 'aquarium_fish', 'baby', ...]`)
+  - **Impact**: Test sample labels were completely mismatched (e.g., torchvision label 0 = 'apple' but code interpreted as 'chimpanzee')
+  - **Symptom**: Baseline accuracy dropped from ~65% to ~1% (random chance for 100 classes)
+- **Fix**: Updated CIFAR-100 class_names to match torchvision's exact alphabetical ordering
+  - **Location**: [elevater_datasets.py:153-175](maveric/datasets/elevater_datasets.py#L153-L175)
+  - **Ordering**: Alphabetically sorted with underscores converted to spaces for REACT style
+  - **First 10 classes**: `['apple', 'aquarium fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 'bicycle', 'bottle']`
+  - **Result**: Class labels now correctly aligned with torchvision dataset
+- **Key insight**: Torchvision CIFAR-100 uses `.classes` attribute with alphabetically sorted class names
+
+**Bug Fix 2: CIFAR-100 Missing 9 Classes with Spaces (Interactive GUI)**:
 - **Issue**: Interactive GUI only detected 91 out of 100 CIFAR-100 classes
   - **Root cause**: Predefined class names used underscores (`'aquarium_fish'`, `'sweet_pepper'`) but JSON columns have spaces (`"Class_aquarium fish_img2img"`, `"Class_sweet pepper_txt2txt"`)
   - **Impact**: 9 classes with spaces were not recognized: `'aquarium fish'`, `'lawn mower'`, `'maple tree'`, `'oak tree'`, `'palm tree'`, `'pickup truck'`, `'pine tree'`, `'sweet pepper'`, `'willow tree'`
