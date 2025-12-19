@@ -1267,7 +1267,7 @@ class MAVERICInteractiveQualityControl:
 
         # Explanation
         explanation = widgets.HTML(
-            "<div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>"
+            "<div style='padding: 10px; border-radius: 5px; margin-bottom: 10px;'>"
             "<b>EfficientNet Prediction Analysis</b><br>"
             "• <b>Weighted Score Class</b>: Class selected by similarity-based metrics<br>"
             "• <b>EfficientNet Class</b>: Class with highest EfficientNet probability<br>"
@@ -1294,13 +1294,19 @@ class MAVERICInteractiveQualityControl:
         """Create Mahalanobis distance filtering tab"""
         # Explanation HTML
         explanation = widgets.HTML(
-            "<div style='background-color: #e8f4f8; padding: 12px; margin-bottom: 10px; border-left: 4px solid #2196F3;'>"
+            "<div style='padding: 12px; margin-bottom: 10px; border-left: 4px solid #2196F3;'>"
             "<b>🎯 Mahalanobis Distance Filtering</b><br>"
             "<small>"
             "• Filters samples based on distance from ideal point in (weighted_score, consistency) space<br>"
             "• Accounts for correlation between metrics and their different scales<br>"
             "• Keeps top N% of samples closest to ideal point (95th percentile)<br>"
-            "• Visualization shows ellipse boundary and sample distribution"
+            "• Visualization shows ellipse boundary and sample distribution<br>"
+            "<br>"
+            "<b>Filter Modes:</b><br>"
+            "• <b>Global</b>: Apply filtering to entire dataset (may result in class imbalance)<br>"
+            "• <b>Per-Class</b>: Apply filtering separately for each class (maintains class balance)<br>"
+            "<br>"
+            "⚠️ <b>Important:</b> Go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first to create required columns!"
             "</small>"
             "</div>"
         )
@@ -1376,7 +1382,13 @@ class MAVERICInteractiveQualityControl:
                         status_display.value = "<p style='color:red;'>❌ No data available. Load data first.</p>"
                         return
 
-                    # Store original count
+                    # Restore original data before Mahalanobis filter (if it was applied before)
+                    # This ensures we always filter from the same baseline, not compound filters
+                    if self.data_before_mahalanobis is not None:
+                        print("🔄 Resetting to data before previous Mahalanobis filter...")
+                        self.filtered_data = self.data_before_mahalanobis.copy()
+
+                    # Store original count (before this Mahalanobis filter)
                     original_count = len(self.filtered_data)
 
                     # Apply Mahalanobis filter
@@ -1446,9 +1458,13 @@ class MAVERICInteractiveQualityControl:
         # Check required columns
         if 'weighted_class_score' not in self.filtered_data.columns:
             print("❌ 'weighted_class_score' column not found")
+            print("💡 This column is created when you apply quality thresholds.")
+            print("   Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
             return None
         if 'consistency' not in self.filtered_data.columns:
             print("❌ 'consistency' column not found")
+            print("💡 This column is created when you calculate best class scores.")
+            print("   Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
             return None
 
         # Store backup

@@ -34,14 +34,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **More samples**: Typically retains 20-40% more samples than simple thresholds
   - **Higher quality**: Selected samples have better mean/min scores on both metrics
   - **Flexible**: Easy percentage adjustment via dropdown or text input
+  - **Automatic reset**: Prevents compounding filters by restoring pre-Mahalanobis data on each apply
+- **Automatic Reset Behavior**:
+  - First filter: Backs up data before applying Mahalanobis filter
+  - Change percentage: Automatically resets to backup before applying new filter
+  - **Prevents compounding**: Always filters from same baseline (data after Tab 1)
+  - **Example**: Apply 30% (50K→15K), change to 20% → resets to 50K, then filters to 10K (NOT 15K→3K)
 - **Usage**:
   ```python
   from maveric.visualization import start_interactive_gui
   gui = start_interactive_gui('cifar10')
-  # Navigate to "Mahalanobis Filter" tab
-  # Select percentage (e.g., 30%)
-  # Click "Apply Filter"
-  # View XY plot with ellipse and statistics
+  # 1. Go to Tab 1: Quality Thresholds, click "Apply Settings"
+  # 2. Navigate to Tab 2: Mahalanobis Filter
+  # 3. Select percentage (e.g., 30%) and mode (Global/Per-Class)
+  # 4. Click "Apply Filter"
+  # 5. View XY plot with ellipse and statistics
+  # 6. Change percentage and re-apply → automatically resets first
   ```
 
 ### December 18, 2025 - CIFAR-100 Class Name Fix & Intelligent Balancing

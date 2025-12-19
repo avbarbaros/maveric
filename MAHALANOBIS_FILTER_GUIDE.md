@@ -190,11 +190,14 @@ When "Per-Class" is selected:
 - Prevents class imbalance
 - Slightly different ellipse per class
 
-### Data Backup
+### Data Backup and Reset
 Before applying filter:
-- Current `filtered_data` is backed up
-- Stored in `data_before_mahalanobis`
-- Can be restored if needed (future feature)
+- Current `filtered_data` is backed up to `data_before_mahalanobis`
+- When you change percentage and click Apply again:
+  - **Automatically resets** to data before Mahalanobis filter
+  - Applies new filter from the **same baseline**
+  - **Does NOT compound filters** (prevents progressive filtering)
+- Example: If you apply 30%, then change to 20%, it filters 20% from the original data (not 20% of the 30%)
 
 ## Example Use Cases
 
