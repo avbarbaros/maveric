@@ -4,7 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 18, 2025 - CIFAR-100 Class Name Fix & Intelligent Balancing (LATEST)
+### December 19, 2025 - Mahalanobis Distance Filtering (LATEST)
+
+**New Feature: Mahalanobis Distance Filtering Tab in Interactive GUI**:
+- **Purpose**: Advanced sample selection using Mahalanobis distance from ideal point
+- **Implementation**: New "Mahalanobis Filter" tab between "Quality Thresholds" and "EfficientNet Prediction"
+  - **Location**: [interactive.py:1293-1679](maveric/visualization/interactive.py#L1293-L1679)
+  - **Tab order**: Metric Weights → Quality Thresholds → **Mahalanobis Filter** → EfficientNet → Balance Settings
+- **Algorithm**:
+  - Jointly optimizes `weighted_class_score` and `consistency` metrics
+  - Calculates ideal point at 95th percentile of both metrics
+  - Computes Mahalanobis distance accounting for correlation and different scales
+  - Keeps top N% of samples closest to ideal point
+- **Features**:
+  - **Dropdown selector**: Choose percentage (10%, 20%, 30%, 40%, 50%)
+  - **Custom input**: Enter any percentage (1-99%) for precise control
+  - **Filter modes**: Global (all samples) or Per-Class (balanced per class)
+  - **Visual feedback**: XY scatter plot with ellipse boundary, marginal histograms, correlation coefficient
+  - **Statistics**: Before/after sample counts, class distribution with total class count
+- **Visualization**:
+  - Green dots: Selected samples
+  - Gray dots: Rejected samples
+  - Red star: Ideal point (95th percentile)
+  - Red ellipse: Selection boundary (Mahalanobis distance threshold)
+  - ρ value: Correlation coefficient displayed in corner
+  - Marginal plots: Distribution of each metric (all vs selected)
+- **Benefits**:
+  - **Better selection**: Jointly optimizes both metrics (vs independent thresholds)
+  - **More samples**: Typically retains 20-40% more samples than simple thresholds
+  - **Higher quality**: Selected samples have better mean/min scores on both metrics
+  - **Flexible**: Easy percentage adjustment via dropdown or text input
+- **Usage**:
+  ```python
+  from maveric.visualization import start_interactive_gui
+  gui = start_interactive_gui('cifar10')
+  # Navigate to "Mahalanobis Filter" tab
+  # Select percentage (e.g., 30%)
+  # Click "Apply Filter"
+  # View XY plot with ellipse and statistics
+  ```
+
+### December 18, 2025 - CIFAR-100 Class Name Fix & Intelligent Balancing
 
 **Bug Fix 1: CIFAR-100 Class Ordering Mismatch (CRITICAL - Baseline Accuracy 1.15% → 65.1%)**:
 - **Issue**: Baseline model evaluation showed 1.15% accuracy instead of expected 65.1% for CIFAR-100

@@ -13,6 +13,10 @@ from PIL import Image
 import warnings
 warnings.filterwarnings('ignore')
 
+# Mahalanobis filtering
+from scipy.spatial.distance import mahalanobis
+from matplotlib.patches import Ellipse
+
 # Jupyter widgets
 try:
     import ipywidgets as widgets
@@ -101,7 +105,11 @@ class MAVERICInteractiveQualityControl:
             'balance_min_samples': 15,
             'balance_enable_oversampling': False
         }
-        
+
+        # Mahalanobis filter state
+        self.mahalanobis_filter_info = {}  # Store filter parameters for plotting
+        self.data_before_mahalanobis = None  # Backup for reference
+
         # Auto-detect data path if not provided
         if self.data_path is None:
             self.data_path = self._detect_data_path()
@@ -1282,6 +1290,393 @@ class MAVERICInteractiveQualityControl:
 
         return tab_content
 
+    def _create_mahalanobis_tab(self):
+        """Create Mahalanobis distance filtering tab"""
+        # Explanation HTML
+        explanation = widgets.HTML(
+            "<div style='background-color: #e8f4f8; padding: 12px; margin-bottom: 10px; border-left: 4px solid #2196F3;'>"
+            "<b>🎯 Mahalanobis Distance Filtering</b><br>"
+            "<small>"
+            "• Filters samples based on distance from ideal point in (weighted_score, consistency) space<br>"
+            "• Accounts for correlation between metrics and their different scales<br>"
+            "• Keeps top N% of samples closest to ideal point (95th percentile)<br>"
+            "• Visualization shows ellipse boundary and sample distribution"
+            "</small>"
+            "</div>"
+        )
+
+        # Percentage selector dropdown
+        keep_percentage_combo = widgets.Dropdown(
+            options=[('10%', 10), ('20%', 20), ('30%', 30), ('40%', 40), ('50%', 50)],
+            value=30,
+            description='Keep Top:',
+            layout=widgets.Layout(width='180px'),
+            style={'description_width': '70px'}
+        )
+
+        # Custom percentage input
+        custom_percentage_text = widgets.FloatText(
+            value=30.0,
+            min=1.0,
+            max=99.0,
+            step=0.1,
+            description='Custom %:',
+            layout=widgets.Layout(width='150px'),
+            style={'description_width': '70px'}
+        )
+
+        # Sync dropdown and text input
+        def on_combo_change(change):
+            custom_percentage_text.value = float(change['new'])
+
+        def on_text_change(change):
+            # Find closest dropdown value
+            val = change['new']
+            closest = min([10, 20, 30, 40, 50], key=lambda x: abs(x - val))
+            if closest in [10, 20, 30, 40, 50]:
+                keep_percentage_combo.value = closest
+
+        keep_percentage_combo.observe(on_combo_change, names='value')
+        custom_percentage_text.observe(on_text_change, names='value')
+
+        # Filter mode radio buttons
+        filter_mode_radio = widgets.RadioButtons(
+            options=['Global', 'Per-Class'],
+            value='Global',
+            description='Mode:',
+            layout=widgets.Layout(width='250px')
+        )
+
+        # Apply button
+        apply_button = widgets.Button(
+            description='Apply Filter',
+            button_style='primary',
+            icon='filter',
+            layout=widgets.Layout(width='150px')
+        )
+
+        # Output widget for plot
+        plot_output = widgets.Output()
+
+        # Status display
+        status_display = widgets.HTML(
+            value="<p style='color:#666; font-style:italic;'>Select percentage and click Apply to filter data</p>"
+        )
+
+        # Callback for apply button
+        def on_apply_clicked(b):
+            with plot_output:
+                clear_output(wait=True)
+                try:
+                    # Get percentage from text input (more precise)
+                    percentage = custom_percentage_text.value
+                    per_class = (filter_mode_radio.value == 'Per-Class')
+
+                    if self.filtered_data is None or len(self.filtered_data) == 0:
+                        status_display.value = "<p style='color:red;'>❌ No data available. Load data first.</p>"
+                        return
+
+                    # Store original count
+                    original_count = len(self.filtered_data)
+
+                    # Apply Mahalanobis filter
+                    status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter ({percentage}%)...</p>"
+
+                    result = self._apply_mahalanobis_filter(percentage, per_class)
+
+                    if result is None:
+                        status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
+                        return
+
+                    new_count = len(self.filtered_data)
+
+                    # Plot analysis
+                    self._plot_mahalanobis_analysis()
+
+                    # Show statistics
+                    print("\n")
+                    self._show_mahalanobis_statistics(original_count, new_count, percentage)
+
+                    # Update status
+                    status_display.value = (
+                        f"<p style='color:green;'>✅ Filter applied successfully<br>"
+                        f"<small>Kept top {percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
+                    )
+
+                except Exception as e:
+                    import traceback
+                    status_display.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
+                    print("Error traceback:")
+                    traceback.print_exc()
+
+        apply_button.on_click(on_apply_clicked)
+
+        # Layout
+        tab_content = widgets.VBox([
+            explanation,
+            widgets.HBox([
+                keep_percentage_combo,
+                custom_percentage_text,
+                filter_mode_radio,
+                apply_button
+            ], layout=widgets.Layout(margin='10px 0')),
+            status_display,
+            plot_output
+        ], layout=widgets.Layout(
+            padding='10px'
+        ))
+
+        return tab_content
+
+    def _apply_mahalanobis_filter(self, keep_percentile, per_class=False):
+        """
+        Apply Mahalanobis distance filtering to select samples closest to ideal point.
+
+        Args:
+            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%)
+            per_class: If True, apply filtering separately for each class
+
+        Returns:
+            Dictionary with filter statistics, or None on error
+        """
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("❌ No data available for filtering")
+            return None
+
+        # Check required columns
+        if 'weighted_class_score' not in self.filtered_data.columns:
+            print("❌ 'weighted_class_score' column not found")
+            return None
+        if 'consistency' not in self.filtered_data.columns:
+            print("❌ 'consistency' column not found")
+            return None
+
+        # Store backup
+        self.data_before_mahalanobis = self.filtered_data.copy()
+
+        # Extract metrics
+        df = self.filtered_data.copy()
+        weighted = df['weighted_class_score'].values
+        consistency = df['consistency'].values
+
+        # Require minimum samples
+        if len(df) < 100:
+            print(f"⚠️ Warning: Only {len(df)} samples available. Results may be unstable.")
+
+        # Calculate ideal point (95th percentile)
+        ideal_point = np.array([
+            np.percentile(weighted, 95),
+            np.percentile(consistency, 95)
+        ])
+
+        # Compute covariance matrix
+        data_matrix = np.column_stack([weighted, consistency])
+        covariance = np.cov(data_matrix.T)
+
+        # Handle singular covariance with regularization
+        try:
+            covariance_inv = np.linalg.inv(covariance)
+        except np.linalg.LinAlgError:
+            print("⚠️ Singular covariance matrix detected. Adding regularization...")
+            reg = 1e-6 * np.eye(2)
+            covariance_inv = np.linalg.inv(covariance + reg)
+            covariance = covariance + reg
+
+        # Calculate Mahalanobis distances
+        distances = np.array([
+            mahalanobis(x, ideal_point, covariance_inv)
+            for x in data_matrix
+        ])
+
+        # Store all samples with their distances (for plotting)
+        all_samples_info = {
+            'weighted': weighted.copy(),
+            'consistency': consistency.copy(),
+            'distances': distances.copy(),
+            'data_matrix': data_matrix.copy()
+        }
+
+        # Apply filtering
+        if per_class and 'label' in df.columns:
+            # Per-class filtering
+            print(f"📊 Applying per-class Mahalanobis filtering...")
+            filtered_dfs = []
+
+            for class_name in df['label'].unique():
+                class_df = df[df['label'] == class_name].copy()
+                class_indices = df[df['label'] == class_name].index
+                class_distances = distances[df['label'] == class_name]
+
+                # Calculate threshold for this class
+                n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+                threshold = np.partition(class_distances, n_keep-1)[n_keep-1] if n_keep < len(class_distances) else class_distances.max()
+
+                # Filter
+                mask = class_distances <= threshold
+                filtered_class = class_df[mask].copy()
+                filtered_class['mahalanobis_distance'] = class_distances[mask]
+                filtered_dfs.append(filtered_class)
+
+            filtered_df = pd.concat(filtered_dfs, ignore_index=True)
+        else:
+            # Global filtering
+            print(f"📊 Applying global Mahalanobis filtering...")
+            n_keep = max(1, int(len(df) * keep_percentile / 100))
+            threshold = np.partition(distances, n_keep-1)[n_keep-1] if n_keep < len(distances) else distances.max()
+
+            # Create mask
+            mask = distances <= threshold
+            filtered_df = df[mask].copy()
+            filtered_df['mahalanobis_distance'] = distances[mask]
+
+        # Update filtered data
+        self.filtered_data = filtered_df
+
+        # Store filter info for plotting
+        correlation = np.corrcoef(weighted, consistency)[0, 1]
+        self.mahalanobis_filter_info = {
+            'ideal_point': ideal_point,
+            'covariance': covariance,
+            'covariance_inv': covariance_inv,
+            'threshold': threshold if not per_class else None,
+            'correlation': correlation,
+            'all_samples': all_samples_info,
+            'selected_mask': mask if not per_class else None,
+            'keep_percentile': keep_percentile,
+            'per_class': per_class
+        }
+
+        return {
+            'samples_before': len(df),
+            'samples_after': len(filtered_df),
+            'threshold': threshold if not per_class else None
+        }
+
+    def _plot_mahalanobis_analysis(self):
+        """Plot Mahalanobis distance analysis with scatter plot and ellipse"""
+        if not self.mahalanobis_filter_info:
+            print("❌ No Mahalanobis filter info available")
+            return
+
+        info = self.mahalanobis_filter_info
+        ideal_point = info['ideal_point']
+        covariance = info['covariance']
+        correlation = info['correlation']
+        all_samples = info['all_samples']
+        keep_percentile = info['keep_percentile']
+
+        # Get all samples data
+        all_weighted = all_samples['weighted']
+        all_consistency = all_samples['consistency']
+        all_distances = all_samples['distances']
+
+        # Determine selected samples
+        if info['selected_mask'] is not None:
+            selected_mask = info['selected_mask']
+        else:
+            # For per-class mode, use current filtered_data
+            selected_indices = self.filtered_data.index
+            selected_mask = np.zeros(len(all_weighted), dtype=bool)
+            selected_mask[selected_indices] = True
+
+        # Create figure with gridspec for marginal plots
+        fig = plt.figure(figsize=(12, 10))
+        gs = fig.add_gridspec(3, 3, width_ratios=[4, 1, 0.2], height_ratios=[0.2, 4, 1],
+                             hspace=0.05, wspace=0.05)
+
+        # Main scatter plot
+        ax_main = fig.add_subplot(gs[1, 0])
+        ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
+        ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+
+        # Plot rejected samples (gray)
+        ax_main.scatter(all_weighted[~selected_mask], all_consistency[~selected_mask],
+                       c='gray', alpha=0.3, s=20, label=f'Rejected ({(~selected_mask).sum():,})')
+
+        # Plot selected samples (green)
+        ax_main.scatter(all_weighted[selected_mask], all_consistency[selected_mask],
+                       c='green', alpha=0.7, s=20, label=f'Selected ({selected_mask.sum():,})')
+
+        # Plot ideal point (red star)
+        ax_main.scatter(ideal_point[0], ideal_point[1],
+                       c='red', marker='*', s=300, label='Ideal Point',
+                       edgecolors='darkred', linewidth=1.5, zorder=10)
+
+        # Plot Mahalanobis ellipse
+        # Compute eigenvalues and eigenvectors
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        order = eigenvalues.argsort()[::-1]
+        eigenvalues = eigenvalues[order]
+        eigenvectors = eigenvectors[:, order]
+
+        # Angle of ellipse
+        angle = np.degrees(np.arctan2(*eigenvectors[:, 0][::-1]))
+
+        # Use the threshold distance for ellipse size
+        if info['threshold'] is not None:
+            n_std = info['threshold']
+        else:
+            # For per-class, use median distance of selected samples
+            n_std = np.median(all_distances[selected_mask])
+
+        width = 2 * n_std * np.sqrt(eigenvalues[0])
+        height = 2 * n_std * np.sqrt(eigenvalues[1])
+
+        ellipse = Ellipse(xy=ideal_point, width=width, height=height,
+                         angle=angle, edgecolor='red', facecolor='none',
+                         linewidth=2, linestyle='--', label='Selection Boundary')
+        ax_main.add_patch(ellipse)
+
+        # Main plot formatting
+        ax_main.set_xlabel('Weighted Class Score', fontsize=11)
+        ax_main.set_ylabel('Consistency', fontsize=11)
+        ax_main.grid(True, alpha=0.3)
+        ax_main.legend(loc='lower right', fontsize=9)
+
+        # Add correlation text
+        ax_main.text(0.02, 0.98, f'ρ = {correlation:.3f}',
+                    transform=ax_main.transAxes, fontsize=10,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        # Top histogram (weighted_class_score)
+        ax_top.hist(all_weighted, bins=50, alpha=0.3, color='gray', label='All')
+        ax_top.hist(all_weighted[selected_mask], bins=50, alpha=0.7, color='green', label='Selected')
+        ax_top.axvline(ideal_point[0], color='red', linestyle='--', linewidth=1, label='Ideal')
+        ax_top.set_ylabel('Density', fontsize=9)
+        ax_top.tick_params(labelbottom=False)
+        ax_top.legend(loc='upper right', fontsize=8)
+        ax_top.set_title(f'Joint Distribution with Mahalanobis Selection Boundary\n(Top {keep_percentile}% closest to ideal)',
+                        fontsize=12, fontweight='bold', pad=10)
+
+        # Right histogram (consistency)
+        ax_right.hist(all_consistency, bins=50, alpha=0.3, color='gray', orientation='horizontal')
+        ax_right.hist(all_consistency[selected_mask], bins=50, alpha=0.7, color='green', orientation='horizontal')
+        ax_right.axhline(ideal_point[1], color='red', linestyle='--', linewidth=1)
+        ax_right.set_xlabel('Density', fontsize=9)
+        ax_right.tick_params(labelleft=False)
+
+        plt.tight_layout()
+        plt.show()
+
+    def _show_mahalanobis_statistics(self, original_count, new_count, percentage):
+        """Display simple before/after filtering statistics"""
+        print("📊 Filtering Results:")
+        print(f"   Before: {original_count:,} samples")
+        print(f"   After:  {new_count:,} samples ({percentage:.1f}%)")
+        print()
+
+        # Show class distribution
+        if 'label' in self.filtered_data.columns:
+            class_counts = self.filtered_data['label'].value_counts().sort_index()
+            num_classes = len(class_counts)
+
+            print(f"📋 Class Distribution ({num_classes} classes):")
+            for class_name, count in class_counts.items():
+                print(f"   {class_name}: {count} samples")
+        else:
+            print("📋 Class Distribution: No label column available")
+
     def _analyze_class_predictions(self):
         """Analyze class predictions from weighted scores vs EfficientNet"""
         if self.filtered_data is None or len(self.filtered_data) == 0:
@@ -1601,19 +1996,24 @@ class MAVERICInteractiveQualityControl:
 
         # Create EfficientNet Prediction tab content
         efficientnet_tab_content = self._create_efficientnet_tab()
-        
+
+        # Create Mahalanobis Filter tab content
+        mahalanobis_tab_content = self._create_mahalanobis_tab()
+
         # Create tabs
         tab = widgets.Tab()
         tab.children = [
             widgets.VBox(list(weight_widgets.values())),
             widgets.VBox(list(threshold_containers.values())),
+            mahalanobis_tab_content,
             efficientnet_tab_content,
             balance_tab_content
         ]
         tab.set_title(0, 'Metric Weights')
         tab.set_title(1, 'Quality Thresholds')
-        tab.set_title(2, 'EfficientNet Prediction')
-        tab.set_title(3, 'Balance Settings')
+        tab.set_title(2, 'Mahalanobis Filter')
+        tab.set_title(3, 'EfficientNet Prediction')
+        tab.set_title(4, 'Balance Settings')
         
         # Create buttons
         apply_button = widgets.Button(description='Apply Settings', button_style='primary', icon='check')
