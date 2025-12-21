@@ -439,12 +439,14 @@ class MAVERICInteractiveQualityControl:
         strategy = self.balance_settings['balance_strategy']
         min_samples = self.balance_settings['balance_min_samples']
         enable_oversampling = self.balance_settings['balance_enable_oversampling']
-        
+        sorting_method = self.balance_settings.get('balance_sorting_method', 'consistency')
+
         if strategy == 'none':
             print("ℹ️  No balancing applied (strategy='none')")
             return len(self.filtered_data)
-        
+
         print(f"\n⚖️  Applying Balance Strategy: {strategy}")
+        print(f"   Sorting method: {sorting_method}")
         print("=" * 60)
         
         # Get class distribution before balancing
@@ -495,11 +497,15 @@ class MAVERICInteractiveQualityControl:
         
         for class_name in sufficient_classes.index:
             class_data = self.filtered_data[self.filtered_data['label'] == class_name].copy()
-            
-            # Sort by consistency score for best sample selection
-            if 'consistency' in class_data.columns:
+
+            # Sort by the selected sorting method for best sample selection
+            if sorting_method in class_data.columns:
+                class_data = class_data.sort_values(sorting_method, ascending=False)
+            elif 'consistency' in class_data.columns:
+                # Fallback to consistency if selected sorting method not available
+                print(f"⚠️  Sorting method '{sorting_method}' not found, falling back to 'consistency'")
                 class_data = class_data.sort_values('consistency', ascending=False)
-            
+
             current_size = len(class_data)
             
             if current_size > target_samples:
@@ -1975,37 +1981,37 @@ class MAVERICInteractiveQualityControl:
             options=['none', 'median', 'mean', 'min', 'max'],
             value=self.balance_settings['balance_strategy'],
             description='Strategy:',
-            style={'description_width': '180px'}
-        )
-        
-        balance_min_samples_widget = widgets.IntSlider(
-            value=self.balance_settings['balance_min_samples'],
-            min=1,
-            max=100,
-            step=1,
-            description='Min Samples:',
-            continuous_update=False,
             layout=widgets.Layout(width='500px'),
             style={'description_width': '180px'}
         )
-        
+
+        # Sorting method for sample selection (consistency or weighted_class_score)
+        balance_sorting_widget = widgets.Dropdown(
+            options=[('Consistency', 'consistency'), ('Weighted', 'weighted_class_score')],
+            value='consistency',  # Default to consistency-based sorting
+            description='Sorting:',
+            layout=widgets.Layout(width='500px'),
+            style={'description_width': '180px'}
+        )
+
         balance_oversampling_widget = widgets.Checkbox(
             value=self.balance_settings['balance_enable_oversampling'],
             description='Enable Oversampling',
+            layout=widgets.Layout(width='500px'),
             style={'description_width': '180px'}
         )
-        
+
         balance_button = widgets.Button(
             description='Apply Balance',
             button_style='warning',
             icon='balance-scale',
             layout=widgets.Layout(width='200px')
         )
-        
+
         # Create balance tab content
         balance_tab_content = widgets.VBox([
             balance_strategy_widget,
-            balance_min_samples_widget,
+            balance_sorting_widget,
             balance_oversampling_widget,
             balance_button
         ])
@@ -2080,8 +2086,9 @@ class MAVERICInteractiveQualityControl:
                 status_label.value = "<b>Updating balance settings...</b>"
                 self.balance_settings.update({
                     'balance_strategy': balance_strategy_widget.value,
-                    'balance_min_samples': balance_min_samples_widget.value,
-                    'balance_enable_oversampling': balance_oversampling_widget.value
+                    'balance_min_samples': 1,  # Hardcoded to 1
+                    'balance_enable_oversampling': balance_oversampling_widget.value,
+                    'balance_sorting_method': balance_sorting_widget.value
                 })
 
                 # Apply filters
@@ -2223,7 +2230,7 @@ class MAVERICInteractiveQualityControl:
 
                 # Update balance widgets
                 balance_strategy_widget.value = default_balance['balance_strategy']
-                balance_min_samples_widget.value = default_balance['balance_min_samples']
+                balance_sorting_widget.value = default_balance.get('balance_sorting_method', 'consistency')
                 balance_oversampling_widget.value = default_balance['balance_enable_oversampling']
 
                 # Recalculate best class with default weights
@@ -2244,11 +2251,12 @@ class MAVERICInteractiveQualityControl:
             with output:
                 clear_output()
 
-                # Update balance settings
+                # Update balance settings (min_samples is now hardcoded to 1)
                 self.balance_settings.update({
                     'balance_strategy': balance_strategy_widget.value,
-                    'balance_min_samples': balance_min_samples_widget.value,
-                    'balance_enable_oversampling': balance_oversampling_widget.value
+                    'balance_min_samples': 1,  # Hardcoded to 1
+                    'balance_enable_oversampling': balance_oversampling_widget.value,
+                    'balance_sorting_method': balance_sorting_widget.value  # New sorting parameter
                 })
 
                 # Apply balance

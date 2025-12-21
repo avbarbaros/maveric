@@ -4,7 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 19, 2025 - Mahalanobis Distance Filtering (LATEST)
+### December 21, 2025 - Balance Settings Tab Improvements (LATEST)
+
+**Enhancement: Simplified and Enhanced Balance Settings Tab**:
+- **Purpose**: Streamlined UI and flexible sample sorting for balanced datasets
+- **Changes**:
+  1. **Min Samples removed**: Removed from UI, now hardcoded to 1 (no class filtering)
+  2. **Oversampling checkbox visibility**: Set explicit width (500px) for full visibility
+  3. **Sorting method selector**: New dropdown to choose sample sorting strategy
+- **New Sorting Options**:
+  - **Consistency** (default): Sort samples by consistency score (higher = better)
+  - **Weighted**: Sort samples by weighted_class_score (higher = better)
+  - **Impact**: Choose which metric to prioritize when selecting best samples during balancing
+- **Location**: [interactive.py:1973-2011](maveric/visualization/interactive.py#L1973-L2011)
+- **Balancing Logic**: [interactive.py:439-542](maveric/visualization/interactive.py#L439-L542)
+- **Benefits**:
+  - **Cleaner UI**: One less widget, simpler interface
+  - **Flexible selection**: Choose consistency or weighted score for sample ranking
+  - **Better visibility**: Oversampling checkbox fully visible with explicit layout
+  - **No class removal**: min_samples=1 ensures all classes are kept
+- **Usage**:
+  ```python
+  from maveric.visualization import start_interactive_gui
+  gui = start_interactive_gui('cifar10')
+  # Navigate to Tab 4: Balance Settings
+  # Select strategy (e.g., "median")
+  # Select sorting method: "Consistency" or "Weighted"
+  # Check "Enable Oversampling" if needed
+  # Click "Apply Balance"
+  ```
+
+### December 19, 2025 - Mahalanobis Distance Filtering
 
 **New Feature: Mahalanobis Distance Filtering Tab in Interactive GUI**:
 - **Purpose**: Advanced sample selection using Mahalanobis distance from ideal point
