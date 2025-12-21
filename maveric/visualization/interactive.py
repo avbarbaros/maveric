@@ -1104,14 +1104,14 @@ class MAVERICInteractiveQualityControl:
                         image = Image.open(BytesIO(response.content)).convert('RGB')
 
                         # Save to destination
-                        image.save(dst_path, 'JPEG', quality=95)
+                        image.save(dst_path, 'JPEG', quality=)
                         downloaded_count += 1
 
                         # Also save to hierarchical cache for future use
                         try:
                             cache_subdir = global_cache_dir / subdir
                             cache_subdir.mkdir(parents=True, exist_ok=True)
-                            image.save(src_path_hierarchical, 'JPEG', quality=95)
+                            image.save(src_path_hierarchical, 'JPEG', quality=)
                         except Exception:
                             pass  # Cache save failed, but we have the training image
 
@@ -1299,7 +1299,7 @@ class MAVERICInteractiveQualityControl:
             "<small>"
             "• Filters samples based on distance from ideal point in (weighted_score, consistency) space<br>"
             "• Accounts for correlation between metrics and their different scales<br>"
-            "• Keeps top N% of samples closest to ideal point (95th percentile)<br>"
+            "• Keeps top N% of samples closest to ideal point (th percentile)<br>"
             "• Visualization shows ellipse boundary and sample distribution<br>"
             "<br>"
             "<b>Filter Modes:</b><br>"
@@ -1479,10 +1479,10 @@ class MAVERICInteractiveQualityControl:
         if len(df) < 100:
             print(f"⚠️ Warning: Only {len(df)} samples available. Results may be unstable.")
 
-        # Calculate ideal point (95th percentile)
+        # Calculate ideal point (th percentile)
         ideal_point = np.array([
-            np.percentile(weighted, 95),
-            np.percentile(consistency, 95)
+            np.percentile(weighted, 90),
+            np.percentile(consistency, 80)
         ])
 
         # Compute covariance matrix
