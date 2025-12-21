@@ -4,7 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 21, 2025 - Balance Settings Tab Improvements (LATEST)
+### December 21, 2025 - Mahalanobis Filter Tab Simplification (LATEST)
+
+**Enhancement: Simplified and Enhanced Mahalanobis Filter Tab**:
+- **Purpose**: Cleaner UI with configurable ideal point selection
+- **Changes**:
+  1. **Per-class mode removed**: Global mode only (hardcoded `per_class=False`)
+  2. **Explanation section removed**: No verbose text at top of tab
+  3. **Percentile controls added**: Two text boxes for ideal point configuration
+     - **Weighted %ile**: Percentile for weighted_class_score (default: 95)
+     - **Consistency %ile**: Percentile for consistency (default: 95)
+  4. **Percentage dropdown removed**: Only "Keep %ile" text box remains
+  5. **Histogram scaling fixed**: Added `density=True` for proper normalization
+- **New Controls**:
+  - **Weighted %ile** (1-99%): Configure ideal point for weighted_class_score axis
+  - **Consistency %ile** (1-99%): Configure ideal point for consistency axis
+  - **Keep %ile** (1-99%): Percentage of samples to keep (closest to ideal point)
+- **Location**: [interactive.py:1299-1424](maveric/visualization/interactive.py#L1299-L1424)
+- **Filter Logic**: [interactive.py:1426-1580](maveric/visualization/interactive.py#L1426-L1580)
+- **Benefits**:
+  - **Cleaner UI**: Removed explanation and mode selector
+  - **Flexible ideal point**: User can adjust target percentiles for both axes
+  - **Simpler workflow**: Only global mode, fewer decisions
+  - **Better visualizations**: Histogram density normalization shows true distributions
+- **Usage**:
+  ```python
+  from maveric.visualization import start_interactive_gui
+  gui = start_interactive_gui('cifar10')
+  # Navigate to Tab 2: Mahalanobis Filter
+  # Set Weighted %ile (e.g., 95)
+  # Set Consistency %ile (e.g., 95)
+  # Set Keep %ile (e.g., 30)
+  # Click "Apply Filter"
+  # View normalized histograms and ellipse plot
+  ```
+
+### December 21, 2025 - Balance Settings Tab Improvements
 
 **Enhancement: Simplified and Enhanced Balance Settings Tab**:
 - **Purpose**: Streamlined UI and flexible sample sorting for balanced datasets

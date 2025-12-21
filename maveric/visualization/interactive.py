@@ -1298,65 +1298,37 @@ class MAVERICInteractiveQualityControl:
 
     def _create_mahalanobis_tab(self):
         """Create Mahalanobis distance filtering tab"""
-        # Explanation HTML
-        explanation = widgets.HTML(
-            "<div style='padding: 12px; margin-bottom: 10px; border-left: 4px solid #2196F3;'>"
-            "<b>🎯 Mahalanobis Distance Filtering</b><br>"
-            "<small>"
-            "• Filters samples based on distance from ideal point in (weighted_score, consistency) space<br>"
-            "• Accounts for correlation between metrics and their different scales<br>"
-            "• Keeps top N% of samples closest to ideal point (90th percentile from weighted_score, %80th percentile from consistency score)<br>"
-            "• Visualization shows ellipse boundary and sample distribution<br>"
-            "<br>"
-            "<b>Filter Modes:</b><br>"
-            "• <b>Global</b>: Apply filtering to entire dataset (may result in class imbalance)<br>"
-            "• <b>Per-Class</b>: Apply filtering separately for each class (maintains class balance)<br>"
-            "<br>"
-            "⚠️ <b>Important:</b> Go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first to create required columns!"
-            "</small>"
-            "</div>"
+        # Weighted percentile for ideal point
+        weighted_percentile_text = widgets.FloatText(
+            value=95.0,
+            min=1.0,
+            max=99.0,
+            step=0.1,
+            description='Weighted %ile:',
+            layout=widgets.Layout(width='200px'),
+            style={'description_width': '100px'}
         )
 
-        # Percentage selector dropdown
-        keep_percentage_combo = widgets.Dropdown(
-            options=[('10%', 10), ('20%', 20), ('30%', 30), ('40%', 40), ('50%', 50)],
-            value=30,
-            description='Keep Top:',
-            layout=widgets.Layout(width='180px'),
-            style={'description_width': '70px'}
+        # Consistency percentile for ideal point
+        consistency_percentile_text = widgets.FloatText(
+            value=95.0,
+            min=1.0,
+            max=99.0,
+            step=0.1,
+            description='Consistency %ile:',
+            layout=widgets.Layout(width='200px'),
+            style={'description_width': '100px'}
         )
 
-        # Custom percentage input
-        custom_percentage_text = widgets.FloatText(
+        # Keep percentile input (renamed from "Custom %")
+        keep_percentile_text = widgets.FloatText(
             value=30.0,
             min=1.0,
             max=99.0,
             step=0.1,
-            description='Custom %:',
-            layout=widgets.Layout(width='150px'),
-            style={'description_width': '70px'}
-        )
-
-        # Sync dropdown and text input
-        def on_combo_change(change):
-            custom_percentage_text.value = float(change['new'])
-
-        def on_text_change(change):
-            # Find closest dropdown value
-            val = change['new']
-            closest = min([10, 20, 30, 40, 50], key=lambda x: abs(x - val))
-            if closest in [10, 20, 30, 40, 50]:
-                keep_percentage_combo.value = closest
-
-        keep_percentage_combo.observe(on_combo_change, names='value')
-        custom_percentage_text.observe(on_text_change, names='value')
-
-        # Filter mode radio buttons
-        filter_mode_radio = widgets.RadioButtons(
-            options=['Global', 'Per-Class'],
-            value='Global',
-            description='Mode:',
-            layout=widgets.Layout(width='250px')
+            description='Keep %ile:',
+            layout=widgets.Layout(width='200px'),
+            style={'description_width': '100px'}
         )
 
         # Apply button
@@ -1372,7 +1344,7 @@ class MAVERICInteractiveQualityControl:
 
         # Status display
         status_display = widgets.HTML(
-            value="<p style='color:#666; font-style:italic;'>Select percentage and click Apply to filter data</p>"
+            value="<p style='color:#666; font-style:italic;'>Configure percentiles and click Apply to filter data</p>"
         )
 
         # Callback for apply button
@@ -1380,9 +1352,10 @@ class MAVERICInteractiveQualityControl:
             with plot_output:
                 clear_output(wait=True)
                 try:
-                    # Get percentage from text input (more precise)
-                    percentage = custom_percentage_text.value
-                    per_class = (filter_mode_radio.value == 'Per-Class')
+                    # Get parameters from widgets
+                    keep_percentage = keep_percentile_text.value
+                    weighted_pct = weighted_percentile_text.value
+                    consistency_pct = consistency_percentile_text.value
 
                     if self.filtered_data is None or len(self.filtered_data) == 0:
                         status_display.value = "<p style='color:red;'>❌ No data available. Load data first.</p>"
@@ -1397,10 +1370,15 @@ class MAVERICInteractiveQualityControl:
                     # Store original count (before this Mahalanobis filter)
                     original_count = len(self.filtered_data)
 
-                    # Apply Mahalanobis filter
-                    status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter ({percentage}%)...</p>"
+                    # Apply Mahalanobis filter (global mode only, per_class=False)
+                    status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter ({keep_percentage}%)...</p>"
 
-                    result = self._apply_mahalanobis_filter(percentage, per_class)
+                    result = self._apply_mahalanobis_filter(
+                        keep_percentile=keep_percentage,
+                        weighted_percentile=weighted_pct,
+                        consistency_percentile=consistency_pct,
+                        per_class=False  # Always global mode
+                    )
 
                     if result is None:
                         status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
@@ -1413,12 +1391,12 @@ class MAVERICInteractiveQualityControl:
 
                     # Show statistics
                     print("\n")
-                    self._show_mahalanobis_statistics(original_count, new_count, percentage)
+                    self._show_mahalanobis_statistics(original_count, new_count, keep_percentage)
 
                     # Update status
                     status_display.value = (
                         f"<p style='color:green;'>✅ Filter applied successfully<br>"
-                        f"<small>Kept top {percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
+                        f"<small>Kept top {keep_percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
                     )
 
                 except Exception as e:
@@ -1429,13 +1407,12 @@ class MAVERICInteractiveQualityControl:
 
         apply_button.on_click(on_apply_clicked)
 
-        # Layout
+        # Layout (simplified - removed explanation and mode selector)
         tab_content = widgets.VBox([
-            explanation,
             widgets.HBox([
-                keep_percentage_combo,
-                custom_percentage_text,
-                filter_mode_radio,
+                weighted_percentile_text,
+                consistency_percentile_text,
+                keep_percentile_text,
                 apply_button
             ], layout=widgets.Layout(margin='10px 0')),
             status_display,
@@ -1446,12 +1423,14 @@ class MAVERICInteractiveQualityControl:
 
         return tab_content
 
-    def _apply_mahalanobis_filter(self, keep_percentile, per_class=False):
+    def _apply_mahalanobis_filter(self, keep_percentile, weighted_percentile=95, consistency_percentile=95, per_class=False):
         """
         Apply Mahalanobis distance filtering to select samples closest to ideal point.
 
         Args:
             keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%)
+            weighted_percentile: Percentile for weighted_class_score ideal point (default: 95)
+            consistency_percentile: Percentile for consistency ideal point (default: 95)
             per_class: If True, apply filtering separately for each class
 
         Returns:
@@ -1485,11 +1464,13 @@ class MAVERICInteractiveQualityControl:
         if len(df) < 100:
             print(f"⚠️ Warning: Only {len(df)} samples available. Results may be unstable.")
 
-        # Calculate ideal point (90th percentile from weighted, 80th percentile from consistency)
+        # Calculate ideal point using user-specified percentiles
         ideal_point = np.array([
-            np.percentile(weighted, 90),
-            np.percentile(consistency, 80)
+            np.percentile(weighted, weighted_percentile),
+            np.percentile(consistency, consistency_percentile)
         ])
+
+        print(f"📍 Ideal point: weighted={ideal_point[0]:.3f} ({weighted_percentile}th %ile), consistency={ideal_point[1]:.3f} ({consistency_percentile}th %ile)")
 
         # Compute covariance matrix
         data_matrix = np.column_stack([weighted, consistency])
@@ -1661,9 +1642,9 @@ class MAVERICInteractiveQualityControl:
                     verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-        # Top histogram (weighted_class_score)
-        ax_top.hist(all_weighted, bins=50, alpha=0.3, color='gray', label='All')
-        ax_top.hist(all_weighted[selected_mask], bins=50, alpha=0.7, color='green', label='Selected')
+        # Top histogram (weighted_class_score) - normalized density
+        ax_top.hist(all_weighted, bins=50, alpha=0.3, color='gray', label='All', density=True)
+        ax_top.hist(all_weighted[selected_mask], bins=50, alpha=0.7, color='green', label='Selected', density=True)
         ax_top.axvline(ideal_point[0], color='red', linestyle='--', linewidth=1, label='Ideal')
         ax_top.set_ylabel('Density', fontsize=9)
         ax_top.tick_params(labelbottom=False)
@@ -1671,9 +1652,9 @@ class MAVERICInteractiveQualityControl:
         ax_top.set_title(f'Joint Distribution with Mahalanobis Selection Boundary\n(Top {keep_percentile}% closest to ideal)',
                         fontsize=12, fontweight='bold', pad=10)
 
-        # Right histogram (consistency)
-        ax_right.hist(all_consistency, bins=50, alpha=0.3, color='gray', orientation='horizontal')
-        ax_right.hist(all_consistency[selected_mask], bins=50, alpha=0.7, color='green', orientation='horizontal')
+        # Right histogram (consistency) - normalized density
+        ax_right.hist(all_consistency, bins=50, alpha=0.3, color='gray', orientation='horizontal', density=True)
+        ax_right.hist(all_consistency[selected_mask], bins=50, alpha=0.7, color='green', orientation='horizontal', density=True)
         ax_right.axhline(ideal_point[1], color='red', linestyle='--', linewidth=1)
         ax_right.set_xlabel('Density', fontsize=9)
         ax_right.tick_params(labelleft=False)
