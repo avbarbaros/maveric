@@ -1297,7 +1297,32 @@ class MAVERICInteractiveQualityControl:
         return tab_content
 
     def _create_mahalanobis_tab(self):
-        """Create Mahalanobis distance filtering tab"""
+        """Create Mahalanobis distance filtering tab with Global and Class-Based modes"""
+        # Initialize class-based filtered data storage
+        if not hasattr(self, 'class_based_filtered_data'):
+            self.class_based_filtered_data = {}  # Store filtered data per class
+
+        # Mode selector
+        mode_selector = widgets.RadioButtons(
+            options=['Global', 'Class-Based'],
+            value='Global',
+            description='Mode:',
+            layout=widgets.Layout(width='300px')
+        )
+
+        # Class selector (for Class-Based mode)
+        class_options = ['Select class...']
+        if self.filtered_data is not None and 'label' in self.filtered_data.columns:
+            class_options.extend(sorted(self.filtered_data['label'].unique()))
+
+        class_selector = widgets.Dropdown(
+            options=class_options,
+            value=class_options[0],
+            description='Class:',
+            layout=widgets.Layout(width='250px', visibility='hidden'),
+            style={'description_width': '50px'}
+        )
+
         # Weighted percentile for ideal point
         weighted_percentile_text = widgets.FloatText(
             value=95.0,
@@ -1320,7 +1345,7 @@ class MAVERICInteractiveQualityControl:
             style={'description_width': '100px'}
         )
 
-        # Keep percentile input (renamed from "Custom %")
+        # Keep percentile input
         keep_percentile_text = widgets.FloatText(
             value=30.0,
             min=1.0,
@@ -1331,12 +1356,26 @@ class MAVERICInteractiveQualityControl:
             style={'description_width': '100px'}
         )
 
-        # Apply button
+        # Buttons
         apply_button = widgets.Button(
             description='Apply Filter',
             button_style='primary',
             icon='filter',
-            layout=widgets.Layout(width='150px')
+            layout=widgets.Layout(width='120px')
+        )
+
+        add_data_button = widgets.Button(
+            description='Add Data',
+            button_style='success',
+            icon='plus',
+            layout=widgets.Layout(width='120px', visibility='hidden')  # Hidden in Global mode
+        )
+
+        save_filtered_button = widgets.Button(
+            description='Save Filtered Data',
+            button_style='warning',
+            icon='save',
+            layout=widgets.Layout(width='150px', visibility='hidden')  # Hidden in Global mode
         )
 
         # Output widget for plot
@@ -1347,12 +1386,33 @@ class MAVERICInteractiveQualityControl:
             value="<p style='color:#666; font-style:italic;'>Configure percentiles and click Apply to filter data</p>"
         )
 
+        # Update class selector when mode changes
+        def on_mode_change(change):
+            if change['new'] == 'Class-Based':
+                # Show class-specific controls
+                class_selector.layout.visibility = 'visible'
+                add_data_button.layout.visibility = 'visible'
+                save_filtered_button.layout.visibility = 'visible'
+
+                # Update class options from current filtered data
+                if self.filtered_data is not None and 'label' in self.filtered_data.columns:
+                    classes = ['Select class...'] + sorted(self.filtered_data['label'].unique())
+                    class_selector.options = classes
+                    class_selector.value = classes[0]
+            else:
+                # Hide class-specific controls
+                class_selector.layout.visibility = 'hidden'
+                add_data_button.layout.visibility = 'hidden'
+                save_filtered_button.layout.visibility = 'hidden'
+
+        mode_selector.observe(on_mode_change, names='value')
+
         # Callback for apply button
         def on_apply_clicked(b):
             with plot_output:
                 clear_output(wait=True)
                 try:
-                    # Get parameters from widgets
+                    mode = mode_selector.value
                     keep_percentage = keep_percentile_text.value
                     weighted_pct = weighted_percentile_text.value
                     consistency_pct = consistency_percentile_text.value
@@ -1361,43 +1421,63 @@ class MAVERICInteractiveQualityControl:
                         status_display.value = "<p style='color:red;'>❌ No data available. Load data first.</p>"
                         return
 
-                    # Restore original data before Mahalanobis filter (if it was applied before)
-                    # This ensures we always filter from the same baseline, not compound filters
-                    if self.data_before_mahalanobis is not None:
-                        print("🔄 Resetting to data before previous Mahalanobis filter...")
-                        self.filtered_data = self.data_before_mahalanobis.copy()
+                    if mode == 'Global':
+                        # Global mode - filter all data
+                        if self.data_before_mahalanobis is not None:
+                            print("🔄 Resetting to data before previous Mahalanobis filter...")
+                            self.filtered_data = self.data_before_mahalanobis.copy()
 
-                    # Store original count (before this Mahalanobis filter)
-                    original_count = len(self.filtered_data)
+                        original_count = len(self.filtered_data)
+                        status_display.value = f"<p style='color:blue;'>⏳ Applying global Mahalanobis filter ({keep_percentage}%)...</p>"
 
-                    # Apply Mahalanobis filter (global mode only, per_class=False)
-                    status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter ({keep_percentage}%)...</p>"
+                        result = self._apply_mahalanobis_filter(
+                            keep_percentile=keep_percentage,
+                            weighted_percentile=weighted_pct,
+                            consistency_percentile=consistency_pct,
+                            per_class=False
+                        )
 
-                    result = self._apply_mahalanobis_filter(
-                        keep_percentile=keep_percentage,
-                        weighted_percentile=weighted_pct,
-                        consistency_percentile=consistency_pct,
-                        per_class=False  # Always global mode
-                    )
+                        if result is None:
+                            status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
+                            return
 
-                    if result is None:
-                        status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
-                        return
+                        new_count = len(self.filtered_data)
+                        self._plot_mahalanobis_analysis()
+                        print("\n")
+                        self._show_mahalanobis_statistics(original_count, new_count, keep_percentage)
 
-                    new_count = len(self.filtered_data)
+                        status_display.value = (
+                            f"<p style='color:green;'>✅ Global filter applied successfully<br>"
+                            f"<small>Kept top {keep_percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
+                        )
+                    else:
+                        # Class-Based mode - filter selected class
+                        selected_class = class_selector.value
+                        if selected_class == 'Select class...':
+                            status_display.value = "<p style='color:red;'>❌ Please select a class first.</p>"
+                            return
 
-                    # Plot analysis
-                    self._plot_mahalanobis_analysis()
+                        status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}'...</p>"
 
-                    # Show statistics
-                    print("\n")
-                    self._show_mahalanobis_statistics(original_count, new_count, keep_percentage)
+                        # Filter for selected class only
+                        result = self._apply_mahalanobis_filter_class_based(
+                            class_name=selected_class,
+                            keep_percentile=keep_percentage,
+                            weighted_percentile=weighted_pct,
+                            consistency_percentile=consistency_pct
+                        )
 
-                    # Update status
-                    status_display.value = (
-                        f"<p style='color:green;'>✅ Filter applied successfully<br>"
-                        f"<small>Kept top {keep_percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
-                    )
+                        if result is None:
+                            status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
+                            return
+
+                        # Plot class-specific analysis
+                        self._plot_mahalanobis_analysis_class_based(selected_class)
+
+                        status_display.value = (
+                            f"<p style='color:green;'>✅ Filter applied for class '{selected_class}'<br>"
+                            f"<small>{result['samples_after']:,} / {result['samples_before']:,} samples kept</small></p>"
+                        )
 
                 except Exception as e:
                     import traceback
@@ -1405,16 +1485,85 @@ class MAVERICInteractiveQualityControl:
                     print("Error traceback:")
                     traceback.print_exc()
 
-        apply_button.on_click(on_apply_clicked)
+        # Callback for add data button
+        def on_add_data_clicked(b):
+            try:
+                selected_class = class_selector.value
+                if selected_class == 'Select class...':
+                    status_display.value = "<p style='color:red;'>❌ Please select a class first.</p>"
+                    return
 
-        # Layout (simplified - removed explanation and mode selector)
+                if selected_class not in self.class_based_filtered_data:
+                    status_display.value = f"<p style='color:red;'>❌ No filtered data for class '{selected_class}'. Apply filter first.</p>"
+                    return
+
+                # Consolidate all class-based filtered data into filtered_data
+                self._consolidate_class_based_data()
+
+                class_data = self.class_based_filtered_data[selected_class]
+                count = len(class_data)
+                total_samples = sum(len(data) for data in self.class_based_filtered_data.values())
+
+                print(f"✅ Class '{selected_class}' data confirmed ({count:,} samples)")
+                print(f"📊 Total samples from all classes: {total_samples:,}")
+                print(f"📋 Classes with data: {', '.join(sorted(self.class_based_filtered_data.keys()))}")
+
+                status_display.value = (
+                    f"<p style='color:green;'>✅ Class '{selected_class}' added<br>"
+                    f"<small>Total classes: {len(self.class_based_filtered_data)} | Total samples: {total_samples:,}</small></p>"
+                )
+
+            except Exception as e:
+                import traceback
+                status_display.value = f"<p style='color:red;'>❌ Error adding data: {str(e)}</p>"
+                traceback.print_exc()
+
+        # Callback for save filtered data button
+        def on_save_filtered_clicked(b):
+            try:
+                selected_class = class_selector.value
+                if selected_class == 'Select class...':
+                    status_display.value = "<p style='color:red;'>❌ Please select a class first.</p>"
+                    return
+
+                if selected_class not in self.class_based_filtered_data:
+                    status_display.value = f"<p style='color:red;'>❌ No filtered data for class '{selected_class}'. Apply filter first.</p>"
+                    return
+
+                # Save grid images for selected class
+                result_path = self._save_class_filtered_grids(selected_class)
+
+                if result_path:
+                    print(f"✅ Grid images saved to: {result_path}")
+                    status_display.value = (
+                        f"<p style='color:green;'>✅ Grid images saved for '{selected_class}'<br>"
+                        f"<small>Location: {result_path}</small></p>"
+                    )
+                else:
+                    status_display.value = "<p style='color:red;'>❌ Failed to save grid images.</p>"
+
+            except Exception as e:
+                import traceback
+                status_display.value = f"<p style='color:red;'>❌ Error saving grids: {str(e)}</p>"
+                traceback.print_exc()
+
+        apply_button.on_click(on_apply_clicked)
+        add_data_button.on_click(on_add_data_clicked)
+        save_filtered_button.on_click(on_save_filtered_clicked)
+
+        # Layout
         tab_content = widgets.VBox([
+            widgets.HBox([mode_selector, class_selector], layout=widgets.Layout(margin='5px 0')),
             widgets.HBox([
                 weighted_percentile_text,
                 consistency_percentile_text,
-                keep_percentile_text,
-                apply_button
-            ], layout=widgets.Layout(margin='10px 0')),
+                keep_percentile_text
+            ], layout=widgets.Layout(margin='5px 0')),
+            widgets.HBox([
+                apply_button,
+                add_data_button,
+                save_filtered_button
+            ], layout=widgets.Layout(margin='5px 0')),
             status_display,
             plot_output
         ], layout=widgets.Layout(
@@ -1679,6 +1828,368 @@ class MAVERICInteractiveQualityControl:
                 print(f"   {class_name}: {count} samples")
         else:
             print("📋 Class Distribution: No label column available")
+
+    def _apply_mahalanobis_filter_class_based(self, class_name, keep_percentile, weighted_percentile=95, consistency_percentile=95):
+        """
+        Apply Mahalanobis distance filtering to a specific class only.
+
+        Args:
+            class_name: Name of the class to filter
+            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%)
+            weighted_percentile: Percentile for weighted_class_score ideal point
+            consistency_percentile: Percentile for consistency ideal point
+
+        Returns:
+            Dictionary with filter statistics, or None on error
+        """
+        if self.filtered_data is None or len(self.filtered_data) == 0:
+            print("❌ No data available for filtering")
+            return None
+
+        # Check required columns
+        if 'weighted_class_score' not in self.filtered_data.columns:
+            print("❌ 'weighted_class_score' column not found")
+            print("💡 Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
+            return None
+        if 'consistency' not in self.filtered_data.columns:
+            print("❌ 'consistency' column not found")
+            print("💡 Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
+            return None
+        if 'label' not in self.filtered_data.columns:
+            print("❌ 'label' column not found")
+            return None
+
+        # Filter for selected class
+        class_df = self.filtered_data[self.filtered_data['label'] == class_name].copy()
+
+        if len(class_df) == 0:
+            print(f"❌ No samples found for class '{class_name}'")
+            return None
+
+        print(f"📊 Filtering class '{class_name}' ({len(class_df):,} samples)")
+
+        # Extract metrics
+        weighted = class_df['weighted_class_score'].values
+        consistency = class_df['consistency'].values
+
+        # Calculate ideal point using user-specified percentiles
+        ideal_point = np.array([
+            np.percentile(weighted, weighted_percentile),
+            np.percentile(consistency, consistency_percentile)
+        ])
+
+        print(f"📍 Ideal point: weighted={ideal_point[0]:.3f} ({weighted_percentile}th %ile), "
+              f"consistency={ideal_point[1]:.3f} ({consistency_percentile}th %ile)")
+
+        # Compute covariance matrix
+        data_matrix = np.column_stack([weighted, consistency])
+        covariance = np.cov(data_matrix.T)
+
+        # Handle singular covariance with regularization
+        try:
+            covariance_inv = np.linalg.inv(covariance)
+        except np.linalg.LinAlgError:
+            print("⚠️ Singular covariance matrix detected. Adding regularization...")
+            reg = 1e-6 * np.eye(2)
+            covariance_inv = np.linalg.inv(covariance + reg)
+            covariance = covariance + reg
+
+        # Calculate Mahalanobis distances
+        distances = np.array([
+            mahalanobis(x, ideal_point, covariance_inv)
+            for x in data_matrix
+        ])
+
+        # Store all samples with their distances (for plotting)
+        all_samples_info = {
+            'weighted': weighted.copy(),
+            'consistency': consistency.copy(),
+            'distances': distances.copy(),
+            'data_matrix': data_matrix.copy()
+        }
+
+        # Calculate threshold and filter
+        n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+        threshold = np.partition(distances, n_keep-1)[n_keep-1] if n_keep < len(distances) else distances.max()
+
+        mask = distances <= threshold
+        filtered_class_df = class_df[mask].copy()
+        filtered_class_df['mahalanobis_distance'] = distances[mask]
+
+        # Store filtered data for this class
+        self.class_based_filtered_data[class_name] = filtered_class_df
+
+        # Store filter info for plotting
+        correlation = np.corrcoef(weighted, consistency)[0, 1]
+        self.mahalanobis_filter_info_class = {
+            'class_name': class_name,
+            'ideal_point': ideal_point,
+            'covariance': covariance,
+            'covariance_inv': covariance_inv,
+            'threshold': threshold,
+            'correlation': correlation,
+            'all_samples': all_samples_info,
+            'selected_mask': mask,
+            'keep_percentile': keep_percentile,
+            'weighted_percentile': weighted_percentile,
+            'consistency_percentile': consistency_percentile
+        }
+
+        print(f"✅ Kept {len(filtered_class_df):,} / {len(class_df):,} samples for class '{class_name}'")
+
+        return {
+            'samples_before': len(class_df),
+            'samples_after': len(filtered_class_df),
+            'threshold': threshold
+        }
+
+    def _plot_mahalanobis_analysis_class_based(self, class_name):
+        """Plot Mahalanobis distance analysis for a specific class"""
+        if not hasattr(self, 'mahalanobis_filter_info_class') or not self.mahalanobis_filter_info_class:
+            print("❌ No class-based Mahalanobis filter info available")
+            return
+
+        info = self.mahalanobis_filter_info_class
+        if info['class_name'] != class_name:
+            print(f"❌ Filter info is for class '{info['class_name']}', not '{class_name}'")
+            return
+
+        ideal_point = info['ideal_point']
+        covariance = info['covariance']
+        correlation = info['correlation']
+        all_samples = info['all_samples']
+        keep_percentile = info['keep_percentile']
+        selected_mask = info['selected_mask']
+
+        # Get all samples data
+        all_weighted = all_samples['weighted']
+        all_consistency = all_samples['consistency']
+        all_distances = all_samples['distances']
+
+        # Create figure with gridspec for marginal plots
+        fig = plt.figure(figsize=(12, 10))
+        gs = fig.add_gridspec(3, 3, width_ratios=[4, 1, 0.2], height_ratios=[0.2, 4, 1],
+                             hspace=0.05, wspace=0.05)
+
+        # Main scatter plot
+        ax_main = fig.add_subplot(gs[1, 0])
+        ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
+        ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+
+        # Plot rejected samples (gray)
+        ax_main.scatter(all_weighted[~selected_mask], all_consistency[~selected_mask],
+                       c='gray', alpha=0.3, s=20, label=f'Rejected ({(~selected_mask).sum():,})')
+
+        # Plot selected samples (green)
+        ax_main.scatter(all_weighted[selected_mask], all_consistency[selected_mask],
+                       c='green', alpha=0.7, s=20, label=f'Selected ({selected_mask.sum():,})')
+
+        # Plot ideal point (red star)
+        ax_main.scatter(ideal_point[0], ideal_point[1],
+                       c='red', marker='*', s=300, label='Ideal Point',
+                       edgecolors='darkred', linewidth=1.5, zorder=10)
+
+        # Plot Mahalanobis ellipse
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        order = eigenvalues.argsort()[::-1]
+        eigenvalues = eigenvalues[order]
+        eigenvectors = eigenvectors[:, order]
+
+        angle = np.degrees(np.arctan2(*eigenvectors[:, 0][::-1]))
+        n_std = info['threshold']
+        width = 2 * n_std * np.sqrt(eigenvalues[0])
+        height = 2 * n_std * np.sqrt(eigenvalues[1])
+
+        ellipse = Ellipse(xy=ideal_point, width=width, height=height,
+                         angle=angle, edgecolor='red', facecolor='none',
+                         linewidth=2, linestyle='--', label='Selection Boundary')
+        ax_main.add_patch(ellipse)
+
+        # Main plot formatting
+        ax_main.set_xlabel('Weighted Class Score', fontsize=11)
+        ax_main.set_ylabel('Consistency', fontsize=11)
+        ax_main.grid(True, alpha=0.3)
+        ax_main.legend(loc='lower right', fontsize=9)
+
+        # Add correlation text
+        ax_main.text(0.02, 0.98, f'ρ = {correlation:.3f}',
+                    transform=ax_main.transAxes, fontsize=10,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        # Top histogram (weighted_class_score) - normalized density
+        ax_top.hist(all_weighted, bins=50, alpha=0.3, color='gray', label='All', density=True)
+        ax_top.hist(all_weighted[selected_mask], bins=50, alpha=0.7, color='green', label='Selected', density=True)
+        ax_top.axvline(ideal_point[0], color='red', linestyle='--', linewidth=1, label='Ideal')
+        ax_top.set_ylabel('Density', fontsize=9)
+        ax_top.tick_params(labelbottom=False)
+        ax_top.legend(loc='upper right', fontsize=8)
+        ax_top.set_title(f'Class: {class_name} - Mahalanobis Selection (Top {keep_percentile}%)',
+                        fontsize=12, fontweight='bold', pad=10)
+
+        # Right histogram (consistency) - normalized density
+        ax_right.hist(all_consistency, bins=50, alpha=0.3, color='gray', orientation='horizontal', density=True)
+        ax_right.hist(all_consistency[selected_mask], bins=50, alpha=0.7, color='green', orientation='horizontal', density=True)
+        ax_right.axhline(ideal_point[1], color='red', linestyle='--', linewidth=1)
+        ax_right.set_xlabel('Density', fontsize=9)
+        ax_right.tick_params(labelleft=False)
+
+        plt.tight_layout()
+        plt.show()
+
+    def _save_class_filtered_grids(self, class_name):
+        """
+        Save grid visualizations for filtered data of a specific class.
+
+        Args:
+            class_name: Name of the class to save grids for
+
+        Returns:
+            Path to curationResults folder or None if error
+        """
+        if class_name not in self.class_based_filtered_data:
+            print(f"❌ No filtered data for class '{class_name}'")
+            return None
+
+        class_data = self.class_based_filtered_data[class_name]
+
+        if len(class_data) == 0:
+            print(f"❌ No samples for class '{class_name}'")
+            return None
+
+        try:
+            # Determine output directory
+            if self.data_path.endswith('/raw'):
+                base_dir = os.path.dirname(self.data_path)
+            else:
+                base_dir = self.data_path
+
+            # Get images directory
+            from pathlib import Path
+            images_dir = Path(base_dir) / 'images'
+
+            # Create curationResults folder
+            results_dir = os.path.join(base_dir, 'curationResults')
+            os.makedirs(results_dir, exist_ok=True)
+
+            # Sort data by score for organized grids
+            sorted_data = class_data.sort_values('weighted_class_score', ascending=False)
+
+            total_samples = len(sorted_data)
+            samples_per_grid = 100  # 10x10 grid
+            num_grids = (total_samples + samples_per_grid - 1) // samples_per_grid
+
+            print(f"📊 Creating {num_grids} grid visualization(s) for class '{class_name}' ({total_samples} samples)...")
+            print(f"   Grid size: 10x10 ({samples_per_grid} images per grid)")
+            print(f"   Source: {images_dir}")
+            print(f"   Output: {results_dir}")
+
+            for grid_idx in range(num_grids):
+                start_idx = grid_idx * samples_per_grid
+                end_idx = min((grid_idx + 1) * samples_per_grid, total_samples)
+                grid_samples = sorted_data.iloc[start_idx:end_idx]
+
+                # Create 10x10 grid
+                fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+                axes = axes.flatten()
+
+                for i, (_, row) in enumerate(grid_samples.iterrows()):
+                    if i >= samples_per_grid:
+                        break
+
+                    ax = axes[i]
+
+                    try:
+                        # Load image from local images directory
+                        url = row.get('url', '')
+                        if url:
+                            image = self._load_image_from_local(url, images_dir)
+                            if image:
+                                ax.imshow(image)
+
+                                # Display compact metrics
+                                label = row.get('label', 'unknown')
+                                sample_id = row.get('id', start_idx + i)
+                                score = row.get('weighted_class_score', 0)
+                                consistency = row.get('consistency', 0)
+
+                                title_text = f"ID:{sample_id}\n{label}\nS:{score:.2f} C:{consistency:.2f}"
+                                ax.set_title(title_text, fontsize=8)
+                            else:
+                                ax.text(0.5, 0.5, 'Image\nNot Found', ha='center', va='center')
+                                ax.set_title(f'ID:{start_idx + i}', fontsize=8)
+                        else:
+                            ax.text(0.5, 0.5, 'No URL', ha='center', va='center')
+                            ax.set_title(f'ID:{start_idx + i}', fontsize=8)
+
+                    except Exception as e:
+                        ax.text(0.5, 0.5, f'Error:\n{str(e)}', ha='center', va='center', fontsize=6)
+                        ax.set_title(f'ID:{start_idx + i}', fontsize=8)
+
+                    ax.axis('off')
+
+                # Hide unused subplots
+                for i in range(len(grid_samples), samples_per_grid):
+                    axes[i].axis('off')
+
+                # Save grid with class name in filename
+                # Format: datasetName_className_sequenceNo.png
+                safe_class_name = class_name.replace('/', '_').replace('\\', '_')
+                grid_filename = f"{self.dataset_name}_{safe_class_name}_{grid_idx+1:03d}.png"
+                grid_path = os.path.join(results_dir, grid_filename)
+
+                plt.suptitle(f'Class: {class_name} - Grid {grid_idx+1}/{num_grids}', fontsize=16, fontweight='bold')
+                plt.savefig(grid_path, dpi=150, bbox_inches='tight')
+                plt.close()
+
+                print(f"   ✅ Saved grid {grid_idx+1}/{num_grids}: {grid_filename}")
+
+            print(f"✅ All {num_grids} grids saved for class '{class_name}'")
+            return results_dir
+
+        except Exception as e:
+            import traceback
+            print(f"❌ Error saving grids: {str(e)}")
+            traceback.print_exc()
+            return None
+
+    def _consolidate_class_based_data(self):
+        """
+        Consolidate all class-based filtered data into self.filtered_data.
+        This allows the filtered data to be used by the Balance tab and other features.
+        """
+        if not hasattr(self, 'class_based_filtered_data'):
+            print("⚠️  No class-based filtered data storage found")
+            return
+
+        if not self.class_based_filtered_data:
+            print("⚠️  No class-based filtered data to consolidate")
+            return
+
+        # Combine all class DataFrames
+        combined_dfs = []
+        for class_name in sorted(self.class_based_filtered_data.keys()):
+            class_df = self.class_based_filtered_data[class_name]
+            combined_dfs.append(class_df)
+            print(f"   📦 Class '{class_name}': {len(class_df):,} samples")
+
+        # Concatenate and update filtered_data
+        if combined_dfs:
+            self.filtered_data = pd.concat(combined_dfs, ignore_index=True)
+            total_samples = len(self.filtered_data)
+            num_classes = len(self.class_based_filtered_data)
+
+            print(f"✅ Consolidated {num_classes} classes into filtered_data")
+            print(f"   Total samples: {total_samples:,}")
+            print(f"   Average per class: {total_samples/num_classes:.1f}")
+
+            # Show class distribution
+            class_counts = self.filtered_data['label'].value_counts().sort_index()
+            print(f"\n📊 Consolidated Class Distribution:")
+            for class_name, count in class_counts.items():
+                print(f"   {class_name}: {count:,} samples")
+        else:
+            print("⚠️  No data to consolidate")
 
     def _analyze_class_predictions(self):
         """Analyze class predictions from weighted scores vs EfficientNet"""

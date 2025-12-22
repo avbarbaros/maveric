@@ -4,7 +4,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 21, 2025 - Mahalanobis Filter Tab Simplification (LATEST)
+### December 22, 2025 - Mahalanobis Filter Global & Class-Based Modes (LATEST)
+
+**Enhancement: Dual-Mode Mahalanobis Filtering System**:
+- **Purpose**: Support both global (all classes) and class-based (per-class) filtering workflows
+- **Two Modes**:
+  1. **Global Mode**: Filter all data at once with uniform settings (existing functionality)
+  2. **Class-Based Mode**: Filter each class individually with custom settings (NEW)
+- **Class-Based Mode Features**:
+  - **Class Selector**: Dropdown to choose which class to filter
+  - **Percentile Controls**: Configure weighted %ile, consistency %ile, and keep %ile per class
+  - **Apply Filter**: Generate class-specific analysis plot and statistics
+  - **Add Data**: Accumulate filtered data from multiple classes
+  - **Save Filtered Data**: Export grid PNG files (format: `datasetName_className_###.png`)
+- **Location**: [interactive.py:1299-1567](maveric/visualization/interactive.py#L1299-L1567)
+- **New Methods**:
+  - `_apply_mahalanobis_filter_class_based()`: [interactive.py:1832-1945](maveric/visualization/interactive.py#L1832-L1945)
+  - `_plot_mahalanobis_analysis_class_based()`: [interactive.py:1947-2060](maveric/visualization/interactive.py#L1947-L2060)
+  - `_save_class_filtered_grids()`: [interactive.py:2062-2154](maveric/visualization/interactive.py#L2062-L2154)
+  - `_consolidate_class_based_data()`: [interactive.py:2156-2192](maveric/visualization/interactive.py#L2156-L2192)
+- **Benefits**:
+  - **Flexible**: Choose global or per-class filtering based on workflow needs
+  - **Targeted**: Apply different quality criteria to each class
+  - **Visual**: Save grid PNGs for manual inspection per class
+  - **Iterative**: Review and adjust each class before adding to training set
+  - **Compatible**: Consolidated data works with Balance tab and other features
+- **Usage - Global Mode**:
+  ```python
+  from maveric.visualization import start_interactive_gui
+  gui = start_interactive_gui('cifar10')
+  # Navigate to Tab 2: Mahalanobis Filter
+  # Select "Global" mode
+  # Set Weighted %ile (e.g., 95)
+  # Set Consistency %ile (e.g., 95)
+  # Set Keep %ile (e.g., 30)
+  # Click "Apply Filter"
+  # → All classes filtered at once
+  # → Data immediately available for Balance tab
+  ```
+- **Usage - Class-Based Mode**:
+  ```python
+  from maveric.visualization import start_interactive_gui
+  gui = start_interactive_gui('cifar10')
+  # Navigate to Tab 2: Mahalanobis Filter
+  # Select "Class-Based" mode
+  # For each class:
+  #   1. Select class from dropdown (e.g., "airplane")
+  #   2. Set Weighted %ile (e.g., 95)
+  #   3. Set Consistency %ile (e.g., 95)
+  #   4. Set Keep %ile (e.g., 40)
+  #   5. Click "Apply Filter" → See class-specific plot
+  #   6. Click "Add Data" → Store filtered class
+  #   7. (Optional) Click "Save Filtered Data" → Export grids
+  # After all classes added:
+  # → Consolidated data available for Balance tab
+  ```
+- **Documentation**: [MAHALANOBIS_CLASS_BASED_MODE.md](MAHALANOBIS_CLASS_BASED_MODE.md)
+
+### December 21, 2025 - Mahalanobis Filter Tab Simplification
 
 **Enhancement: Simplified and Enhanced Mahalanobis Filter Tab**:
 - **Purpose**: Cleaner UI with configurable ideal point selection
