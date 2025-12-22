@@ -998,7 +998,7 @@ class MAVERICInteractiveQualityControl:
     def _load_image_from_local(self, url, images_dir):
         """
         Load image from local dataset-specific images directory.
-        This is much faster than loading from global cache on network drives.
+        Falls back to global image_cache if not found locally.
 
         Args:
             url: Image URL (used to calculate hash for filename)
@@ -1015,11 +1015,18 @@ class MAVERICInteractiveQualityControl:
             url_hash = hashlib.md5(url.encode()).hexdigest()
             img_filename = f"img_{url_hash}.jpg"
 
-            # Load from dataset-specific images folder
+            # Try 1: Load from dataset-specific images folder (fastest, local)
             img_path = Path(images_dir) / img_filename
-
             if img_path.exists():
                 return Image.open(img_path).convert('RGB')
+
+            # Try 2: Fall back to global image_cache (may be on network drive)
+            # Get cache directory from config or use default
+            cache_base_dir = getattr(self, 'cache_base_dir', None)
+            if cache_base_dir:
+                cache_path = Path(cache_base_dir) / 'image_cache' / url_hash[:2] / img_filename
+                if cache_path.exists():
+                    return Image.open(cache_path).convert('RGB')
 
         except Exception:
             pass  # Silently fail for grid generation
