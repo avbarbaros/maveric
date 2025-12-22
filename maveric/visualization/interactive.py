@@ -1378,6 +1378,13 @@ class MAVERICInteractiveQualityControl:
             layout=widgets.Layout(width='150px', visibility='hidden')  # Hidden in Global mode
         )
 
+        reset_button = widgets.Button(
+            description='Reset',
+            button_style='danger',
+            icon='undo',
+            layout=widgets.Layout(width='100px')
+        )
+
         # Output widget for plot
         plot_output = widgets.Output()
 
@@ -1547,9 +1554,78 @@ class MAVERICInteractiveQualityControl:
                 status_display.value = f"<p style='color:red;'>❌ Error saving grids: {str(e)}</p>"
                 traceback.print_exc()
 
+        # Callback for reset button
+        def on_reset_clicked(b):
+            with plot_output:
+                clear_output(wait=True)
+                try:
+                    mode = mode_selector.value
+
+                    if mode == 'Global':
+                        # Global mode - restore data before Mahalanobis filter
+                        if self.data_before_mahalanobis is not None:
+                            self.filtered_data = self.data_before_mahalanobis.copy()
+                            self.data_before_mahalanobis = None  # Clear backup
+                            sample_count = len(self.filtered_data)
+                            print(f"🔄 Reset to data before Mahalanobis filter")
+                            print(f"   Total samples: {sample_count:,}")
+                            status_display.value = (
+                                f"<p style='color:green;'>✅ Global filter reset successfully<br>"
+                                f"<small>Restored {sample_count:,} samples</small></p>"
+                            )
+                        else:
+                            print("ℹ️  No previous Mahalanobis filter applied")
+                            status_display.value = "<p style='color:#666;'>ℹ️ No filter to reset</p>"
+
+                    else:
+                        # Class-Based mode - clear specific class data
+                        selected_class = class_selector.value
+                        if selected_class == 'Select class...':
+                            # No class selected - clear all class-based data
+                            if hasattr(self, 'class_based_filtered_data') and self.class_based_filtered_data:
+                                num_classes = len(self.class_based_filtered_data)
+                                self.class_based_filtered_data.clear()
+                                print(f"🔄 Cleared all class-based filtered data ({num_classes} classes)")
+                                status_display.value = (
+                                    f"<p style='color:green;'>✅ All class-based data cleared<br>"
+                                    f"<small>Removed {num_classes} classes</small></p>"
+                                )
+                            else:
+                                print("ℹ️  No class-based filtered data to clear")
+                                status_display.value = "<p style='color:#666;'>ℹ️ No class data to reset</p>"
+                        else:
+                            # Clear specific class
+                            if hasattr(self, 'class_based_filtered_data') and selected_class in self.class_based_filtered_data:
+                                sample_count = len(self.class_based_filtered_data[selected_class])
+                                del self.class_based_filtered_data[selected_class]
+
+                                # Re-consolidate remaining data
+                                if self.class_based_filtered_data:
+                                    self._consolidate_class_based_data()
+                                else:
+                                    # No more class data - restore original
+                                    if self.data_before_mahalanobis is not None:
+                                        self.filtered_data = self.data_before_mahalanobis.copy()
+
+                                print(f"🔄 Cleared filtered data for class '{selected_class}' ({sample_count:,} samples)")
+                                remaining_classes = len(self.class_based_filtered_data)
+                                status_display.value = (
+                                    f"<p style='color:green;'>✅ Class '{selected_class}' data cleared<br>"
+                                    f"<small>Remaining classes: {remaining_classes}</small></p>"
+                                )
+                            else:
+                                print(f"ℹ️  No filtered data for class '{selected_class}'")
+                                status_display.value = f"<p style='color:#666;'>ℹ️ No data for class '{selected_class}'</p>"
+
+                except Exception as e:
+                    import traceback
+                    status_display.value = f"<p style='color:red;'>❌ Error resetting: {str(e)}</p>"
+                    traceback.print_exc()
+
         apply_button.on_click(on_apply_clicked)
         add_data_button.on_click(on_add_data_clicked)
         save_filtered_button.on_click(on_save_filtered_clicked)
+        reset_button.on_click(on_reset_clicked)
 
         # Layout
         tab_content = widgets.VBox([
@@ -1562,7 +1638,8 @@ class MAVERICInteractiveQualityControl:
             widgets.HBox([
                 apply_button,
                 add_data_button,
-                save_filtered_button
+                save_filtered_button,
+                reset_button
             ], layout=widgets.Layout(margin='5px 0')),
             status_display,
             plot_output

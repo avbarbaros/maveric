@@ -35,10 +35,11 @@ When Class-Based mode is selected, additional controls appear:
    - **Consistency %ile**: Ideal point for consistency (1-99%, default: 95)
    - **Keep %ile**: Percentage of samples to keep (1-99%, default: 30)
 
-3. **Three Action Buttons**:
+3. **Four Action Buttons**:
    - **Apply Filter**: Generate analysis for selected class
    - **Add Data**: Add filtered class data to training dataset
    - **Save Filtered Data**: Save grid PNG files for visual inspection
+   - **Reset**: Clear filtered data (NEW)
 
 ---
 
@@ -243,6 +244,87 @@ def on_save_filtered_clicked(b):
         )
     else:
         status_display.value = "<p style='color:red;'>❌ Failed to save grid images.</p>"
+```
+
+---
+
+### 6. Reset Button (NEW)
+
+**Purpose**: Clear filtered data and return to original state
+
+**Behavior**: Mode-dependent reset functionality
+
+**Global Mode Reset**:
+```python
+def on_reset_clicked(b):
+    if mode == 'Global':
+        # Restore data before Mahalanobis filter
+        if self.data_before_mahalanobis is not None:
+            self.filtered_data = self.data_before_mahalanobis.copy()
+            self.data_before_mahalanobis = None  # Clear backup
+            print(f"🔄 Reset to data before Mahalanobis filter")
+            print(f"   Total samples: {sample_count:,}")
+        else:
+            print("ℹ️  No previous Mahalanobis filter applied")
+```
+
+**Class-Based Mode Reset** (No specific class selected):
+```python
+    else:  # Class-Based mode
+        if selected_class == 'Select class...':
+            # Clear all class-based data
+            if self.class_based_filtered_data:
+                num_classes = len(self.class_based_filtered_data)
+                self.class_based_filtered_data.clear()
+                print(f"🔄 Cleared all class-based filtered data ({num_classes} classes)")
+```
+
+**Class-Based Mode Reset** (Specific class selected):
+```python
+        else:
+            # Clear specific class
+            if selected_class in self.class_based_filtered_data:
+                sample_count = len(self.class_based_filtered_data[selected_class])
+                del self.class_based_filtered_data[selected_class]
+
+                # Re-consolidate remaining data
+                if self.class_based_filtered_data:
+                    self._consolidate_class_based_data()
+                else:
+                    # No more class data - restore original
+                    if self.data_before_mahalanobis is not None:
+                        self.filtered_data = self.data_before_mahalanobis.copy()
+
+                print(f"🔄 Cleared filtered data for class '{selected_class}' ({sample_count:,} samples)")
+```
+
+**Use Cases**:
+- **Global + Reset**: Undo Mahalanobis filter, restore all data from before filter
+- **Class-Based + No class + Reset**: Clear all accumulated class data
+- **Class-Based + Specific class + Reset**: Remove one class, re-consolidate remaining classes
+
+**Console Output Examples**:
+
+Global mode:
+```
+🔄 Reset to data before Mahalanobis filter
+   Total samples: 50,000
+✅ Global filter reset successfully
+   Restored 50,000 samples
+```
+
+Class-Based mode (no class selected):
+```
+🔄 Cleared all class-based filtered data (3 classes)
+✅ All class-based data cleared
+   Removed 3 classes
+```
+
+Class-Based mode (specific class):
+```
+🔄 Cleared filtered data for class 'airplane' (200 samples)
+✅ Class 'airplane' data cleared
+   Remaining classes: 2
 ```
 
 ---

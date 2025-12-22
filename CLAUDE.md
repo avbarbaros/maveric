@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **Apply Filter**: Generate class-specific analysis plot and statistics
   - **Add Data**: Accumulate filtered data from multiple classes
   - **Save Filtered Data**: Export grid PNG files (format: `datasetName_className_###.png`)
+  - **Reset Button**: Clear filtered data and return to original state (NEW)
 - **Location**: [interactive.py:1299-1567](maveric/visualization/interactive.py#L1299-L1567)
 - **New Methods**:
   - `_apply_mahalanobis_filter_class_based()`: [interactive.py:1832-1945](maveric/visualization/interactive.py#L1832-L1945)
@@ -56,10 +57,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   #   5. Click "Apply Filter" → See class-specific plot
   #   6. Click "Add Data" → Store filtered class
   #   7. (Optional) Click "Save Filtered Data" → Export grids
+  #   8. (Optional) Click "Reset" → Clear specific class or all data
   # After all classes added:
   # → Consolidated data available for Balance tab
   ```
-- **Documentation**: [MAHALANOBIS_CLASS_BASED_MODE.md](MAHALANOBIS_CLASS_BASED_MODE.md)
+- **Reset Button Behavior**:
+  - **Global Mode**: Restores data before Mahalanobis filter (undo filter)
+  - **Class-Based (no class)**: Clears ALL accumulated class data (start over)
+  - **Class-Based (specific class)**: Removes that class, re-consolidates remaining data
+- **Documentation**:
+  - [MAHALANOBIS_CLASS_BASED_MODE.md](MAHALANOBIS_CLASS_BASED_MODE.md)
+  - [MAHALANOBIS_RESET_BUTTON.md](MAHALANOBIS_RESET_BUTTON.md)
 
 ### December 21, 2025 - Mahalanobis Filter Tab Simplification
 
