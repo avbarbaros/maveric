@@ -1518,13 +1518,27 @@ class MAVERICInteractiveQualityControl:
                 count = len(class_data)
                 total_samples = sum(len(data) for data in self.class_based_filtered_data.values())
 
+                # Get total number of classes in dataset
+                if hasattr(self, 'data_before_mahalanobis') and self.data_before_mahalanobis is not None:
+                    total_classes_in_dataset = len(self.data_before_mahalanobis['label'].unique())
+                else:
+                    total_classes_in_dataset = len(self.filtered_data['label'].unique())
+
+                num_filtered_classes = len(self.class_based_filtered_data)
+                filtered_class_names = sorted(self.class_based_filtered_data.keys())
+
                 print(f"✅ Class '{selected_class}' data confirmed ({count:,} samples)")
                 print(f"📊 Total samples from all classes: {total_samples:,}")
-                print(f"📋 Classes with data: {', '.join(sorted(self.class_based_filtered_data.keys()))}")
+                print(f"📋 Filtered classes ({num_filtered_classes}/{total_classes_in_dataset}): {', '.join(filtered_class_names)}")
+
+                # Show remaining classes
+                if num_filtered_classes < total_classes_in_dataset:
+                    remaining = total_classes_in_dataset - num_filtered_classes
+                    print(f"⏳ Remaining classes to filter: {remaining}")
 
                 status_display.value = (
                     f"<p style='color:green;'>✅ Class '{selected_class}' added<br>"
-                    f"<small>Total classes: {len(self.class_based_filtered_data)} | Total samples: {total_samples:,}</small></p>"
+                    f"<small>Progress: {num_filtered_classes}/{total_classes_in_dataset} classes | {total_samples:,} samples</small></p>"
                 )
 
             except Exception as e:
@@ -1943,8 +1957,15 @@ class MAVERICInteractiveQualityControl:
             print("❌ 'label' column not found")
             return None
 
-        # Filter for selected class
-        class_df = self.filtered_data[self.filtered_data['label'] == class_name].copy()
+        # IMPORTANT: Always filter from original data (before any class-based filtering)
+        # Create backup on first class filter
+        if self.data_before_mahalanobis is None:
+            self.data_before_mahalanobis = self.filtered_data.copy()
+            print("💾 Backing up data for class-based filtering...")
+
+        # Filter for selected class from ORIGINAL data (not consolidated data)
+        source_data = self.data_before_mahalanobis
+        class_df = source_data[source_data['label'] == class_name].copy()
 
         if len(class_df) == 0:
             print(f"❌ No samples found for class '{class_name}'")
