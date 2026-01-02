@@ -1718,7 +1718,6 @@ class ELEVATERDataset(BaseDataset):
             ],
             'cifar10': [
                 "a photo of a {}.",
-                "a photo of a {}.",
                 "a blurry photo of a {}.",
                 "a black and white photo of a {}.",
                 "a low contrast photo of a {}.",
