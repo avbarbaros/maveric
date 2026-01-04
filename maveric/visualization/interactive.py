@@ -1363,6 +1363,61 @@ class MAVERICInteractiveQualityControl:
             style={'description_width': '100px'}
         )
 
+        # Keep count input (alternative to percentile)
+        keep_count_text = widgets.IntText(
+            value=0,
+            min=1,
+            description='Keep Count:',
+            layout=widgets.Layout(width='200px'),
+            style={'description_width': '100px'},
+            disabled=False
+        )
+
+        # Helper to get total sample count for current mode/class
+        def get_sample_count_for_filter():
+            """Get the number of samples that will be filtered"""
+            if self.filtered_data is None or len(self.filtered_data) == 0:
+                return 0
+
+            mode = mode_selector.value
+            if mode == 'Class-Based':
+                selected_class = class_selector.value
+                if selected_class == 'Select class...':
+                    return 0
+
+                # Use backup data if available
+                source_data = self.data_before_mahalanobis if self.data_before_mahalanobis is not None else self.filtered_data
+                class_data = source_data[source_data['label'] == selected_class]
+                return len(class_data)
+            else:
+                # Global mode
+                source_data = self.data_before_mahalanobis if self.data_before_mahalanobis is not None else self.filtered_data
+                return len(source_data)
+
+        # Callback for keep percentile change -> update count
+        def on_percentile_change(change):
+            total_samples = get_sample_count_for_filter()
+            if total_samples > 0:
+                count = int(total_samples * change['new'] / 100.0)
+                keep_count_text.value = max(1, count)
+
+        # Callback for keep count change -> update percentile
+        def on_count_change(change):
+            total_samples = get_sample_count_for_filter()
+            if total_samples > 0 and change['new'] > 0:
+                percentile = (change['new'] / total_samples) * 100.0
+                percentile = min(99.0, max(1.0, percentile))
+                keep_percentile_text.value = round(percentile, 1)
+
+        keep_percentile_text.observe(on_percentile_change, names='value')
+        keep_count_text.observe(on_count_change, names='value')
+
+        # Initialize keep_count based on initial percentile
+        total_samples = get_sample_count_for_filter()
+        if total_samples > 0:
+            initial_count = int(total_samples * keep_percentile_text.value / 100.0)
+            keep_count_text.value = max(1, initial_count)
+
         # Buttons
         apply_button = widgets.Button(
             description='Apply Filter',
@@ -1419,7 +1474,21 @@ class MAVERICInteractiveQualityControl:
                 add_data_button.layout.visibility = 'hidden'
                 save_filtered_button.layout.visibility = 'hidden'
 
+            # Update keep_count based on new mode
+            total_samples = get_sample_count_for_filter()
+            if total_samples > 0:
+                count = int(total_samples * keep_percentile_text.value / 100.0)
+                keep_count_text.value = max(1, count)
+
+        # Update keep_count when class selection changes
+        def on_class_change(change):
+            total_samples = get_sample_count_for_filter()
+            if total_samples > 0:
+                count = int(total_samples * keep_percentile_text.value / 100.0)
+                keep_count_text.value = max(1, count)
+
         mode_selector.observe(on_mode_change, names='value')
+        class_selector.observe(on_class_change, names='value')
 
         # Callback for apply button
         def on_apply_clicked(b):
@@ -1653,8 +1722,11 @@ class MAVERICInteractiveQualityControl:
             widgets.HBox([mode_selector, class_selector], layout=widgets.Layout(margin='5px 0')),
             widgets.HBox([
                 weighted_percentile_text,
-                consistency_percentile_text,
-                keep_percentile_text
+                consistency_percentile_text
+            ], layout=widgets.Layout(margin='5px 0')),
+            widgets.HBox([
+                keep_percentile_text,
+                keep_count_text
             ], layout=widgets.Layout(margin='5px 0')),
             widgets.HBox([
                 apply_button,
