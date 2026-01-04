@@ -4,7 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### December 22, 2025 - Mahalanobis Filter Global & Class-Based Modes (LATEST)
+### January 4, 2026 - Keep Count Feature for Mahalanobis Filter (LATEST)
+
+**Enhancement: Dual Input Method for Sample Selection**:
+- **Purpose**: Allow users to specify filtering criteria using either percentages or exact counts
+- **New Features**:
+  - **Keep Count Input**: IntText widget for entering exact sample count (e.g., 350 for exactly 350 samples)
+  - **Bidirectional Sync**: Percentile ↔ Count auto-update in real-time
+  - **Priority Logic**: Keep Count takes priority when specified (> 0), falls back to Keep Percentile otherwise
+  - **Context-Aware**: Automatically updates when switching modes or classes
+  - **Exact Filtering**: User gets **exactly** the number of samples requested (not approximate)
+- **Location**: [interactive.py:1366-1491, 1493-1582, 1764-1906, 2033-2162](maveric/visualization/interactive.py)
+- **Modified Methods**:
+  - `_apply_mahalanobis_filter()`: Now accepts `keep_count` parameter, uses it when specified
+  - `_apply_mahalanobis_filter_class_based()`: Now accepts `keep_count` parameter, uses it when specified
+  - Apply Filter callback: Passes both percentile and count to filtering methods
+- **Benefits**:
+  - **Flexible Input**: Think in percentages (30%) or absolute counts (350 samples)
+  - **Precision**: Get exactly N samples (no rounding errors)
+  - **User-Friendly**: See both values, change either one
+  - **Automatic**: No mental math required
+- **Usage Example**:
+  ```python
+  # Global mode: Enter 5000 in Keep Count → filters to exactly 5,000 samples
+  # Keep Percentile auto-updates to 10.0 (if dataset has 50,000 samples)
+
+  # Class-Based mode: Enter 350 in Keep Count → filters class to exactly 350 samples
+  # Keep Percentile auto-updates to corresponding percentage for that class
+  ```
+- **Console Output**:
+  ```
+  🎯 Keeping exactly 350 samples (requested: 350)
+  ✅ Kept 350 / 5,000 samples for class 'airplane'
+  ```
+- **Documentation**: [KEEP_COUNT_IMPLEMENTATION.md](KEEP_COUNT_IMPLEMENTATION.md)
+
+### December 22, 2025 - Mahalanobis Filter Global & Class-Based Modes
 
 **Enhancement: Dual-Mode Mahalanobis Filtering System**:
 - **Purpose**: Support both global (all classes) and class-based (per-class) filtering workflows

@@ -1497,6 +1497,7 @@ class MAVERICInteractiveQualityControl:
                 try:
                     mode = mode_selector.value
                     keep_percentage = keep_percentile_text.value
+                    keep_count = keep_count_text.value
                     weighted_pct = weighted_percentile_text.value
                     consistency_pct = consistency_percentile_text.value
 
@@ -1511,10 +1512,16 @@ class MAVERICInteractiveQualityControl:
                             self.filtered_data = self.data_before_mahalanobis.copy()
 
                         original_count = len(self.filtered_data)
-                        status_display.value = f"<p style='color:blue;'>⏳ Applying global Mahalanobis filter ({keep_percentage}%)...</p>"
+
+                        # Determine display message based on keep_count
+                        if keep_count > 0:
+                            status_display.value = f"<p style='color:blue;'>⏳ Applying global Mahalanobis filter (keeping {keep_count:,} samples)...</p>"
+                        else:
+                            status_display.value = f"<p style='color:blue;'>⏳ Applying global Mahalanobis filter ({keep_percentage}%)...</p>"
 
                         result = self._apply_mahalanobis_filter(
                             keep_percentile=keep_percentage,
+                            keep_count=keep_count,
                             weighted_percentile=weighted_pct,
                             consistency_percentile=consistency_pct,
                             per_class=False
@@ -1529,10 +1536,17 @@ class MAVERICInteractiveQualityControl:
                         print("\n")
                         self._show_mahalanobis_statistics(original_count, new_count, keep_percentage)
 
-                        status_display.value = (
-                            f"<p style='color:green;'>✅ Global filter applied successfully<br>"
-                            f"<small>Kept top {keep_percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
-                        )
+                        # Update status display based on actual method used
+                        if keep_count > 0:
+                            status_display.value = (
+                                f"<p style='color:green;'>✅ Global filter applied successfully<br>"
+                                f"<small>Kept {new_count:,} / {original_count:,} samples</small></p>"
+                            )
+                        else:
+                            status_display.value = (
+                                f"<p style='color:green;'>✅ Global filter applied successfully<br>"
+                                f"<small>Kept top {keep_percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
+                            )
                     else:
                         # Class-Based mode - filter selected class
                         selected_class = class_selector.value
@@ -1540,12 +1554,17 @@ class MAVERICInteractiveQualityControl:
                             status_display.value = "<p style='color:red;'>❌ Please select a class first.</p>"
                             return
 
-                        status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}'...</p>"
+                        # Determine display message based on keep_count
+                        if keep_count > 0:
+                            status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}' (keeping {keep_count:,} samples)...</p>"
+                        else:
+                            status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}'...</p>"
 
                         # Filter for selected class only
                         result = self._apply_mahalanobis_filter_class_based(
                             class_name=selected_class,
                             keep_percentile=keep_percentage,
+                            keep_count=keep_count,
                             weighted_percentile=weighted_pct,
                             consistency_percentile=consistency_pct
                         )
@@ -1742,12 +1761,13 @@ class MAVERICInteractiveQualityControl:
 
         return tab_content
 
-    def _apply_mahalanobis_filter(self, keep_percentile, weighted_percentile=95, consistency_percentile=95, per_class=False):
+    def _apply_mahalanobis_filter(self, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95, per_class=False):
         """
         Apply Mahalanobis distance filtering to select samples closest to ideal point.
 
         Args:
-            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%)
+            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified.
+            keep_count: Exact number of samples to keep (e.g., 350 for exactly 350 samples). Takes priority over keep_percentile.
             weighted_percentile: Percentile for weighted_class_score ideal point (default: 95)
             consistency_percentile: Percentile for consistency ideal point (default: 95)
             per_class: If True, apply filtering separately for each class
@@ -1830,7 +1850,11 @@ class MAVERICInteractiveQualityControl:
                 class_distances = distances[df['label'] == class_name]
 
                 # Calculate threshold for this class
-                n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+                # Use keep_count if specified, otherwise use keep_percentile
+                if keep_count is not None and keep_count > 0:
+                    n_keep = min(keep_count, len(class_df))
+                else:
+                    n_keep = max(1, int(len(class_df) * keep_percentile / 100))
                 threshold = np.partition(class_distances, n_keep-1)[n_keep-1] if n_keep < len(class_distances) else class_distances.max()
 
                 # Filter
@@ -1842,8 +1866,14 @@ class MAVERICInteractiveQualityControl:
             filtered_df = pd.concat(filtered_dfs, ignore_index=True)
         else:
             # Global filtering
-            print(f"📊 Applying global Mahalanobis filtering...")
-            n_keep = max(1, int(len(df) * keep_percentile / 100))
+            # Use keep_count if specified, otherwise use keep_percentile
+            if keep_count is not None and keep_count > 0:
+                print(f"📊 Applying global Mahalanobis filtering (keeping {keep_count:,} samples)...")
+                n_keep = min(keep_count, len(df))
+            else:
+                print(f"📊 Applying global Mahalanobis filtering...")
+                n_keep = max(1, int(len(df) * keep_percentile / 100))
+
             threshold = np.partition(distances, n_keep-1)[n_keep-1] if n_keep < len(distances) else distances.max()
 
             # Create mask
@@ -1864,7 +1894,8 @@ class MAVERICInteractiveQualityControl:
             'correlation': correlation,
             'all_samples': all_samples_info,
             'selected_mask': mask if not per_class else None,
-            'keep_percentile': keep_percentile,
+            'keep_percentile': keep_percentile if keep_count is None or keep_count <= 0 else (len(filtered_df) / len(df) * 100),
+            'keep_count': keep_count,
             'per_class': per_class
         }
 
@@ -1999,13 +2030,14 @@ class MAVERICInteractiveQualityControl:
         else:
             print("📋 Class Distribution: No label column available")
 
-    def _apply_mahalanobis_filter_class_based(self, class_name, keep_percentile, weighted_percentile=95, consistency_percentile=95):
+    def _apply_mahalanobis_filter_class_based(self, class_name, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95):
         """
         Apply Mahalanobis distance filtering to a specific class only.
 
         Args:
             class_name: Name of the class to filter
-            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%)
+            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified.
+            keep_count: Exact number of samples to keep (e.g., 350 for exactly 350 samples). Takes priority over keep_percentile.
             weighted_percentile: Percentile for weighted_class_score ideal point
             consistency_percentile: Percentile for consistency ideal point
 
@@ -2086,7 +2118,14 @@ class MAVERICInteractiveQualityControl:
         }
 
         # Calculate threshold and filter
-        n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+        # Use keep_count if specified, otherwise use keep_percentile
+        if keep_count is not None and keep_count > 0:
+            n_keep = min(keep_count, len(class_df))
+            print(f"🎯 Keeping exactly {n_keep:,} samples (requested: {keep_count:,})")
+        else:
+            n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+            print(f"🎯 Keeping top {keep_percentile}% ({n_keep:,} samples)")
+
         threshold = np.partition(distances, n_keep-1)[n_keep-1] if n_keep < len(distances) else distances.max()
 
         mask = distances <= threshold
@@ -2107,7 +2146,8 @@ class MAVERICInteractiveQualityControl:
             'correlation': correlation,
             'all_samples': all_samples_info,
             'selected_mask': mask,
-            'keep_percentile': keep_percentile,
+            'keep_percentile': keep_percentile if keep_count is None or keep_count <= 0 else (len(filtered_class_df) / len(class_df) * 100),
+            'keep_count': keep_count,
             'weighted_percentile': weighted_percentile,
             'consistency_percentile': consistency_percentile
         }
