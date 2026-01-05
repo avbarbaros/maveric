@@ -1,7 +1,7 @@
 """Configuration management for MAVERIC."""
 
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 import yaml
 import json
 from pathlib import Path
@@ -271,7 +271,19 @@ class TrainingConfig:
     use_augmentation: bool = True
     augmentation_strength: int = 2  # For RandAugment
     augmentation_magnitude: int = 9  # For RandAugment
-    
+
+    # Domain adaptation (simulates test data characteristics)
+    use_domain_adaptation: bool = False
+    domain_blur_probability: float = 0.3
+    domain_blur_sigma_range: Tuple[float, float] = (0.1, 2.0)
+    domain_jpeg_probability: float = 0.3
+    domain_jpeg_quality_range: Tuple[int, int] = (30, 95)
+    domain_downsample_probability: float = 0.3
+    # Fixed target size for datasets like CIFAR-10 (32), MNIST (28), etc.
+    domain_target_size: Optional[int] = None  # None = use scale_range
+    # Scale range fallback for generic datasets
+    domain_downsample_scale_range: Tuple[float, float] = (0.5, 0.9)
+
     # Optimization
     optimizer: str = "adamw"  # adamw, adam, sgd
     scheduler: str = "cosine"  # cosine, linear, constant

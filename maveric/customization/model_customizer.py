@@ -240,6 +240,16 @@ class ModelCustomizer(BaseComponent):
                 'num_ops': training_config.augmentation_strength,
                 'magnitude': training_config.augmentation_magnitude
             },
+            use_domain_adaptation=training_config.use_domain_adaptation,
+            domain_adaptation_config={
+                'blur_prob': training_config.domain_blur_probability,
+                'blur_sigma': training_config.domain_blur_sigma_range,
+                'jpeg_prob': training_config.domain_jpeg_probability,
+                'jpeg_quality': training_config.domain_jpeg_quality_range,
+                'downsample_prob': training_config.domain_downsample_probability,
+                'target_size': training_config.domain_target_size,
+                'downsample_scale': training_config.domain_downsample_scale_range
+            },
             cache_dir=self.cache_base_dir,
             training_data_path=quality_result.source_path  # Use dataset-specific images folder
         )
@@ -834,6 +844,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                  processor: CLIPProcessor,
                  use_augmentation: bool = True,
                  augmentation_config: Optional[Dict] = None,
+                 use_domain_adaptation: bool = False,
+                 domain_adaptation_config: Optional[Dict] = None,
                  cache_dir: Optional[str] = None,
                  training_data_path: Optional[str] = None):
         """
@@ -845,6 +857,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             processor: CLIP processor
             use_augmentation: Whether to use data augmentation
             augmentation_config: Augmentation configuration
+            use_domain_adaptation: Whether to use domain adaptation
+            domain_adaptation_config: Domain adaptation configuration
             cache_dir: Directory for caching images (global cache)
             training_data_path: Path to training data JSON (for dataset-specific cache)
         """
@@ -859,6 +873,10 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         # Setup augmentation configuration
         self.use_augmentation = use_augmentation
         self.augmentation_config = augmentation_config or {}
+
+        # Setup domain adaptation configuration
+        self.use_domain_adaptation = use_domain_adaptation
+        self.domain_adaptation_config = domain_adaptation_config or {}
 
         # Setup image caching - prioritize dataset-specific images folder
         if training_data_path:
@@ -993,12 +1011,70 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         # Fallback - this should rarely happen since we pre-filtered
         return self._create_placeholder_image()
     
+    def _apply_domain_adaptation(self, image):
+        """
+        Apply domain adaptation transforms to simulate test data characteristics.
+        Applied AFTER RandAugment to ensure domain match.
+
+        Transforms include:
+        - Gaussian blur (simulates low quality/pixelation)
+        - JPEG compression (adds compression artifacts)
+        - Downsample/upsample (simulates resolution degradation)
+        """
+        import random
+        import numpy as np
+        from PIL import ImageFilter
+        import io
+
+        config = self.domain_adaptation_config
+
+        # 1. Gaussian Blur (simulates low quality/pixelation)
+        blur_prob = config.get('blur_prob', 0.3)
+        if random.random() < blur_prob:
+            blur_sigma_range = config.get('blur_sigma', [0.1, 2.0])
+            sigma = random.uniform(blur_sigma_range[0], blur_sigma_range[1])
+            image = image.filter(ImageFilter.GaussianBlur(radius=sigma))
+
+        # 2. JPEG Compression (adds compression artifacts)
+        jpeg_prob = config.get('jpeg_prob', 0.3)
+        if random.random() < jpeg_prob:
+            jpeg_quality_range = config.get('jpeg_quality', [30, 95])
+            quality = random.randint(jpeg_quality_range[0], jpeg_quality_range[1])
+            # Simulate JPEG compression by saving and loading from buffer
+            buffer = io.BytesIO()
+            image.save(buffer, format='JPEG', quality=quality)
+            buffer.seek(0)
+            image = Image.open(buffer).convert('RGB')
+
+        # 3. Downsample/Upsample (simulates resolution degradation)
+        downsample_prob = config.get('downsample_prob', 0.3)
+        if random.random() < downsample_prob:
+            original_size = image.size
+
+            # Check if we have a target size (e.g., 32 for CIFAR-10/100, 28 for MNIST)
+            target_size = config.get('target_size', None)
+
+            if target_size is not None:
+                # Downscale to target size then upscale back to original
+                image = image.resize((target_size, target_size), Image.BILINEAR)
+                image = image.resize(original_size, Image.BILINEAR)
+            else:
+                # Use scale range for continuous downsampling
+                scale_range = config.get('downsample_scale', [0.5, 0.9])
+                scale = random.uniform(scale_range[0], scale_range[1])
+                small_size = (int(original_size[0] * scale), int(original_size[1] * scale))
+                # Downsample then upsample back
+                image = image.resize(small_size, Image.BILINEAR)
+                image = image.resize(original_size, Image.BILINEAR)
+
+        return image
+
     def _apply_transforms(self, image):
-        """Apply appropriate transforms based on augmentation settings"""
+        """Apply appropriate transforms based on augmentation and domain adaptation settings"""
         if self.use_augmentation:
             try:
                 from torchvision import transforms
-                
+
                 # Convert PIL to tensor for RandAugment, then back to PIL
                 tensor_image = transforms.PILToTensor()(image)
                 # Apply RandAugment (note: RandAugment expects tensor input)
@@ -1009,13 +1085,21 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                 )(tensor_image)
                 # Convert back to PIL Image
                 augmented_image = transforms.ToPILImage()(augmented_tensor)
+
+                # Apply domain adaptation AFTER RandAugment (if enabled)
+                if self.use_domain_adaptation:
+                    augmented_image = self._apply_domain_adaptation(augmented_image)
+
                 return augmented_image
             except Exception as e:
                 print(f"Error applying augmentation, using original image: {str(e)}")
                 # Fallback to basic resize if augmentation fails
                 return image.resize((224, 224)) if image.size != (224, 224) else image
         else:
-            # Just resize if no augmentation
+            # Apply domain adaptation even without RandAugment (if enabled)
+            if self.use_domain_adaptation:
+                image = self._apply_domain_adaptation(image)
+            # Resize to 224x224
             return image.resize((224, 224)) if image.size != (224, 224) else image
     
     def __getitem__(self, idx):
