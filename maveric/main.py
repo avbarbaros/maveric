@@ -262,7 +262,8 @@ class MAVERIC(BaseComponent):
                        model_name: str = None,
                        training_config: Optional[TrainingConfig] = None,
                        target_dataset: str = None,
-                       class_names: Optional[List[str]] = None) -> CustomizationResult:
+                       class_names: Optional[List[str]] = None,
+                       save_augmented_grids: bool = False) -> CustomizationResult:
         """
         Customize pre-trained model using filtered samples.
 
@@ -272,6 +273,7 @@ class MAVERIC(BaseComponent):
             training_config: Training configuration (uses defaults if None)
             target_dataset: Target dataset name for customization (REQUIRED for test evaluation)
             class_names: List of class names from ELEVATER_DATASETS (uses training data labels if None)
+            save_augmented_grids: If True, save 10x10 grid visualizations of augmented/domain-adapted samples
 
         Returns:
             CustomizationResult with trained model and metrics
@@ -344,7 +346,8 @@ class MAVERIC(BaseComponent):
             quality_result=quality_result,
             training_config=training_config,
             target_dataset_name=target_dataset or "custom",
-            class_names=class_names
+            class_names=class_names,
+            save_augmented_grids=save_augmented_grids
         )
         
         return result

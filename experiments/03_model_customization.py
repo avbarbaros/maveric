@@ -218,7 +218,13 @@ Note: The model will be evaluated on the actual test set of the target dataset a
         default=None,
         help='Batch size (overrides config)'
     )
-    
+
+    parser.add_argument(
+        '--save-augmented-grids',
+        action='store_true',
+        help='Save 10x10 grid visualizations of augmented/domain-adapted training samples for inspection'
+    )
+
     return parser.parse_args()
 
 
@@ -420,7 +426,8 @@ def main():
             model_name=config.get('clip_model', 'ViT-B/32'),
             training_config=training_config,
             target_dataset=target_dataset,
-            class_names=class_names  # Pass ELEVATER_DATASETS class names for accurate evaluation
+            class_names=class_names,  # Pass ELEVATER_DATASETS class names for accurate evaluation
+            save_augmented_grids=args.save_augmented_grids  # Save grid visualizations if requested
         )
         
         if customization_result is None:

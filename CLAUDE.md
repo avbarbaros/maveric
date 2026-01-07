@@ -4,48 +4,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### January 5, 2026 - Domain Adaptation for Training (LATEST)
+### January 7, 2026 - Domain Adaptation Implementation Complete (LATEST)
 
-**Enhancement: Domain Adaptation Transforms for Better Generalization**:
+**Enhancement: Complete Domain Adaptation System with Visual Inspection**:
 - **Purpose**: Simulate test data characteristics during training to improve model robustness
-- **New Features**:
+- **Core Features**:
   - **Gaussian Blur**: Simulates low quality, pixelation, or motion blur (configurable probability and sigma range)
   - **JPEG Compression**: Adds compression artifacts typical of web images (configurable quality range)
   - **Resolution Degradation**: Simulates downsampled/lower resolution images (fixed target or scale range)
+  - **Applied After Augmentation**: Domain transforms applied after RandAugment for proper pipeline order
   - **Flexible Configuration**: Works with or without RandAugment, dataset-specific parameters
-  - **Applied After Augmentation**: Domain transforms applied after RandAugment for proper pipeline
-- **Location**: [model_customizer.py:877-879, 1014-1103](maveric/customization/model_customizer.py)
+- **New Features** (January 7):
+  - **Grid Visualization**: Save 10×10 grids of augmented/domain-adapted samples for manual inspection
+  - **CLI Control**: `--save-augmented-grids` flag in `03_model_customization.py`
+  - **Console Logging**: Detailed output showing augmentation and domain adaptation settings
+  - **Error Handling**: Graceful fallback if domain adaptation fails
+- **Location**:
+  - Core implementation: [model_customizer.py:1042-1076, 1160-1197](maveric/customization/model_customizer.py)
+  - Grid visualization: [model_customizer.py:1078-1158](maveric/customization/model_customizer.py)
+  - Console logging: [model_customizer.py:263-281](maveric/customization/model_customizer.py)
 - **Configuration**: [maveric_config.yaml:88-107](experiments/maveric_config.yaml)
-- **New Methods**:
-  - `_apply_domain_adaptation()`: Applies domain-specific transforms (blur, JPEG, downsample)
-  - Updated `_apply_transforms()`: Integrates domain adaptation into transform pipeline
-  - Updated `__init__()`: Stores domain adaptation config
 - **Benefits**:
-  - **+1-2% Accuracy**: Improvement on degraded test sets (CIFAR-10/100, Food101)
-  - **Robustness**: Better handling of real-world image quality variations
+  - **Visual Confirmation**: Inspect domain-adapted samples before training starts
+  - **Transparency**: Console shows exactly what transforms are active
+  - **Robustness**: Error handling prevents training crashes from bad transforms
+  - **+1-2% Accuracy**: Expected improvement on degraded test sets (CIFAR-10/100, Food101)
   - **Flexible**: Easy to enable/disable, per-dataset configuration
   - **Minimal Overhead**: Only 10-15% training time increase
-- **Usage Example**:
+- **Configuration Example** (maveric_config.yaml):
   ```yaml
   training:
     use_domain_adaptation: true
     domain_blur_probability: 0.3
     domain_jpeg_probability: 0.3
     domain_downsample_probability: 0.3
-    domain_target_size: 32  # CIFAR-10/100 = 32, MNIST = 28
+    domain_target_size: 32  # CIFAR-10/100 = 32, MNIST = 28, null = use scale_range
+  ```
+- **CLI Usage** (with grid visualization):
+  ```bash
+  python experiments/03_model_customization.py \
+      --input ./results/cifar10/curated/ \
+      --config experiments/maveric_config.yaml \
+      --save-augmented-grids
   ```
 - **Console Output**:
   ```
-  📦 Creating training dataset with domain adaptation...
+  📦 Creating training dataset...
      Augmentation: RandAugment (num_ops=7, magnitude=22)
      Domain Adaptation: Enabled
         - Blur probability: 30.0%
         - JPEG probability: 30.0%
         - Downsample probability: 30.0%
         - Target size: 32x32 (CIFAR-10/100 mode)
+
+  📸 Saving augmented sample grids for visual inspection...
+  ✅ Saved augmented samples grid to: results/cifar10/models/augmented_grids/cifar10_augmented_grid.png
+     Grid shows effects of:
+     - RandAugment (ops=7, mag=22)
+     - Domain Adaptation (blur/JPEG/downsample)
   ```
+- **Grid Output Location**: `{checkpoint_dir}/../augmented_grids/{dataset_name}_augmented_grid.png`
 - **Testing**: [test_domain_adaptation.py](test_domain_adaptation.py) - Comprehensive test suite
-- **Documentation**: [DOMAIN_ADAPTATION_IMPLEMENTATION.md](DOMAIN_ADAPTATION_IMPLEMENTATION.md)
+- **Documentation**:
+  - [DOMAIN_ADAPTATION_IMPLEMENTATION.md](DOMAIN_ADAPTATION_IMPLEMENTATION.md) - Initial implementation
+  - [DOMAIN_ADAPTATION_IMPROVEMENTS_SUMMARY.md](DOMAIN_ADAPTATION_IMPROVEMENTS_SUMMARY.md) - Complete feature list
 
 ### January 4, 2026 - Keep Count Feature for Mahalanobis Filter
 
