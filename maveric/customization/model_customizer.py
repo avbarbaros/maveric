@@ -822,8 +822,70 @@ class CustomizedCLIP(nn.Module):
         with torch.no_grad():
             text_embeds = self.clip_model.get_text_features(**tokens)
             text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
-        
+
         return text_embeds
+
+    def _save_augmented_grids(self, dataset, dataset_name, training_config):
+        """Save 10x10 grid visualizations of augmented/domain-adapted training samples."""
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+
+        self.log_info("📸 Saving augmented sample grids for visual inspection...")
+
+        # Create output directory
+        output_dir = Path(self.checkpoint_dir).parent / 'augmented_grids'
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Sample 100 random indices
+        num_samples = min(100, len(dataset))
+        indices = random.sample(range(len(dataset)), num_samples)
+
+        # Create figure with 10x10 grid
+        fig = plt.figure(figsize=(30, 30))
+        gs = gridspec.GridSpec(10, 10, figure=fig, hspace=0.3, wspace=0.3)
+
+        for idx, sample_idx in enumerate(indices):
+            try:
+                # Get augmented/domain-adapted image from dataset
+                image, text, label = dataset[sample_idx]
+
+                # Convert CLIP processor output to displayable format
+                if hasattr(image, 'numpy'):
+                    # If it's a tensor, convert to numpy
+                    img_array = image.permute(1, 2, 0).numpy()
+                    # Denormalize if needed (CLIP uses mean=[0.48145466, 0.45782750, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+                    img_array = img_array * np.array([0.26862954, 0.26130258, 0.27577711]) + np.array([0.48145466, 0.45782750, 0.40821073])
+                    img_array = np.clip(img_array, 0, 1)
+                else:
+                    img_array = np.array(image) / 255.0 if np.array(image).max() > 1 else np.array(image)
+
+                # Create subplot
+                ax = fig.add_subplot(gs[idx // 10, idx % 10])
+                ax.imshow(img_array)
+                ax.axis('off')
+
+                # Add label
+                class_name = dataset.class_names[label] if hasattr(dataset, 'class_names') else f'Class {label}'
+                ax.set_title(f'{class_name}\n#{sample_idx}', fontsize=8)
+
+            except Exception as e:
+                self.log_warning(f"Failed to process sample {sample_idx}: {e}")
+                continue
+
+        # Save figure
+        output_file = output_dir / f'{dataset_name}_augmented_grid.png'
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+
+        self.log_info(f"✅ Saved augmented samples grid to: {output_file}")
+
+        # Print summary of what transforms are shown
+        if training_config.use_augmentation or training_config.use_domain_adaptation:
+            self.log_info("   Grid shows effects of:")
+            if training_config.use_augmentation:
+                self.log_info(f"   - RandAugment (ops={training_config.augmentation_strength}, mag={training_config.augmentation_magnitude})")
+            if training_config.use_domain_adaptation:
+                self.log_info("   - Domain Adaptation (blur/JPEG/downsample)")
 
 
 class TestDataset(torch.utils.data.Dataset):
@@ -1091,71 +1153,6 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                 image = image.resize(original_size, Image.BILINEAR)
 
         return image
-
-    def _save_augmented_grids(self, dataset, dataset_name, training_config):
-        """Save 10x10 grid visualizations of augmented/domain-adapted training samples."""
-        import matplotlib.pyplot as plt
-        import matplotlib.gridspec as gridspec
-        from pathlib import Path
-        import random
-        import numpy as np
-
-        self.log_info("📸 Saving augmented sample grids for visual inspection...")
-
-        # Create output directory
-        output_dir = Path(self.checkpoint_dir).parent / 'augmented_grids'
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Sample 100 random indices
-        num_samples = min(100, len(dataset))
-        indices = random.sample(range(len(dataset)), num_samples)
-
-        # Create figure with 10x10 grid
-        fig = plt.figure(figsize=(30, 30))
-        gs = gridspec.GridSpec(10, 10, figure=fig, hspace=0.3, wspace=0.3)
-
-        for idx, sample_idx in enumerate(indices):
-            try:
-                # Get augmented/domain-adapted image from dataset
-                image, text, label = dataset[sample_idx]
-
-                # Convert CLIP processor output to displayable format
-                if hasattr(image, 'numpy'):
-                    # If it's a tensor, convert to numpy
-                    img_array = image.permute(1, 2, 0).numpy()
-                    # Denormalize if needed (CLIP uses mean=[0.48145466, 0.45782750, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
-                    img_array = img_array * np.array([0.26862954, 0.26130258, 0.27577711]) + np.array([0.48145466, 0.45782750, 0.40821073])
-                    img_array = np.clip(img_array, 0, 1)
-                else:
-                    img_array = np.array(image) / 255.0 if np.array(image).max() > 1 else np.array(image)
-
-                # Create subplot
-                ax = fig.add_subplot(gs[idx // 10, idx % 10])
-                ax.imshow(img_array)
-                ax.axis('off')
-
-                # Add label
-                class_name = dataset.class_names[label] if hasattr(dataset, 'class_names') else f'Class {label}'
-                ax.set_title(f'{class_name}\n#{sample_idx}', fontsize=8)
-
-            except Exception as e:
-                self.log_warning(f"Failed to process sample {sample_idx}: {e}")
-                continue
-
-        # Save figure
-        output_file = output_dir / f'{dataset_name}_augmented_grid.png'
-        plt.savefig(output_file, dpi=150, bbox_inches='tight')
-        plt.close(fig)
-
-        self.log_info(f"✅ Saved augmented samples grid to: {output_file}")
-
-        # Print summary of what transforms are shown
-        if training_config.use_augmentation or training_config.use_domain_adaptation:
-            self.log_info("   Grid shows effects of:")
-            if training_config.use_augmentation:
-                self.log_info(f"   - RandAugment (ops={training_config.augmentation_strength}, mag={training_config.augmentation_magnitude})")
-            if training_config.use_domain_adaptation:
-                self.log_info("   - Domain Adaptation (blur/JPEG/downsample)")
 
     def _apply_transforms(self, image):
         """Apply appropriate transforms based on augmentation and domain adaptation settings"""
