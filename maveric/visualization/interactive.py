@@ -1318,7 +1318,7 @@ class MAVERICInteractiveQualityControl:
         )
 
         # Class selector (for Class-Based mode)
-        class_options = ['Select class...']
+        class_options = ['Select class...', 'ALL']  # Added 'ALL' option for batch processing
         if self.filtered_data is not None and 'label' in self.filtered_data.columns:
             class_options.extend(sorted(self.filtered_data['label'].unique()))
 
@@ -1465,7 +1465,7 @@ class MAVERICInteractiveQualityControl:
 
                 # Update class options from current filtered data
                 if self.filtered_data is not None and 'label' in self.filtered_data.columns:
-                    classes = ['Select class...'] + sorted(self.filtered_data['label'].unique())
+                    classes = ['Select class...', 'ALL'] + sorted(self.filtered_data['label'].unique())
                     class_selector.options = classes
                     class_selector.value = classes[0]
             else:
@@ -1548,38 +1548,120 @@ class MAVERICInteractiveQualityControl:
                                 f"<small>Kept top {keep_percentage}% ({new_count:,} / {original_count:,} samples)</small></p>"
                             )
                     else:
-                        # Class-Based mode - filter selected class
+                        # Class-Based mode - filter selected class or ALL classes
                         selected_class = class_selector.value
                         if selected_class == 'Select class...':
                             status_display.value = "<p style='color:red;'>❌ Please select a class first.</p>"
                             return
 
-                        # Determine display message based on keep_count
-                        if keep_count > 0:
-                            status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}' (keeping {keep_count:,} samples)...</p>"
+                        if selected_class == 'ALL':
+                            # Batch process all classes
+                            # Get all unique classes
+                            if self.data_before_mahalanobis is not None:
+                                source_data = self.data_before_mahalanobis
+                            else:
+                                source_data = self.filtered_data
+
+                            all_classes = sorted(source_data['label'].unique())
+                            total_classes = len(all_classes)
+
+                            # Display start message
+                            if keep_count > 0:
+                                status_display.value = f"<p style='color:blue;'>⏳ Batch processing {total_classes} classes (keeping {keep_count:,} samples per class)...</p>"
+                            else:
+                                status_display.value = f"<p style='color:blue;'>⏳ Batch processing {total_classes} classes (keeping {keep_percentage}% per class)...</p>"
+
+                            print(f"\n🔄 Starting batch processing for {total_classes} classes...")
+                            print("=" * 60)
+
+                            # Process each class
+                            successful = 0
+                            failed = 0
+                            results_summary = []
+
+                            for i, class_name in enumerate(all_classes, 1):
+                                try:
+                                    # Filter this class
+                                    result = self._apply_mahalanobis_filter_class_based(
+                                        class_name=class_name,
+                                        keep_percentile=keep_percentage,
+                                        keep_count=keep_count,
+                                        weighted_percentile=weighted_pct,
+                                        consistency_percentile=consistency_pct
+                                    )
+
+                                    if result is not None:
+                                        successful += 1
+                                        results_summary.append({
+                                            'class': class_name,
+                                            'before': result['samples_before'],
+                                            'after': result['samples_after'],
+                                            'percentage': (result['samples_after'] / result['samples_before'] * 100) if result['samples_before'] > 0 else 0
+                                        })
+                                        # Show progress every 10 classes or at end
+                                        if i % 10 == 0 or i == total_classes:
+                                            print(f"   Progress: {i}/{total_classes} classes processed ({successful} successful, {failed} failed)")
+                                    else:
+                                        failed += 1
+                                        print(f"   ⚠️  Failed to filter class '{class_name}'")
+
+                                except Exception as e:
+                                    failed += 1
+                                    print(f"   ❌ Error filtering class '{class_name}': {str(e)}")
+
+                            # Display summary
+                            print("\n" + "=" * 60)
+                            print(f"✅ Batch processing complete!")
+                            print(f"   Successful: {successful}/{total_classes} classes")
+                            if failed > 0:
+                                print(f"   Failed: {failed}/{total_classes} classes")
+                            print("\n📊 Filtered Samples by Class:")
+                            print("-" * 60)
+
+                            # Show results in a table format
+                            for r in results_summary:
+                                print(f"   {r['class']:30s}: {r['after']:6,} / {r['before']:6,} ({r['percentage']:5.1f}%)")
+
+                            total_samples = sum(r['after'] for r in results_summary)
+                            print("-" * 60)
+                            print(f"   {'TOTAL':30s}: {total_samples:6,} samples")
+                            print("=" * 60)
+
+                            # Update status display
+                            status_display.value = (
+                                f"<p style='color:green;'>✅ Batch processing complete!<br>"
+                                f"<small>Processed {successful}/{total_classes} classes successfully<br>"
+                                f"Total filtered samples: {total_samples:,}</small></p>"
+                            )
+
                         else:
-                            status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}'...</p>"
+                            # Single class mode (existing logic)
+                            # Determine display message based on keep_count
+                            if keep_count > 0:
+                                status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}' (keeping {keep_count:,} samples)...</p>"
+                            else:
+                                status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}'...</p>"
 
-                        # Filter for selected class only
-                        result = self._apply_mahalanobis_filter_class_based(
-                            class_name=selected_class,
-                            keep_percentile=keep_percentage,
-                            keep_count=keep_count,
-                            weighted_percentile=weighted_pct,
-                            consistency_percentile=consistency_pct
-                        )
+                            # Filter for selected class only
+                            result = self._apply_mahalanobis_filter_class_based(
+                                class_name=selected_class,
+                                keep_percentile=keep_percentage,
+                                keep_count=keep_count,
+                                weighted_percentile=weighted_pct,
+                                consistency_percentile=consistency_pct
+                            )
 
-                        if result is None:
-                            status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
-                            return
+                            if result is None:
+                                status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
+                                return
 
-                        # Plot class-specific analysis
-                        self._plot_mahalanobis_analysis_class_based(selected_class)
+                            # Plot class-specific analysis
+                            self._plot_mahalanobis_analysis_class_based(selected_class)
 
-                        status_display.value = (
-                            f"<p style='color:green;'>✅ Filter applied for class '{selected_class}'<br>"
-                            f"<small>{result['samples_after']:,} / {result['samples_before']:,} samples kept</small></p>"
-                        )
+                            status_display.value = (
+                                f"<p style='color:green;'>✅ Filter applied for class '{selected_class}'<br>"
+                                f"<small>{result['samples_after']:,} / {result['samples_before']:,} samples kept</small></p>"
+                            )
 
                 except Exception as e:
                     import traceback
@@ -1595,6 +1677,31 @@ class MAVERICInteractiveQualityControl:
                     status_display.value = "<p style='color:red;'>❌ Please select a class first.</p>"
                     return
 
+                if selected_class == 'ALL':
+                    # Handle ALL mode - consolidate all filtered classes
+                    if not self.class_based_filtered_data:
+                        status_display.value = "<p style='color:red;'>❌ No filtered data. Apply filter first.</p>"
+                        return
+
+                    # Consolidate all class-based filtered data into filtered_data
+                    self._consolidate_class_based_data()
+
+                    num_classes = len(self.class_based_filtered_data)
+                    total_samples = sum(len(data) for data in self.class_based_filtered_data.values())
+                    filtered_class_names = sorted(self.class_based_filtered_data.keys())
+
+                    print(f"\n✅ All {num_classes} classes added to training data!")
+                    print(f"📊 Total samples: {total_samples:,}")
+                    print(f"📋 Classes included: {', '.join(filtered_class_names[:10])}" +
+                          (f" ... (+{num_classes - 10} more)" if num_classes > 10 else ""))
+
+                    status_display.value = (
+                        f"<p style='color:green;'>✅ All {num_classes} classes added<br>"
+                        f"<small>Total samples: {total_samples:,}</small></p>"
+                    )
+                    return
+
+                # Single class mode (existing logic)
                 if selected_class not in self.class_based_filtered_data:
                     status_display.value = f"<p style='color:red;'>❌ No filtered data for class '{selected_class}'. Apply filter first.</p>"
                     return

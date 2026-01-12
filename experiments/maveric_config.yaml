@@ -34,10 +34,10 @@ quality_metrics:
 
 # Metric weights for composite scoring
 metric_weights:
-  img2img: 0.50    # Image-to-image similarity weight
-  txt2txt: 0.50    # Text-to-text similarity weight
-  img2txt: 0    # Image-to-text consistency weight
-  txt2img: 0    # Text-to-image consistency weight
+  img2img: 0.25    # Image-to-image similarity weight
+  txt2txt: 0.25    # Text-to-text similarity weight
+  img2txt: 0.25    # Image-to-text consistency weight
+  txt2img: 0.25    # Text-to-image consistency weight
 
 
 # Quality thresholds for ELEVATER experiments - organized by category
@@ -71,34 +71,34 @@ processing:
   
 # Training configuration (for model customization)
 training:
-  epochs: 30
+  epochs: 50
   learning_rate: 0.0000003
   weight_decay: 0.05
   warmup_steps: 150
 
   # Regularization settings
   use_regularization: true  # Prevent catastrophic forgetting with MSE loss to original weights
-  regularization_weight: 0.70  # Weight for regularization loss (0.0-1.0)
+  regularization_weight: 0.7  # Weight for regularization loss (0.0-1.0)
 
   # Data augmentation settings
   use_augmentation: true
-  augmentation_strength: 6  # RandAugment num_ops
-  augmentation_magnitude: 18  # RandAugment magnitude
+  augmentation_strength: 3  # RandAugment num_ops
+  augmentation_magnitude: 12  # RandAugment magnitude
 
   # Domain adaptation settings (simulate test data characteristics)
   # Applied AFTER RandAugment to ensure domain match
   use_domain_adaptation: true  # Set to true to enable domain adaptation
 
   # Gaussian Blur (simulates low quality/pixelation)
-  domain_blur_probability: 0.3
-  domain_blur_sigma_range: [0.1, 2.0]
+  domain_blur_probability: 0.5
+  domain_blur_sigma_range: [0.5, 2.0]
 
   # JPEG Compression (adds compression artifacts)
-  domain_jpeg_probability: 0.3
+  domain_jpeg_probability: 0.4
   domain_jpeg_quality_range: [50, 90]
 
   # Downsample/Upsample (simulates resolution degradation)
-  domain_downsample_probability: 0.5
+  domain_downsample_probability: 0.7
 
   # Target size mode: Use fixed size for CIFAR-10/MNIST, or null for scale range
   domain_target_size: 32  # CIFAR-10/100 = 32, MNIST = 28, null = use scale_range
@@ -109,7 +109,7 @@ training:
   # Optimization settings
   optimizer: "adamw"  # adamw, adam, sgd
   scheduler: "cosine"  # cosine, linear, constant
-  gradient_clip_value: 0.75
+  gradient_clip_value: 0.5
 
   # Validation settings
   use_validation: false  # Set to false to disable validation and use all data for training
