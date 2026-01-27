@@ -641,7 +641,13 @@ class ModelCustomizer(BaseComponent):
                 ax.axis('off')
 
                 # Add label
-                class_name = dataset.class_names[label] if hasattr(dataset, 'class_names') else f'Class {label}'
+                if hasattr(dataset, 'class_names'):
+                    class_name = dataset.class_names[label]
+                    # Handle FER2013-style list class names (use first element for display)
+                    if isinstance(class_name, list):
+                        class_name = class_name[0]
+                else:
+                    class_name = f'Class {label}'
                 ax.set_title(f'{class_name}\n#{sample_idx}', fontsize=8)
 
             except Exception as e:
@@ -903,7 +909,8 @@ class TestDataset(torch.utils.data.Dataset):
         self.test_samples = test_samples
         self.class_names = class_names
         # Direct mapping for REACT class names (test data already has correct names from ELEVATER_DATASETS)
-        self.class_to_idx = {name: i for i, name in enumerate(class_names)}
+        # Handle FER2013-style list class names (use first element as canonical name)
+        self.class_to_idx = {(name[0] if isinstance(name, list) else name): i for i, name in enumerate(class_names)}
         self.processor = processor
 
     def __len__(self):
@@ -956,7 +963,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         self.class_names = class_names
         # Create case-insensitive mapping: normalized_name -> index
         # This handles training JSON having lowercase/normalized labels while evaluation uses REACT's mixed-case format
-        self.class_to_idx = {name: i for i, name in enumerate(class_names)}
+        # Handle FER2013-style list class names (use first element as canonical name)
+        self.class_to_idx = {(name[0] if isinstance(name, list) else name): i for i, name in enumerate(class_names)}
         self.normalized_to_idx = {self._normalize_label(name): i for i, name in enumerate(class_names)}
         self.processor = processor
 
@@ -996,16 +1004,22 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.valid_samples)
 
-    def _normalize_label(self, label: str) -> str:
+    def _normalize_label(self, label) -> str:
         """
         Normalize label for case-insensitive matching.
         Converts to lowercase and replaces spaces/hyphens with underscores.
+
+        Handles both string labels and list-based labels (FER2013 style).
 
         Examples:
             'American Bulldog' -> 'american_bulldog'
             'american bulldog' -> 'american_bulldog'
             'Abyssinian' -> 'abyssinian'
+            ['happy', 'smiling'] -> 'happy'  (uses first element)
         """
+        # Handle FER2013-style list class names
+        if isinstance(label, list):
+            label = label[0]
         return label.lower().replace(' ', '_').replace('-', '_')
 
     def _filter_valid_samples(self):
