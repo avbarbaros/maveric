@@ -352,8 +352,14 @@ def main():
             # This ensures we use the EXACT REACT class names with proper capitalization
             class_names = ELEVATERDataset.ELEVATER_DATASETS[target_dataset]['class_names']
             print(f"📊 Number of classes: {len(class_names)} (from ELEVATER dataset definition)")
-            print(f"📋 First 10 classes: {', '.join(class_names[:10])}" + ("..." if len(class_names) > 10 else ""))
-            print(f"📋 Example prompts will use: '{class_names[0]}' (note: proper capitalization)")
+
+            # Handle FER2013-style list class names for display
+            display_names = [name[0] if isinstance(name, list) else name for name in class_names[:10]]
+            print(f"📋 First 10 classes: {', '.join(display_names)}" + ("..." if len(class_names) > 10 else ""))
+
+            # Display first class name (handle list format)
+            first_class = class_names[0][0] if isinstance(class_names[0], list) else class_names[0]
+            print(f"📋 Example prompts will use: '{first_class}' (note: proper capitalization)")
         else:
             # Fallback: try to load from dataset handler (for non-ELEVATER datasets)
             print(f"⚠️  Warning: {target_dataset} not found in ELEVATER_DATASETS")

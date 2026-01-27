@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
-### January 5, 2026 - Mahalanobis Batch Processing "ALL" Feature (LATEST)
+### January 5, 2026 - Mahalanobis Batch Processing "ALL" Feature
 
 **Enhancement: Batch Process All Classes at Once in Class-Based Mode**:
 - **Purpose**: Dramatically speed up workflow for datasets with many classes (CIFAR-100, etc.)
@@ -49,7 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ```
 - **Documentation**: [MAHALANOBIS_BATCH_ALL_FEATURE.md](MAHALANOBIS_BATCH_ALL_FEATURE.md)
 
-### January 7, 2026 - Domain Adaptation Implementation Complete
+### January 7, 2026 - Domain Adaptation Implementation Complete (LATEST)
 
 **Enhancement: Complete Domain Adaptation System with Visual Inspection**:
 - **Purpose**: Simulate test data characteristics during training to improve model robustness
@@ -64,10 +64,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **CLI Control**: `--save-augmented-grids` flag in `03_model_customization.py`
   - **Console Logging**: Detailed output showing augmentation and domain adaptation settings
   - **Error Handling**: Graceful fallback if domain adaptation fails
+- **Bug Fix** (January 7): Fixed `_save_augmented_grids()` method placement - moved from wrong class to `ModelCustomizer` where it's called
 - **Location**:
-  - Core implementation: [model_customizer.py:1042-1076, 1160-1197](maveric/customization/model_customizer.py)
-  - Grid visualization: [model_customizer.py:1078-1158](maveric/customization/model_customizer.py)
-  - Console logging: [model_customizer.py:263-281](maveric/customization/model_customizer.py)
+  - Core implementation: [model_customizer.py:1104-1155, 1157-1194](maveric/customization/model_customizer.py)
+  - Grid visualization: [model_customizer.py:604-664](maveric/customization/model_customizer.py)
+  - Console logging: [model_customizer.py:265-283](maveric/customization/model_customizer.py)
 - **Configuration**: [maveric_config.yaml:88-107](experiments/maveric_config.yaml)
 - **Benefits**:
   - **Visual Confirmation**: Inspect domain-adapted samples before training starts
