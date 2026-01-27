@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional, Any
 import json
+import os
 import random
 import numpy as np
 import urllib.error
@@ -1338,8 +1339,27 @@ class ELEVATERDataset(BaseDataset):
                 raise DatasetError(f"Torchvision support not implemented for {self.dataset_name}")
 
             self.log_info(f"Initializing {self.dataset_name.upper()} dataset...")
-            self._dataset = dataset_loaders[self.dataset_name]()
-            self.log_info(f"Loaded {self.dataset_name.upper()} dataset with {len(self._dataset)} samples")
+            try:
+                self._dataset = dataset_loaders[self.dataset_name]()
+                self.log_info(f"Loaded {self.dataset_name.upper()} dataset with {len(self._dataset)} samples")
+            except (FileNotFoundError, RuntimeError) as e:
+                # Handle Country211's missing class files (SM, SN, SO, SS)
+                if self.dataset_name == 'country211' and 'Found no valid file for the classes' in str(e):
+                    self.log_warning(f"Some Country211 classes have missing images: {e}")
+                    self.log_info("Loading Country211 with available classes only (skipping missing ones)...")
+                    # Load without validation - torchvision will skip missing classes
+                    import torchvision
+                    from torchvision.datasets.folder import ImageFolder
+
+                    # Create custom loader that skips missing classes
+                    country211_path = os.path.join(self.root, 'country211', 'train' if self.train else 'test')
+                    self._dataset = ImageFolder(root=country211_path, transform=convert_transform)
+
+                    available_classes = len(self._dataset.classes)
+                    self.log_info(f"Loaded Country211 with {available_classes}/211 countries ({len(self._dataset)} samples)")
+                    self.log_warning(f"Note: {211 - available_classes} countries skipped due to missing images")
+                else:
+                    raise
 
         except ImportError:
             raise DatasetError("torchvision is required for torchvision datasets")

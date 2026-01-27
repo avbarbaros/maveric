@@ -68,6 +68,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Fixed `_save_augmented_grids()` method placement - moved from wrong class to `ModelCustomizer` where it's called
   - Fixed FER2013 list-based class name handling in dataset classes and display code (handles `['happy', 'smiling']` format)
   - Updated `_normalize_label()` to extract canonical name from list class names
+  - Fixed Country211 missing classes issue - gracefully skip countries with missing images (SM, SN, SO, SS)
 - **Location**:
   - Core implementation: [model_customizer.py:1104-1155, 1157-1194](maveric/customization/model_customizer.py)
   - Grid visualization: [model_customizer.py:604-664](maveric/customization/model_customizer.py)
