@@ -49,7 +49,56 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ```
 - **Documentation**: [MAHALANOBIS_BATCH_ALL_FEATURE.md](MAHALANOBIS_BATCH_ALL_FEATURE.md)
 
-### January 7, 2026 - Domain Adaptation Implementation Complete (LATEST)
+### January 28, 2026 - File-Based Datasets Test Data Issue (LATEST)
+
+**Issue Identified: Test Data Loading for File-Based Datasets**:
+- **Problem**: When running `03_model_customization.py`, torchvision datasets (CIFAR-10, MNIST, etc.) work fine, but file-based datasets (FER2013, PCAM, RESISC45, etc.) fail to load test data for evaluation
+- **Root Cause**: File-based datasets don't have automatic download support like torchvision datasets. The `_load_dataset()` method does nothing for file-based datasets (`pass` at line 1285), leaving `self._dataset = None`, which causes test data loading to fail in `_create_test_loader()` at line 359
+- **Affected Datasets** (8 total):
+  - FER2013 (Facial Expression Recognition - 7 classes)
+  - HatefulMemes (Hate speech detection - 2 classes)
+  - Kitti Distance (Car distance estimation - 4 classes)
+  - PatchCamelyon/PCAM (Lymph node classification - 2 classes)
+  - RenderedSST2 (Sentiment analysis - 2 classes)
+  - RESISC45 (Remote sensing - 45 classes)
+  - StanfordCars (Car recognition - 196 classes)
+  - VOC2007 (Object recognition - 20 classes)
+- **Solutions Documented**:
+  - **Option 1 (Immediate)**: Manual download + directory organization
+    - Download datasets from official sources
+    - Organize into expected structure: `{root}/elevater/{dataset_name}/test/class_name/*.jpg`
+    - Documented with dataset-specific instructions for all 8 datasets
+  - **Option 2 (Best long-term)**: Implement PyTorch Dataset wrappers
+    - Create custom dataset classes with automatic download support
+    - Change dataset type from 'file_based' to 'torchvision' in ELEVATER_DATASETS
+    - Provides consistent interface like existing torchvision datasets
+  - **Option 3 (Workaround)**: Use file-based datasets for retrieval only
+    - Train on file-based data, evaluate on torchvision datasets instead
+    - Allows workflow continuation without test data setup
+- **Documentation**: [FILE_BASED_DATASETS_GUIDE.md](FILE_BASED_DATASETS_GUIDE.md) - Complete setup guide with download sources, directory structures, and extraction scripts for all file-based datasets
+- **Code Locations**:
+  - Dataset type detection: [elevater_datasets.py:1278](maveric/datasets/elevater_datasets.py#L1278)
+  - File-based loading (empty): [elevater_datasets.py:1283-1285](maveric/datasets/elevater_datasets.py#L1283-L1285)
+  - Test loader creation: [model_customizer.py:339-433](maveric/customization/model_customizer.py#L339-L433)
+  - Dataset check that fails: [model_customizer.py:359-360](maveric/customization/model_customizer.py#L359-L360)
+- **Expected Directory Structure**:
+  ```
+  {root}/elevater/{dataset_name}/
+  ├── train/              # Training split (for reference samples)
+  │   ├── class_1/
+  │   │   ├── image_001.jpg
+  │   │   └── ...
+  │   └── ...
+  └── test/               # Test split (for evaluation)
+      ├── class_1/
+      │   ├── image_001.jpg
+      │   └── ...
+      └── ...
+  ```
+- **Recommended First Steps**: Start with FER2013 (easiest to set up from Kaggle), then expand to other datasets as needed
+- **Status**: Issue identified and documented, manual solution available, future enhancement planned
+
+### January 7, 2026 - Domain Adaptation Implementation Complete
 
 **Enhancement: Complete Domain Adaptation System with Visual Inspection**:
 - **Purpose**: Simulate test data characteristics during training to improve model robustness
