@@ -384,6 +384,21 @@ class ModelCustomizer(BaseComponent):
             # Convert dataset to samples format
             if hasattr(test_dataset_handler, '_dataset') and test_dataset_handler._dataset:
                 dataset = test_dataset_handler._dataset
+            elif expected_test_path.exists():
+                # Fallback for file-based datasets: load directly from filesystem
+                self.log_info(f"File-based dataset detected. Loading from: {expected_test_path}")
+                from torchvision.datasets.folder import ImageFolder
+
+                class SimpleImageFolder(ImageFolder):
+                    """Simple image folder without transforms for loading."""
+                    pass
+
+                dataset = SimpleImageFolder(root=str(expected_test_path), transform=None)
+                self.log_info(f"Loaded {len(dataset)} samples from {len(dataset.classes)} classes")
+            else:
+                dataset = None
+
+            if dataset:
 
                 # CRITICAL: Use class_names from ELEVATER_DATASETS (passed as parameter)
                 # NOT from test_dataset_handler which may have torchvision's dynamically generated names

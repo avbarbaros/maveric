@@ -97,8 +97,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
       └── ...
   ```
 - **Recommended First Steps**: Start with FER2013 (easiest to set up from Kaggle), then expand to other datasets as needed
-- **Status**: Issue identified and documented, manual solution available, future enhancement planned
+- **Status**: ✅ **Fixed (January 29, 2026)** - File-based datasets now load correctly from manually placed test data
 - **Improvement** (January 28, 2026): Added helpful error messages that display exact paths and setup instructions when test data fails to load
+- **Fix** (January 29, 2026): Added ImageFolder fallback for file-based datasets ([model_customizer.py:388-398](maveric/customization/model_customizer.py#L388-L398)) - automatically loads from filesystem when torchvision handler returns None
 
 ### January 7, 2026 - Domain Adaptation Implementation Complete
 
