@@ -79,7 +79,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Code Locations**:
   - Dataset type detection: [elevater_datasets.py:1278](maveric/datasets/elevater_datasets.py#L1278)
   - File-based loading (empty): [elevater_datasets.py:1283-1285](maveric/datasets/elevater_datasets.py#L1283-L1285)
-  - Test loader creation: [model_customizer.py:339-433](maveric/customization/model_customizer.py#L339-L433)
+  - Test loader creation: [model_customizer.py:339-451](maveric/customization/model_customizer.py#L339-L451)
+  - Error handling with setup instructions: [model_customizer.py:435-450](maveric/customization/model_customizer.py#L435-L450)
   - Dataset check that fails: [model_customizer.py:359-360](maveric/customization/model_customizer.py#L359-L360)
 - **Expected Directory Structure**:
   ```
@@ -97,6 +98,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ```
 - **Recommended First Steps**: Start with FER2013 (easiest to set up from Kaggle), then expand to other datasets as needed
 - **Status**: Issue identified and documented, manual solution available, future enhancement planned
+- **Improvement** (January 28, 2026): Added helpful error messages that display exact paths and setup instructions when test data fails to load
 
 ### January 7, 2026 - Domain Adaptation Implementation Complete
 

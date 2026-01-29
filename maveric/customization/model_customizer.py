@@ -307,10 +307,21 @@ class ModelCustomizer(BaseComponent):
         test_loader = self._create_test_loader(target_dataset_name, class_names)
         
         if not test_loader:
+            # Calculate expected path for helpful error message
+            dataset_cache_dir = Path('./data')
+            if hasattr(self, 'cache_base_dir') and self.cache_base_dir:
+                dataset_cache_dir = Path(self.cache_base_dir) / target_dataset_name / 'datasets'
+            expected_path = dataset_cache_dir / 'elevater' / target_dataset_name / 'test'
+
             raise ValueError(
-                f"Failed to load test data for {target_dataset_name}. "
-                f"Test data evaluation is mandatory for reliable model selection. "
-                f"Please ensure the target dataset supports test splits."
+                f"Failed to load test data for {target_dataset_name}.\n\n"
+                f"Test data evaluation is mandatory for reliable model selection.\n\n"
+                f"For file-based datasets (FER2013, PCAM, RESISC45, etc.), you need to:\n"
+                f"  1. Download test data from official source\n"
+                f"  2. Place in: {expected_path}/\n"
+                f"  3. Organize as: {expected_path}/class_name/*.jpg\n\n"
+                f"See FILE_BASED_DATASETS_GUIDE.md for download links and detailed instructions.\n\n"
+                f"Check the log above for specific error details."
             )
         
         # Log data loader info
@@ -434,6 +445,21 @@ class ModelCustomizer(BaseComponent):
             
         except Exception as e:
             self.log_warning(f"Failed to create test loader for {target_dataset_name}: {e}")
+
+            # Provide helpful instructions for manual dataset setup
+            expected_path = dataset_cache_dir / 'elevater' / target_dataset_name / 'test'
+            self.log_info(f"\n📁 Test data setup instructions for {target_dataset_name}:")
+            self.log_info(f"   Expected test data location: {expected_path}")
+            self.log_info(f"   Required structure:")
+            self.log_info(f"      {expected_path}/")
+            self.log_info(f"      ├── class_1/")
+            self.log_info(f"      │   ├── image_001.jpg")
+            self.log_info(f"      │   └── ...")
+            self.log_info(f"      ├── class_2/")
+            self.log_info(f"      │   └── ...")
+            self.log_info(f"      └── ...")
+            self.log_info(f"\n   See FILE_BASED_DATASETS_GUIDE.md for download links and setup instructions")
+
             return None
     
     def _prepare_stratified_kfold_data(self, dataset, k_folds=5):
