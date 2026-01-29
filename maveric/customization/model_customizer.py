@@ -361,6 +361,21 @@ class ModelCustomizer(BaseComponent):
 
             # Load test split of the target dataset
             self.log_info(f"Loading test data from {target_dataset_name}")
+            self.log_info(f"Test dataset root path: {dataset_cache_dir}")
+
+            # Check if path exists for file-based datasets
+            expected_test_path = dataset_cache_dir / 'elevater' / target_dataset_name / 'test'
+            if expected_test_path.exists():
+                self.log_info(f"✓ Test directory found: {expected_test_path}")
+                # List class directories
+                try:
+                    class_dirs = [d.name for d in expected_test_path.iterdir() if d.is_dir()]
+                    self.log_info(f"✓ Found {len(class_dirs)} class directories: {class_dirs[:5]}" + ("..." if len(class_dirs) > 5 else ""))
+                except Exception as list_err:
+                    self.log_warning(f"Could not list class directories: {list_err}")
+            else:
+                self.log_warning(f"✗ Test directory not found: {expected_test_path}")
+
             test_dataset_handler = get_dataset(target_dataset_name, train=False, root=str(dataset_cache_dir))  # Get test split
 
             # Create custom dataset for test data
