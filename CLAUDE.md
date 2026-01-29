@@ -100,11 +100,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Status**: ✅ **Fixed (January 29, 2026)** - File-based datasets now load correctly from manually placed test data
 - **Improvement** (January 28, 2026): Added helpful error messages that display exact paths and setup instructions when test data fails to load
 - **Fix** (January 29, 2026): Added ImageFolder fallback for file-based datasets ([model_customizer.py:388-398](maveric/customization/model_customizer.py#L388-L398)) - automatically loads from filesystem when torchvision handler returns None
-- **Additional Fix** (January 29, 2026): Fixed FER2013 list-based class names causing `unhashable type: 'list'` error
-  - Updated `_normalize_class_name()` to handle list-based class names ([model_customizer.py:338-353](maveric/customization/model_customizer.py#L338-L353))
-  - Extract canonical names before using as dictionary keys ([model_customizer.py:408-422](maveric/customization/model_customizer.py#L408-L422))
-  - Fixed all dictionary operations to use canonical string names instead of lists
-- **Fix** (January 29, 2026): Added ImageFolder fallback for file-based datasets ([model_customizer.py:388-398](maveric/customization/model_customizer.py#L388-L398)) - automatically loads from filesystem when torchvision handler returns None
+- **Additional Fix** (January 29, 2026): Fixed FER2013 list-based class names causing `unhashable type: 'list'` error in test loader and evaluation
+  - **model_customizer.py fixes**:
+    - Updated `_normalize_class_name()` to handle list-based class names ([model_customizer.py:338-353](maveric/customization/model_customizer.py#L338-L353))
+    - Extract canonical names before using as dictionary keys ([model_customizer.py:408-422](maveric/customization/model_customizer.py#L408-L422))
+    - Fixed all dictionary operations to use canonical string names instead of lists
+  - **evaluation.py fixes**:
+    - Added `_get_canonical_name()` static method ([evaluation.py:27-38](maveric/customization/evaluation.py#L27-L38))
+    - Fixed `_create_text_classifier_with_templates()` to extract canonical names for prompt formatting ([evaluation.py:65-67](maveric/customization/evaluation.py#L65-L67))
+    - Fixed `evaluate()` method to use canonical names ([evaluation.py:137-139](maveric/customization/evaluation.py#L137-L139))
+    - Fixed `evaluate_detailed()` method to use canonical names in prompts and dictionary keys ([evaluation.py:192-194, 220-222](maveric/customization/evaluation.py#L192-L194))
+    - Fixed `evaluate_with_metrics()` to use canonical names for sklearn classification_report ([evaluation.py:288, 342-346](maveric/customization/evaluation.py#L288))
+  - **Impact**: FER2013 (and any dataset with list-based class names) now works correctly throughout the entire pipeline
 
 ### January 7, 2026 - Domain Adaptation Implementation Complete
 

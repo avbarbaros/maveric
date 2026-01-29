@@ -24,6 +24,22 @@ class Evaluator(BaseComponent):
         super().__init__("Evaluator")
         self.device = device
 
+    @staticmethod
+    def _get_canonical_name(class_name):
+        """
+        Extract canonical name from class_name.
+        Handles both strings and list-based class names (e.g., FER2013's ['happy', 'smiling']).
+
+        Args:
+            class_name: Either a string or list of strings
+
+        Returns:
+            String representing the canonical class name
+        """
+        if isinstance(class_name, list):
+            return class_name[0]
+        return class_name
+
     def _create_text_classifier_with_templates(self,
                                                model: nn.Module,
                                                class_names: List[str],
@@ -49,20 +65,24 @@ class Evaluator(BaseComponent):
 
         # Debug: Print template info
         if not hasattr(self, '_template_debug_printed'):
+            # Extract canonical name for debug printing
+            first_canonical = self._get_canonical_name(class_names[0])
             print(f"\nDEBUG Text Classifier Creation:")
             print(f"  Number of classes: {len(class_names)}")
             print(f"  Number of templates: {len(templates)}")
             print(f"  Templates: {templates}")
-            print(f"  Example prompts for '{class_names[0]}':")
+            print(f"  Example prompts for '{first_canonical}':")
             for tmpl in templates:
-                print(f"    - {tmpl.format(class_names[0])}")
+                print(f"    - {tmpl.format(first_canonical)}")
             print(f"\n  NOTE: If your standalone code uses different templates (e.g., just 'a photo of a {{}}'),")
             print(f"        that could explain accuracy differences!")
             self._template_debug_printed = True
 
         for class_name in class_names:
+            # Extract canonical name (handles FER2013's list format)
+            canonical_name = self._get_canonical_name(class_name)
             # Generate prompts for this class using all templates
-            class_prompts = [template.format(class_name) for template in templates]
+            class_prompts = [template.format(canonical_name) for template in templates]
 
             # Tokenize and encode
             text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
@@ -114,7 +134,9 @@ class Evaluator(BaseComponent):
             class_text_features = self._create_text_classifier_with_templates(model, class_names, templates)
         else:
             # Simple single-template evaluation (backward compatibility)
-            class_prompts = [f"a photo of a {name}." for name in class_names]
+            # Extract canonical names for string formatting
+            canonical_names = [self._get_canonical_name(name) for name in class_names]
+            class_prompts = [f"a photo of a {name}." for name in canonical_names]
             text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
 
             with torch.no_grad():
@@ -167,7 +189,9 @@ class Evaluator(BaseComponent):
             class_text_features = self._create_text_classifier_with_templates(model, class_names, templates)
         else:
             # Simple single-template evaluation (backward compatibility)
-            class_prompts = [f"a photo of a {name}." for name in class_names]
+            # Extract canonical names for string formatting
+            canonical_names = [self._get_canonical_name(name) for name in class_names]
+            class_prompts = [f"a photo of a {name}." for name in canonical_names]
             text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
 
             with torch.no_grad():
@@ -202,7 +226,9 @@ class Evaluator(BaseComponent):
             mask = all_labels == i
             if mask.any():
                 class_acc = 100 * (all_predictions[mask] == all_labels[mask]).mean()
-                per_class_accuracies[class_name] = class_acc
+                # Use canonical name as dictionary key (handles FER2013's list format)
+                canonical_name = self._get_canonical_name(class_name)
+                per_class_accuracies[canonical_name] = class_acc
         
         return overall_accuracy, per_class_accuracies
     
@@ -222,9 +248,11 @@ class Evaluator(BaseComponent):
             Dictionary with various evaluation metrics
         """
         model.eval()
-        
+
         # Create text features (using same method as original code)
-        class_prompts = [f"a photo of a {name}." for name in class_names]
+        # Extract canonical names for string formatting
+        canonical_names = [self._get_canonical_name(name) for name in class_names]
+        class_prompts = [f"a photo of a {name}." for name in canonical_names]
         text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
         
         with torch.no_grad():
@@ -252,12 +280,14 @@ class Evaluator(BaseComponent):
         all_logits = torch.cat(all_logits, dim=0)
         
         # Calculate metrics
+        # Extract canonical names for sklearn (handles FER2013's list format)
+        canonical_names = [self._get_canonical_name(name) for name in class_names]
         results = {
             'accuracy': 100 * (all_predictions == all_labels).mean(),
             'confusion_matrix': confusion_matrix(all_labels, all_predictions),
             'classification_report': classification_report(
                 all_labels, all_predictions,
-                target_names=class_names,
+                target_names=canonical_names,
                 output_dict=True
             )
         }
@@ -309,9 +339,11 @@ class Evaluator(BaseComponent):
             
             # Add per-class F1 scores
             for class_name in class_names[:5]:  # Top 5 classes
-                if class_name in metrics['classification_report']:
-                    f1 = metrics['classification_report'][class_name]['f1-score']
-                    result[f'{class_name} F1'] = f1
+                # Extract canonical name (handles FER2013's list format)
+                canonical_name = self._get_canonical_name(class_name)
+                if canonical_name in metrics['classification_report']:
+                    f1 = metrics['classification_report'][canonical_name]['f1-score']
+                    result[f'{canonical_name} F1'] = f1
             
             results.append(result)
         
