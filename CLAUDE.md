@@ -100,6 +100,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Status**: ✅ **Fixed (January 29, 2026)** - File-based datasets now load correctly from manually placed test data
 - **Improvement** (January 28, 2026): Added helpful error messages that display exact paths and setup instructions when test data fails to load
 - **Fix** (January 29, 2026): Added ImageFolder fallback for file-based datasets ([model_customizer.py:388-398](maveric/customization/model_customizer.py#L388-L398)) - automatically loads from filesystem when torchvision handler returns None
+- **Additional Fix** (January 29, 2026): Fixed FER2013 list-based class names causing `unhashable type: 'list'` error
+  - Updated `_normalize_class_name()` to handle list-based class names ([model_customizer.py:338-353](maveric/customization/model_customizer.py#L338-L353))
+  - Extract canonical names before using as dictionary keys ([model_customizer.py:408-422](maveric/customization/model_customizer.py#L408-L422))
+  - Fixed all dictionary operations to use canonical string names instead of lists
+- **Fix** (January 29, 2026): Added ImageFolder fallback for file-based datasets ([model_customizer.py:388-398](maveric/customization/model_customizer.py#L388-L398)) - automatically loads from filesystem when torchvision handler returns None
 
 ### January 7, 2026 - Domain Adaptation Implementation Complete
 

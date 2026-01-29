@@ -335,16 +335,22 @@ class ModelCustomizer(BaseComponent):
         
         return train_loader, val_loader, test_loader
     
-    def _normalize_class_name(self, class_name: str) -> str:
+    def _normalize_class_name(self, class_name) -> str:
         """
         Normalize class name for flexible matching.
         Converts to lowercase and replaces spaces with underscores.
+
+        Handles both string and list-based class names (e.g., FER2013's ['happy', 'smiling']).
 
         Examples:
             'American Bulldog' -> 'american_bulldog'
             'american bulldog' -> 'american_bulldog'
             'Abyssinian' -> 'abyssinian'
+            ['happy', 'smiling'] -> 'happy'  # Uses first element as canonical name
         """
+        # Handle list-based class names (e.g., FER2013)
+        if isinstance(class_name, list):
+            class_name = class_name[0]
         return class_name.lower().replace(' ', '_')
 
     def _create_test_loader(self, target_dataset_name: str, class_names: List[str]) -> Optional[Any]:
@@ -405,13 +411,21 @@ class ModelCustomizer(BaseComponent):
                 # This ensures evaluation uses EXACT REACT class names
                 full_dataset_class_names = class_names  # Use parameter, not dataset handler
 
+                # Extract canonical names from class_names (handles FER2013's list format)
+                # For FER2013: ['angry'] -> 'angry', ['happy', 'smiling'] -> 'happy'
+                canonical_class_names = [
+                    name[0] if isinstance(name, list) else name
+                    for name in class_names
+                ]
+
                 # Create mapping from training class names to indices
-                # Use normalized names for flexible matching
-                class_to_idx = {name: idx for idx, name in enumerate(class_names)}
-                training_class_set = set(class_names)
+                # Use canonical names (not lists) as dictionary keys
+                class_to_idx = {name: idx for idx, name in enumerate(canonical_class_names)}
+                training_class_set = set(canonical_class_names)
 
                 # Also create a normalized mapping for flexible matching
-                normalized_training_map = {self._normalize_class_name(name): name for name in class_names}
+                # _normalize_class_name() now handles both strings and lists
+                normalized_training_map = {self._normalize_class_name(name): name for name in canonical_class_names}
 
                 self.log_info(f"Processing {len(dataset)} test samples from {target_dataset_name}")
                 self.log_info(f"Training classes: {len(class_names)}, Full dataset classes: {len(full_dataset_class_names)}")
@@ -422,20 +436,20 @@ class ModelCustomizer(BaseComponent):
                 for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
                     try:
                         image, label = dataset[idx]
-                        if isinstance(label, int) and label < len(full_dataset_class_names):
-                            # Get class name from test dataset (torchvision format, e.g., "American Bulldog")
-                            test_class_name = full_dataset_class_names[label]
+                        if isinstance(label, int) and label < len(canonical_class_names):
+                            # Get canonical class name (handles FER2013 list format)
+                            test_class_name = canonical_class_names[label]
 
                             # Check if this class exists in training data using normalized matching
                             # This handles case/space/underscore differences between training and test
                             normalized_test = self._normalize_class_name(test_class_name)
 
                             if normalized_test in normalized_training_map:
-                                # Use the test dataset class name (from ELEVATER_DATASETS) for the label
+                                # Use the canonical test dataset class name for the label
                                 # Note: Text field is not used during evaluation (templates are used in text classifier)
                                 test_samples.append({
                                     'image': image,
-                                    'label': test_class_name,  # Use test dataset class name
+                                    'label': test_class_name,  # Use canonical class name (string, not list)
                                     'text': ''  # Placeholder - not used during evaluation
                                 })
                     except Exception as e:
@@ -449,7 +463,8 @@ class ModelCustomizer(BaseComponent):
 
             # Log which classes are missing from training data
             # Calculate missing classes using normalized matching
-            normalized_full_classes = {self._normalize_class_name(name): name for name in full_dataset_class_names}
+            # Use canonical_class_names to avoid unhashable list types
+            normalized_full_classes = {self._normalize_class_name(name): name for name in canonical_class_names}
             missing_normalized = set(normalized_full_classes.keys()) - set(normalized_training_map.keys())
             missing_classes = [normalized_full_classes[norm] for norm in missing_normalized]
 
