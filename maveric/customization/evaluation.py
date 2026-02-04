@@ -96,8 +96,10 @@ class Evaluator(BaseComponent):
                 if isinstance(text_features_output, torch.Tensor):
                     class_embeddings = text_features_output
                 else:
-                    # Extract tensor from output object (works for BaseModelOutputWithPooling)
-                    class_embeddings = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+                    # Extract pooler_output from BaseModelOutputWithPooling
+                    # pooler_output has shape (batch_size, hidden_size) which is what we need
+                    # [0] would give last_hidden_state with shape (batch_size, seq_len, hidden_size) - wrong!
+                    class_embeddings = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
 
                 # Normalize each template embedding
                 class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
@@ -154,8 +156,8 @@ class Evaluator(BaseComponent):
                 if isinstance(text_features_output, torch.Tensor):
                     class_text_features = text_features_output
                 else:
-                    # Extract tensor from output object
-                    class_text_features = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+                    # Extract pooler_output from BaseModelOutputWithPooling
+                    class_text_features = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
 
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
                 # Shape: (num_classes, embedding_dim) - matches ensemble format
@@ -217,8 +219,8 @@ class Evaluator(BaseComponent):
                 if isinstance(text_features_output, torch.Tensor):
                     class_text_features = text_features_output
                 else:
-                    # Extract tensor from output object
-                    class_text_features = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+                    # Extract pooler_output from BaseModelOutputWithPooling
+                    class_text_features = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
 
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
                 # Shape: (num_classes, embedding_dim) - matches ensemble format

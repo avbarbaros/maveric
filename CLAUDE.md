@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Bug Fix: BaseModelOutputWithPooling Compatibility**:
 - **Problem**: HuggingFace transformers library updated CLIP model format from `pytorch_model.bin` to `model.safetensors` (via PR #66), changing `get_text_features()` return type from `Tensor` to `BaseModelOutputWithPooling` object
-- **Impact**: Model customization crashed with `AttributeError: 'BaseModelOutputWithPooling' object has no attribute 'norm'`
-- **Root Cause**: Code assumed `get_text_features()` returns a plain tensor, but new safetensors format returns a wrapped object
-- **Fix**: Added backward-compatible tensor extraction that handles both formats:
+- **Impact**: Model customization crashed with `AttributeError: 'BaseModelOutputWithPooling' object has no attribute 'norm'` and later `RuntimeError: stack expects each tensor to be equal size` due to incorrect tensor extraction
+- **Root Cause**: Code assumed `get_text_features()` returns a plain tensor, but new safetensors format returns a wrapped object. Initial fix used `[0]` which extracts `last_hidden_state` (shape: batch_size, seq_len, hidden_size) instead of `pooler_output` (shape: batch_size, hidden_size)
+- **Fix** (January 29, 2026): Corrected to use `pooler_output` attribute for proper tensor extraction:
   ```python
   text_features_output = model.clip_model.get_text_features(**text_inputs)
 
@@ -18,8 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   if isinstance(text_features_output, torch.Tensor):
       text_embeds = text_features_output
   else:
-      # Extract tensor from output object
-      text_embeds = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+      # Extract pooler_output from BaseModelOutputWithPooling (shape: batch_size, hidden_size)
+      # NOT [0] which gives last_hidden_state (shape: batch_size, seq_len, hidden_size)
+      text_embeds = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
   ```
 - **Locations Fixed**:
   - [evaluation.py:90-103](maveric/customization/evaluation.py#L90-L103) - `_create_text_classifier_with_templates()` method
