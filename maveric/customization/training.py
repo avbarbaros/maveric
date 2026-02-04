@@ -83,7 +83,15 @@ class Trainer(BaseComponent):
             class_prompts = [f"a photo of a {name}." for name in class_names]
             text_inputs = self.model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
             with torch.no_grad():
-                class_text_features = self.model.clip_model.get_text_features(**text_inputs)
+                text_features_output = self.model.clip_model.get_text_features(**text_inputs)
+
+                # Handle both tensor and BaseModelOutputWithPooling formats
+                if isinstance(text_features_output, torch.Tensor):
+                    class_text_features = text_features_output
+                else:
+                    # Extract tensor from output object
+                    class_text_features = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
         
         # Setup optimizer

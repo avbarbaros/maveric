@@ -29,7 +29,7 @@ class ELEVATERDataset(BaseDataset):
         'caltech101': {
             'num_classes': 101,
             'task': 'classification',
-            'type': 'torchvision',
+            'type': 'file_based',
             'class_names': [
                 'accordion',
                 'airplanes',
@@ -177,7 +177,7 @@ class ELEVATERDataset(BaseDataset):
         'country211': {
             'num_classes': 211,
             'task': 'classification',
-            'type': 'torchvision',
+            'type': 'file_based',
             'class_names': [
                 'Andorra',
                 'United Arab Emirates',

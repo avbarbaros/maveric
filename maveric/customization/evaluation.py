@@ -89,7 +89,15 @@ class Evaluator(BaseComponent):
 
             with torch.no_grad():
                 # Get text embeddings for all templates
-                class_embeddings = model.clip_model.get_text_features(**text_inputs)
+                text_features_output = model.clip_model.get_text_features(**text_inputs)
+
+                # Handle both tensor and BaseModelOutputWithPooling formats
+                # HuggingFace updated to return BaseModelOutputWithPooling instead of tensor
+                if isinstance(text_features_output, torch.Tensor):
+                    class_embeddings = text_features_output
+                else:
+                    # Extract tensor from output object (works for BaseModelOutputWithPooling)
+                    class_embeddings = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
 
                 # Normalize each template embedding
                 class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
@@ -140,7 +148,15 @@ class Evaluator(BaseComponent):
             text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
 
             with torch.no_grad():
-                class_text_features = model.clip_model.get_text_features(**text_inputs)
+                text_features_output = model.clip_model.get_text_features(**text_inputs)
+
+                # Handle both tensor and BaseModelOutputWithPooling formats
+                if isinstance(text_features_output, torch.Tensor):
+                    class_text_features = text_features_output
+                else:
+                    # Extract tensor from output object
+                    class_text_features = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
                 # Shape: (num_classes, embedding_dim) - matches ensemble format
 
@@ -195,10 +211,18 @@ class Evaluator(BaseComponent):
             text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
 
             with torch.no_grad():
-                class_text_features = model.clip_model.get_text_features(**text_inputs)
+                text_features_output = model.clip_model.get_text_features(**text_inputs)
+
+                # Handle both tensor and BaseModelOutputWithPooling formats
+                if isinstance(text_features_output, torch.Tensor):
+                    class_text_features = text_features_output
+                else:
+                    # Extract tensor from output object
+                    class_text_features = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
                 # Shape: (num_classes, embedding_dim) - matches ensemble format
-        
+
         all_predictions = []
         all_labels = []
         

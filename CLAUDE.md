@@ -4,6 +4,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### February 4, 2026 - HuggingFace Transformers API Compatibility Fix (CRITICAL)
+
+**Bug Fix: BaseModelOutputWithPooling Compatibility**:
+- **Problem**: HuggingFace transformers library updated CLIP model format from `pytorch_model.bin` to `model.safetensors` (via PR #66), changing `get_text_features()` return type from `Tensor` to `BaseModelOutputWithPooling` object
+- **Impact**: Model customization crashed with `AttributeError: 'BaseModelOutputWithPooling' object has no attribute 'norm'`
+- **Root Cause**: Code assumed `get_text_features()` returns a plain tensor, but new safetensors format returns a wrapped object
+- **Fix**: Added backward-compatible tensor extraction that handles both formats:
+  ```python
+  text_features_output = model.clip_model.get_text_features(**text_inputs)
+
+  # Handle both tensor and BaseModelOutputWithPooling formats
+  if isinstance(text_features_output, torch.Tensor):
+      text_embeds = text_features_output
+  else:
+      # Extract tensor from output object
+      text_embeds = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+  ```
+- **Locations Fixed**:
+  - [evaluation.py:90-103](maveric/customization/evaluation.py#L90-L103) - `_create_text_classifier_with_templates()` method
+  - [evaluation.py:150-162](maveric/customization/evaluation.py#L150-L162) - `evaluate()` method
+  - [evaluation.py:205-217](maveric/customization/evaluation.py#L205-L217) - `evaluate_detailed()` method
+  - [training.py:80-92](maveric/customization/training.py#L80-L92) - Training loop text features
+  - [model_customizer.py:955-969](maveric/customization/model_customizer.py#L955-L969) - `encode_text()` method
+- **Testing**: Verified with Caltech101 model customization (6,084 test samples)
+- **Backward Compatibility**: Maintains support for both old (`pytorch_model.bin`) and new (`model.safetensors`) formats
+- **Note**: This is a breaking change from HuggingFace, not MAVERIC. The fix ensures MAVERIC works with both old and new transformers versions.
+
+### January 30, 2026 - Caltech101 Class Name Standardization
+
+**Refactoring: Consistent Class Naming for Caltech101 Dataset**:
+- **Purpose**: Standardize Caltech101 class names for consistency with torchvision's implementation
+- **Changes**: 48 class names updated in ELEVATER_DATASETS dictionary
+- **Naming Convention**:
+  - Use underscores instead of spaces or descriptive phrases
+  - Maintain consistency with torchvision's Caltech101 class names
+  - Some classes retain capitalization to match torchvision format exactly
+- **Examples of Changes**:
+  - 'airplane' → 'airplanes' (pluralization to match torchvision)
+  - 'side of a car' → 'car_side' (standardized format)
+  - 'ceiling fan' → 'ceiling_fan' (underscore instead of space)
+  - 'body of a cougar cat' → 'cougar_body' (concise naming)
+  - 'centered face' → 'Faces_easy' (torchvision compatibility)
+  - 'off-center face' → 'Faces' (simplified)
+  - 'leopard' → 'Leopards' (capitalization consistency)
+  - 'motorbike' → 'Motorbikes' (capitalization consistency)
+  - 'dollar bill' → 'dollar_bill' (underscore format)
+- **Location**: [elevater_datasets.py:33-128](maveric/datasets/elevater_datasets.py#L33-L128)
+- **Impact**:
+  - Affects all Caltech101 dataset users
+  - Class names now match torchvision's exact format
+  - Improves consistency across MAVERIC's dataset handling
+  - Resolves ambiguities in class naming conventions
+- **Related Fixes**: This completes the Caltech101 improvements that began in November 2025:
+  - November 18: Added missing "leopards" class
+  - November 19: Fixed class list mismatch (102 → 101 classes, excluding 'BACKGROUND_Google')
+  - January 30: Standardized all class names to match torchvision exactly
+- **Note**: Mixed capitalization ('Faces_easy', 'Faces', 'Leopards', 'Motorbikes') is intentional and matches torchvision's format
+- **Documentation**: See commit d4c8a69 "Refactor class names for consistency and clarity"
+
 ### January 5, 2026 - Mahalanobis Batch Processing "ALL" Feature
 
 **Enhancement: Batch Process All Classes at Once in Class-Based Mode**:

@@ -957,9 +957,17 @@ class CustomizedCLIP(nn.Module):
             return_tensors="pt",
             padding=True
         ).to(self.device)
-        
+
         with torch.no_grad():
-            text_embeds = self.clip_model.get_text_features(**tokens)
+            text_features_output = self.clip_model.get_text_features(**tokens)
+
+            # Handle both tensor and BaseModelOutputWithPooling formats
+            if isinstance(text_features_output, torch.Tensor):
+                text_embeds = text_features_output
+            else:
+                # Extract tensor from output object
+                text_embeds = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+
             text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
 
         return text_embeds
