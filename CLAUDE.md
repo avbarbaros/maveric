@@ -22,12 +22,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
       # NOT [0] which gives last_hidden_state (shape: batch_size, seq_len, hidden_size)
       text_embeds = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
   ```
-- **Locations Fixed**:
-  - [evaluation.py:90-103](maveric/customization/evaluation.py#L90-L103) - `_create_text_classifier_with_templates()` method
-  - [evaluation.py:150-162](maveric/customization/evaluation.py#L150-L162) - `evaluate()` method
-  - [evaluation.py:205-217](maveric/customization/evaluation.py#L205-L217) - `evaluate_detailed()` method
-  - [training.py:80-92](maveric/customization/training.py#L80-L92) - Training loop text features
-  - [model_customizer.py:955-969](maveric/customization/model_customizer.py#L955-L969) - `encode_text()` method
+- **Locations Fixed** (January 29, 2026 - corrected to use `pooler_output`):
+  - [evaluation.py:94-101](maveric/customization/evaluation.py#L94-L101) - `_create_text_classifier_with_templates()` method (text features)
+  - [evaluation.py:155-160](maveric/customization/evaluation.py#L155-L160) - `evaluate()` method (text features)
+  - [evaluation.py:208-213](maveric/customization/evaluation.py#L208-L213) - `evaluate_detailed()` method (text features)
+  - [training.py:88-93](maveric/customization/training.py#L88-L93) - Training loop text features
+  - [model_customizer.py:795-803](maveric/customization/model_customizer.py#L795-L803) - `forward()` method (image features)
+  - [model_customizer.py:971-976](maveric/customization/model_customizer.py#L971-L976) - `encode_text()` method
 - **Testing**: Verified with Caltech101 model customization (6,084 test samples)
 - **Backward Compatibility**: Maintains support for both old (`pytorch_model.bin`) and new (`model.safetensors`) formats
 - **Note**: This is a breaking change from HuggingFace, not MAVERIC. The fix ensures MAVERIC works with both old and new transformers versions.

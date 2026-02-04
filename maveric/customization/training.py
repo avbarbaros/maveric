@@ -89,8 +89,8 @@ class Trainer(BaseComponent):
                 if isinstance(text_features_output, torch.Tensor):
                     class_text_features = text_features_output
                 else:
-                    # Extract tensor from output object
-                    class_text_features = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+                    # Extract pooler_output from BaseModelOutputWithPooling
+                    class_text_features = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
 
                 class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
         

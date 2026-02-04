@@ -792,7 +792,14 @@ class CustomizedCLIP(nn.Module):
         """
 
         inputs = self._safe_process_images(self.processor, images, self.device)
-        image_embeds = self.clip_model.get_image_features(**inputs)
+        image_embeds_output = self.clip_model.get_image_features(**inputs)
+
+        # Handle both tensor and BaseModelOutputWithPooling formats
+        if isinstance(image_embeds_output, torch.Tensor):
+            image_embeds = image_embeds_output
+        else:
+            # Extract pooler_output from BaseModelOutputWithPooling
+            image_embeds = image_embeds_output.pooler_output if hasattr(image_embeds_output, 'pooler_output') else image_embeds_output[0]
 
         # Normalize
         image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
@@ -965,8 +972,8 @@ class CustomizedCLIP(nn.Module):
             if isinstance(text_features_output, torch.Tensor):
                 text_embeds = text_features_output
             else:
-                # Extract tensor from output object
-                text_embeds = text_features_output[0] if hasattr(text_features_output, '__getitem__') else text_features_output
+                # Extract pooler_output from BaseModelOutputWithPooling
+                text_embeds = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
 
             text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
 
