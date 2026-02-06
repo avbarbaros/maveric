@@ -1,7 +1,9 @@
 # Core dependencies
 torch>=1.9.0
 torchvision>=0.10.0
-transformers>=4.20.0
+# Pin transformers to <5.0.0 to avoid breaking changes with safetensors format
+# Version 4.46.3 is the last stable version before 5.0.0 broke get_text_features() API
+transformers>=4.20.0,<5.0.0
 datasets>=2.0.0
 
 # CLIP and vision
