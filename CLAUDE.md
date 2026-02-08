@@ -4,6 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### February 8, 2026 - VOC2007 Multi-Label Evaluation Fix
+
+**Fix: Correct mAP Evaluation for VOC2007 (Multi-Label Classification)**:
+- **Problem**: VOC2007 baseline showed 75.67% accuracy vs REACT benchmark of 82.6%
+- **Root Cause**: VOC2007 is a **multi-label** dataset - images can belong to multiple classes simultaneously (e.g., an image may have both "person" and "car"). Test data has ~5,952 image-class instances vs 4,952 unique images. MAVERIC was treating each image-class occurrence as a separate single-label sample and computing top-1 accuracy, which is the wrong metric.
+- **Correct metric**: REACT benchmarks VOC2007 using **Mean Average Precision (mAP)**, not top-1 accuracy
+- **Fix**: Implemented proper multi-label evaluation pipeline:
+  1. **Dataset metadata**: Added `'multi_label': True` and `'task': 'multi_label_classification'` to VOC2007 in ELEVATER_DATASETS
+  2. **Multi-label test loader**: When `multi_label=True`, scans filesystem to build unique image → set_of_class_indices mapping, loads each image once with multi-hot label vector
+  3. **mAP evaluation**: New `evaluate_multilabel_map()` method in `Evaluator` uses sklearn's `average_precision_score` per class, then averages
+  4. **Automatic routing**: Detection via `ELEVATERDataset.ELEVATER_DATASETS.get(target_dataset_name, {}).get('multi_label', False)` routes to correct evaluation path
+  5. **Training loop**: Per-epoch test evaluation for multi-label uses mAP instead of top-1
+- **Locations**:
+  - Dataset metadata: [elevater_datasets.py:1208-1212](maveric/datasets/elevater_datasets.py#L1208-L1212)
+  - Multi-label test loader: [model_customizer.py](maveric/customization/model_customizer.py) (added multi-label branch in `_create_test_loader`)
+  - mAP evaluation: [evaluation.py](maveric/customization/evaluation.py) - new `evaluate_multilabel_map()` method
+  - Multi-label routing: [model_customizer.py](maveric/customization/model_customizer.py) - `customize()`, `_evaluate_baseline()`
+  - Training loop: [training.py](maveric/customization/training.py) - `train()` method now accepts `is_multi_label` parameter
+  - collate_fn: [model_customizer.py](maveric/customization/model_customizer.py) - `custom_collate_fn` handles both int and tensor labels
+- **Key insight**: The 75.67% vs 82.6% gap was entirely due to wrong evaluation metric (top-1 vs mAP), not model quality
+
 ### February 4, 2026 - HuggingFace Transformers API Compatibility Fix (CRITICAL)
 
 **Bug Fix: BaseModelOutputWithPooling Compatibility**:
