@@ -157,6 +157,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
       │   └── ...
       └── ...
   ```
+- **Critical Fix** (January 29, 2026): Fixed class name order mismatch between ImageFolder and ELEVATER_DATASETS
+  - **Problem**: For file-based datasets, `ImageFolder` sorts class folders alphabetically (case-sensitive), putting capital-letter folders (`Faces`, `Faces_easy`, `Leopards`, `Motorbikes`) before lowercase ones (`accordion`, `airplanes`). But ELEVATER's `class_names` has its own order. This caused completely wrong label assignments (0.12% accuracy instead of 87.5% for Caltech101)
+  - **Fix**: Use folder name from `dataset.classes[label]` to look up the correct ELEVATER canonical class name via a normalized mapping, instead of using `canonical_class_names[label]` directly
+  - **Location**: [model_customizer.py:439-459](maveric/customization/model_customizer.py#L439-L459)
+  - **Impact**: Correct baseline accuracy now restored for all file-based datasets with mixed-case folder names
 - **Recommended First Steps**: Start with FER2013 (easiest to set up from Kaggle), then expand to other datasets as needed
 - **Status**: ✅ **Fixed (January 29, 2026)** - File-based datasets now load correctly from manually placed test data
 - **Improvement** (January 28, 2026): Added helpful error messages that display exact paths and setup instructions when test data fails to load

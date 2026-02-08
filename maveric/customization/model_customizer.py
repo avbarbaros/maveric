@@ -433,15 +433,32 @@ class ModelCustomizer(BaseComponent):
                 # Use all test samples for complete evaluation
                 from tqdm import tqdm
 
+                # Build lookup from folder name -> ELEVATER canonical class name
+                # This handles mixed-case folder names (e.g., 'Faces' vs 'faces')
+                # where ImageFolder's alphabetical sort order differs from ELEVATER's order
+                folder_to_canonical = {}
+                for canonical in canonical_class_names:
+                    normalized = self._normalize_class_name(canonical)
+                    folder_to_canonical[canonical] = canonical          # exact match
+                    folder_to_canonical[normalized] = canonical         # lowercase match
+                    folder_to_canonical[canonical.lower()] = canonical  # lowercase match
+
                 for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
                     try:
                         image, label = dataset[idx]
-                        if isinstance(label, int) and label < len(canonical_class_names):
-                            # Get canonical class name (handles FER2013 list format)
-                            test_class_name = canonical_class_names[label]
+                        if isinstance(label, int) and label < len(dataset.classes):
+                            # Get folder name from ImageFolder's own class list
+                            folder_name = dataset.classes[label]
+
+                            # Look up the ELEVATER canonical class name for this folder
+                            # This handles case mismatches (e.g., folder 'Faces' matches ELEVATER 'Faces')
+                            test_class_name = folder_to_canonical.get(folder_name) or \
+                                              folder_to_canonical.get(folder_name.lower())
+
+                            if test_class_name is None:
+                                continue  # Skip if folder name doesn't match any known class
 
                             # Check if this class exists in training data using normalized matching
-                            # This handles case/space/underscore differences between training and test
                             normalized_test = self._normalize_class_name(test_class_name)
 
                             if normalized_test in normalized_training_map:
