@@ -43,8 +43,7 @@ class Trainer(BaseComponent):
               training_config: TrainingConfig,
               class_names: List[str],
               templates: Optional[List[str]] = None,
-              evaluator: Optional[Any] = None,
-              is_multi_label: bool = False) -> Dict[str, List[float]]:
+              evaluator: Optional[Any] = None) -> Dict[str, List[float]]:
         """
         Train the model.
 
@@ -150,33 +149,23 @@ class Trainer(BaseComponent):
                     history['val_acc'].append(val_acc)
                 
                 # Evaluate on test set (mandatory)
-                if is_multi_label and evaluator is not None:
-                    # Multi-label evaluation: use mAP
-                    test_acc, _ = evaluator.evaluate_multilabel_map(
-                        self.model, test_loader, class_names, templates=templates
-                    )
-                    test_loss = 0.0
-                else:
-                    test_loss, test_acc = self._validate_epoch(
-                        test_loader,
-                        class_text_features,
-                        criterion,
-                        desc="Testing"
-                    )
+                test_loss, test_acc = self._validate_epoch(
+                    test_loader,
+                    class_text_features,
+                    criterion,
+                    desc="Testing"
+                )
                 history['test_loss'].append(test_loss)
                 history['test_acc'].append(test_acc)
-
-                # Choose metric label
-                metric_label = "mAP" if is_multi_label else "Acc"
-
+                
                 # Log results (always includes test metrics)
                 if val_loader is not None:
                     log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
                               f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%, "
-                              f"Test {metric_label}: {test_acc:.2f}%")
+                              f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}%")
                 else:
                     log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
-                              f"Test {metric_label}: {test_acc:.2f}% (no validation)")
+                              f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}% (no validation)")
                 self.log_info(log_msg)
                 
                 # Check for improvement (always use test accuracy)
@@ -211,8 +200,7 @@ class Trainer(BaseComponent):
             # Skip periodic checkpoints to save disk space - only keep best model
             # Periodic checkpoints disabled for disk efficiency
         
-        metric_label = "mAP" if is_multi_label else "accuracy"
-        self.log_info(f"Training complete. Best epoch: {best_epoch} with {best_val_acc:.2f}% {metric_label}")
+        self.log_info(f"Training complete. Best epoch: {best_epoch} with {best_val_acc:.2f}% accuracy")
         
         return history
     

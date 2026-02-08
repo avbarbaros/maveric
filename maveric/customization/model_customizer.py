@@ -142,24 +142,16 @@ class ModelCustomizer(BaseComponent):
         
         # Create evaluator
         self.evaluator = Evaluator(device=self.device)
-
+        
         # Get dataset templates for evaluation
         templates = self._get_dataset_templates(target_dataset_name)
-
-        # Check if multi-label dataset (e.g., VOC2007 uses mAP instead of top-1 accuracy)
-        from ..datasets.elevater_datasets import ELEVATERDataset
-        dataset_info = ELEVATERDataset.ELEVATER_DATASETS.get(target_dataset_name, {})
-        is_multi_label = dataset_info.get('multi_label', False)
-        metric_name = "mAP" if is_multi_label else "accuracy"
 
         # Get baseline performance (always use test data)
         self.log_info("Evaluating baseline model")
         if not test_loader:
             raise ValueError(f"Test data is required for evaluation but could not load test set for {target_dataset_name}")
-        baseline_accuracy, baseline_class_accuracies = self._evaluate_baseline(
-            test_loader, class_names, templates=templates, is_multi_label=is_multi_label
-        )
-
+        baseline_accuracy, baseline_class_accuracies = self._evaluate_baseline(test_loader, class_names, templates=templates)
+        
         # Train model (test data is mandatory)
         self.log_info("Training customized model")
         training_history = self.trainer.train(
@@ -169,10 +161,9 @@ class ModelCustomizer(BaseComponent):
             training_config=training_config,
             class_names=class_names,
             templates=templates,
-            evaluator=self.evaluator,
-            is_multi_label=is_multi_label
+            evaluator=self.evaluator
         )
-
+        
         # Load and evaluate the best model from training
         best_checkpoint = None
         if training_config.save_best_model and self.checkpoint_dir:
@@ -182,46 +173,40 @@ class ModelCustomizer(BaseComponent):
                 self.log_info("Loading best model checkpoint for final evaluation")
                 best_model = self.load_checkpoint(str(best_checkpoint))
                 # Final evaluation using the best model
-                self.log_info(f"Evaluating best customized model on test set ({metric_name})")
-                if is_multi_label:
-                    final_accuracy, class_accuracies = self.evaluator.evaluate_multilabel_map(
-                        best_model, test_loader, class_names, templates=templates
-                    )
-                else:
-                    final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
-                        best_model, test_loader, class_names, templates=templates
-                    )
+                self.log_info("Evaluating best customized model on test set")
+                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                    best_model,
+                    test_loader,
+                    class_names,
+                    templates=templates
+                )
             else:
                 # Fallback: evaluate current model and save it
-                self.log_info(f"No best checkpoint found, evaluating current model ({metric_name})")
-                if is_multi_label:
-                    final_accuracy, class_accuracies = self.evaluator.evaluate_multilabel_map(
-                        customized_model, test_loader, class_names, templates=templates
-                    )
-                else:
-                    final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
-                        customized_model, test_loader, class_names, templates=templates
-                    )
+                self.log_info("No best checkpoint found, evaluating current model")
+                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                    customized_model,
+                    test_loader,
+                    class_names,
+                    templates=templates
+                )
                 best_checkpoint = self.trainer.save_checkpoint(
                     customized_model,
                     f"best_model_{target_dataset_name}",
                     {
-                        metric_name: final_accuracy,
+                        'accuracy': final_accuracy,
                         'baseline': baseline_accuracy,
                         'config': training_config.to_dict()
                     }
                 )
         else:
             # No checkpointing enabled, evaluate current model
-            self.log_info(f"Evaluating current customized model on test set ({metric_name})")
-            if is_multi_label:
-                final_accuracy, class_accuracies = self.evaluator.evaluate_multilabel_map(
-                    customized_model, test_loader, class_names, templates=templates
-                )
-            else:
-                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
-                    customized_model, test_loader, class_names, templates=templates
-                )
+            self.log_info("Evaluating current customized model on test set")
+            final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                customized_model,
+                test_loader,
+                class_names,
+                templates=templates
+            )
         
         # Create result
         result = CustomizationResult(
@@ -237,10 +222,7 @@ class ModelCustomizer(BaseComponent):
             checkpoint_path=str(best_checkpoint) if best_checkpoint else None
         )
         
-        if is_multi_label:
-            self.log_info(f"Customization complete. mAP improvement: {result.improvement:+.2f}% (baseline: {baseline_accuracy:.2f}% → final: {final_accuracy:.2f}%)")
-        else:
-            self.log_info(f"Customization complete. Improvement: {result.improvement:+.2f}%")
+        self.log_info(f"Customization complete. Improvement: {result.improvement:+.2f}%")
         
         return result
     
@@ -461,113 +443,56 @@ class ModelCustomizer(BaseComponent):
                     folder_to_canonical[normalized] = canonical         # lowercase match
                     folder_to_canonical[canonical.lower()] = canonical  # lowercase match
 
-                # Check if this is a multi-label dataset (e.g., VOC2007)
-                # Multi-label datasets have the same image in multiple class folders
-                from ..datasets.elevater_datasets import ELEVATERDataset
-                dataset_info = ELEVATERDataset.ELEVATER_DATASETS.get(target_dataset_name, {})
-                is_multi_label = dataset_info.get('multi_label', False)
+                for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
+                    try:
+                        image, label = dataset[idx]
+                        if isinstance(label, int) and label < len(dataset.classes):
+                            # Get folder name from ImageFolder's own class list
+                            folder_name = dataset.classes[label]
 
-                if is_multi_label and expected_test_path.exists():
-                    # Multi-label loading: scan filesystem directly to build image->labels mapping
-                    # This ensures each unique image appears only once with ALL its class labels
-                    self.log_info(f"Multi-label dataset detected. Building image->labels mapping for {target_dataset_name}")
-                    image_to_labels = {}  # path -> set of class indices
-                    image_to_pil = {}     # path -> PIL image (loaded once)
+                            # Look up the ELEVATER canonical class name for this folder
+                            # This handles case mismatches (e.g., folder 'Faces' matches ELEVATER 'Faces')
+                            test_class_name = folder_to_canonical.get(folder_name) or \
+                                              folder_to_canonical.get(folder_name.lower())
 
-                    for class_dir in sorted(expected_test_path.iterdir()):
-                        if not class_dir.is_dir():
-                            continue
-                        folder_name = class_dir.name
-                        canonical_name = folder_to_canonical.get(folder_name) or \
-                                        folder_to_canonical.get(folder_name.lower())
-                        if canonical_name is None:
-                            continue
-                        normalized_name = self._normalize_class_name(canonical_name)
-                        if normalized_name not in normalized_training_map:
-                            continue
-                        class_idx = class_to_idx[canonical_name]
+                            if test_class_name is None:
+                                continue  # Skip if folder name doesn't match any known class
 
-                        for img_file in sorted(class_dir.iterdir()):
-                            if img_file.suffix.lower() not in ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'):
-                                continue
-                            img_path = str(img_file)
-                            if img_path not in image_to_labels:
-                                image_to_labels[img_path] = set()
-                            image_to_labels[img_path].add(class_idx)
+                            # Check if this class exists in training data using normalized matching
+                            normalized_test = self._normalize_class_name(test_class_name)
 
-                    # Build test_samples with multi-hot labels
-                    from PIL import Image
-                    num_classes = len(canonical_class_names)
-                    for img_path, label_set in tqdm(image_to_labels.items(), desc=f"Loading {target_dataset_name} test data"):
-                        try:
-                            image = Image.open(img_path).convert('RGB')
-                            # Multi-hot label vector
-                            label_vec = [0.0] * num_classes
-                            for idx in label_set:
-                                label_vec[idx] = 1.0
-                            test_samples.append({
-                                'image': image,
-                                'label': label_vec,  # Multi-hot list for multi-label
-                                'text': '',
-                                'multi_label': True
-                            })
-                        except Exception as e:
-                            self.log_warning(f"Error loading {img_path}: {e}")
-                            continue
-                    self.log_info(f"Multi-label: loaded {len(test_samples)} unique images")
-                else:
-                    # Single-label loading (original path)
-                    for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
-                        try:
-                            image, label = dataset[idx]
-                            if isinstance(label, int) and label < len(dataset.classes):
-                                # Get folder name from ImageFolder's own class list
-                                folder_name = dataset.classes[label]
-
-                                # Look up the ELEVATER canonical class name for this folder
-                                # This handles case mismatches (e.g., folder 'Faces' matches ELEVATER 'Faces')
-                                test_class_name = folder_to_canonical.get(folder_name) or \
-                                                  folder_to_canonical.get(folder_name.lower())
-
-                                if test_class_name is None:
-                                    continue  # Skip if folder name doesn't match any known class
-
-                                # Check if this class exists in training data using normalized matching
-                                normalized_test = self._normalize_class_name(test_class_name)
-
-                                if normalized_test in normalized_training_map:
-                                    # Use the canonical test dataset class name for the label
-                                    # Note: Text field is not used during evaluation (templates are used in text classifier)
-                                    test_samples.append({
-                                        'image': image,
-                                        'label': test_class_name,  # Use canonical class name (string, not list)
-                                        'text': ''  # Placeholder - not used during evaluation
-                                    })
-                        except Exception as e:
-                            if idx < 10:  # Only log first few errors to avoid spam
-                                self.log_warning(f"Error processing test sample {idx}: {e}")
-                            continue
-
+                            if normalized_test in normalized_training_map:
+                                # Use the canonical test dataset class name for the label
+                                # Note: Text field is not used during evaluation (templates are used in text classifier)
+                                test_samples.append({
+                                    'image': image,
+                                    'label': test_class_name,  # Use canonical class name (string, not list)
+                                    'text': ''  # Placeholder - not used during evaluation
+                                })
+                    except Exception as e:
+                        if idx < 10:  # Only log first few errors to avoid spam
+                            self.log_warning(f"Error processing test sample {idx}: {e}")
+                        continue
+            
             if not test_samples:
                 self.log_warning(f"No test samples loaded from {target_dataset_name}")
                 return None
 
-            # Log which classes are missing from training data (single-label only)
-            if not (test_samples and test_samples[0].get('multi_label')):
-                # Calculate missing classes using normalized matching
-                # Use canonical_class_names to avoid unhashable list types
-                normalized_full_classes = {self._normalize_class_name(name): name for name in canonical_class_names}
-                missing_normalized = set(normalized_full_classes.keys()) - set(normalized_training_map.keys())
-                missing_classes = [normalized_full_classes[norm] for norm in missing_normalized]
+            # Log which classes are missing from training data
+            # Calculate missing classes using normalized matching
+            # Use canonical_class_names to avoid unhashable list types
+            normalized_full_classes = {self._normalize_class_name(name): name for name in canonical_class_names}
+            missing_normalized = set(normalized_full_classes.keys()) - set(normalized_training_map.keys())
+            missing_classes = [normalized_full_classes[norm] for norm in missing_normalized]
 
-                if missing_classes:
-                    self.log_info(f"Excluding {len(missing_classes)} classes not in training data: {sorted(missing_classes)[:10]}" +
-                                 ("..." if len(missing_classes) > 10 else ""))
+            if missing_classes:
+                self.log_info(f"Excluding {len(missing_classes)} classes not in training data: {sorted(missing_classes)[:10]}" +
+                             ("..." if len(missing_classes) > 10 else ""))
 
             # Create test dataset using test dataset class names (from ELEVATER_DATASETS)
             # This ensures evaluation uses the correct class names for CLIP embeddings
             test_dataset = TestDataset(test_samples, full_dataset_class_names, self.processor)
-
+            
             # Create test loader
             test_loader = DataLoader(
                 test_dataset,
@@ -576,7 +501,7 @@ class ModelCustomizer(BaseComponent):
                 num_workers=0,
                 collate_fn=custom_collate_fn
             )
-
+            
             self.log_info(f"Created test loader with {len(test_samples)} samples (complete test set)")
             return test_loader
             
@@ -720,8 +645,7 @@ class ModelCustomizer(BaseComponent):
         # Fallback to default template
         return None
 
-    def _evaluate_baseline(self, val_loader: Any, class_names: List[str],
-                           templates: List[str] = None, is_multi_label: bool = False) -> Tuple[float, Dict[str, float]]:
+    def _evaluate_baseline(self, val_loader: Any, class_names: List[str], templates: List[str] = None) -> Tuple[float, Dict[str, float]]:
         """Evaluate baseline model performance."""
         baseline_model = CustomizedCLIP(
             self.model,
@@ -729,17 +653,14 @@ class ModelCustomizer(BaseComponent):
             regularize=False
         ).to(self.device)
 
-        if is_multi_label:
-            accuracy, class_accuracies = self.evaluator.evaluate_multilabel_map(
-                baseline_model, val_loader, class_names, templates=templates
-            )
-            self.log_info(f"Baseline model mAP: {accuracy:.2f}%")
-        else:
-            accuracy, class_accuracies = self.evaluator.evaluate_detailed(
-                baseline_model, val_loader, class_names, templates=templates
-            )
-            self.log_info(f"Baseline model accuracy: {accuracy:.2f}%")
+        accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+            baseline_model,
+            val_loader,
+            class_names,
+            templates=templates
+        )
 
+        self.log_info(f"Baseline model accuracy: {accuracy:.2f}%")
         return accuracy, class_accuracies
     
     def load_checkpoint(self, checkpoint_path: str) -> 'CustomizedCLIP':
@@ -1104,15 +1025,12 @@ class TestDataset(torch.utils.data.Dataset):
         # Get image (already PIL Image from dataset)
         image = sample['image']
 
-        # Get label - handles both single-label (string) and multi-label (list) cases
-        if sample.get('multi_label') and isinstance(sample['label'], list):
-            # Multi-label case: label is a multi-hot vector
-            label = torch.tensor(sample['label'], dtype=torch.float32)
-            text = sample.get('text', '')
-        else:
-            # Single-label case: map class name to index
-            label = self.class_to_idx.get(sample['label'], 0)
-            text = sample.get('text', f"a photo of a {sample['label']}.")
+        # Get label - test samples already have REACT class names from ELEVATER_DATASETS
+        # (assigned in _create_test_loader using class_names parameter from ELEVATER_DATASETS)
+        label = self.class_to_idx.get(sample['label'], 0)
+
+        # Get text
+        text = sample.get('text', f"a photo of a {sample['label']}.")
 
         return image, text, label
 
@@ -1411,16 +1329,9 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
 
 
 def custom_collate_fn(batch):
-    """Custom collate function for handling PIL images.
-
-    Handles both single-label (int) and multi-label (float tensor) cases.
-    """
+    """Custom collate function for handling PIL images."""
     images = [item[0] for item in batch]
     texts = [item[1] for item in batch]
-    # Support multi-hot label tensors (multi-label) and integer labels (single-label)
-    if isinstance(batch[0][2], torch.Tensor):
-        labels = torch.stack([item[2] for item in batch])
-    else:
-        labels = torch.tensor([item[2] for item in batch])
-
+    labels = torch.tensor([item[2] for item in batch])
+    
     return images, texts, labels

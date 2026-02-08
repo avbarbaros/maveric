@@ -1207,8 +1207,7 @@ class ELEVATERDataset(BaseDataset):
         },
         'voc2007': {
             'num_classes': 20,
-            'task': 'multi_label_classification',
-            'multi_label': True,
+            'task': 'classification',
             'type': 'file_based',
             'class_names': [
                 'aeroplane',
