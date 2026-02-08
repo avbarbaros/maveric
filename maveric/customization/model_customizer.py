@@ -879,6 +879,9 @@ class CustomizedCLIP(nn.Module):
                         img = img.convert('RGB')
                     # Test image integrity
                     img.load()
+                    # Replace degenerate images (too small for processor) with placeholder
+                    if img.width < 10 or img.height < 10:
+                        img = Image.new('RGB', (224, 224), color=(128, 128, 128))
                     preprocessed_images.append(img)
                 else:
                     # If it's already a tensor or array, we'll handle it differently
