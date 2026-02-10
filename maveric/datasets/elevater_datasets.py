@@ -27,7 +27,7 @@ class ELEVATERDataset(BaseDataset):
     # Mapping of ELEVATER dataset names to their properties
     ELEVATER_DATASETS = {
         'caltech101': {
-            'num_classes': 101,
+            'num_classes': 102,
             'task': 'classification',
             'type': 'file_based',
             'class_names': [
@@ -35,6 +35,7 @@ class ELEVATERDataset(BaseDataset):
                 'airplanes',
                 'anchor',
                 'ant',
+                'background_google',
                 'barrel',
                 'bass',
                 'beaver',
@@ -67,8 +68,8 @@ class ELEVATERDataset(BaseDataset):
                 'emu',
                 'euphonium',
                 'ewer',
-                'faces_easy',
                 'faces',
+                'faces_easy',
                 'ferry',
                 'flamingo',
                 'flamingo_head',
