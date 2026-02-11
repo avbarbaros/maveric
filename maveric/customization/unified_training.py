@@ -475,9 +475,10 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
                 debug_shown = True
 
             # Check if any file with this hash exists in our index
+            # Note: Dataset-specific images/ folders use 'img_{hash}.jpg' format (copied from global cache)
             found = False
             for ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
-                filename = f'{url_hash}{ext}'
+                filename = f'img_{url_hash}{ext}'  # Add 'img_' prefix
                 if filename in image_index[dataset_name]:
                     valid_samples.append(sample)
                     found = True
