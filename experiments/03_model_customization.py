@@ -379,8 +379,8 @@ def run_unified_training(config: Dict, args) -> bool:
             },
             dataset_domain_adaptation=dataset_domain_adaptation,
             global_domain_config=global_domain_config,
-            cache_dir=config.get('cache_base_dir', './maveric_cache')
-            training_data_dir=args.input  # Directory containing dataset folders with images/ subdirs
+            cache_dir=config.get('cache_base_dir', './maveric_cache'),
+            training_data_dir=Path(args.input).parent  # Parent dir contains dataset folders with images/ subdirs
         )
 
         # Step 7: Create data loader
