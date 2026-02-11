@@ -431,12 +431,19 @@ def run_unified_training(config: Dict, args) -> bool:
         # Train model
         trainer = Trainer(
             model=customizer.model,
-            processor=processor,
-            training_config=training_config,
-            device=customizer.device
+            device=customizer.device,
+            checkpoint_dir=Path(args.output_dir)
         )
 
-        training_results = trainer.train(train_loader, None)  # No validation in unified mode
+        # For unified training, use training data for monitoring (no separate test set available)
+        # This is just for tracking training progress, not for true evaluation
+        training_results = trainer.train(
+            train_loader=train_loader,
+            val_loader=None,
+            test_loader=train_loader,  # Use train data for monitoring (no true test data available)
+            training_config=training_config,
+            class_names=class_info['global_class_names']
+        )
 
         print("\n✅ Training completed!")
         print(f"   Final loss: {training_results.get('final_loss', 'N/A')}")
