@@ -409,18 +409,33 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         print(f"✨ Using dataset-specific image folders for fast validation")
         print(f"   Base directory: {self.training_data_dir}")
         print(f"   Pattern: {{base_dir}}/{{dataset_name}}/images/{{hash}}.{{ext}}")
+
+        # Debug: Check sample structure
+        if samples:
+            sample_keys = list(samples[0].keys())
+            print(f"   Sample keys: {sample_keys[:10]}...")  # Show first 10 keys
+            if 'dataset_source' in samples[0]:
+                print(f"   First dataset_source: {samples[0]['dataset_source']}")
+            else:
+                print(f"   ⚠️  WARNING: 'dataset_source' field not found in samples!")
+
         print(f"Filtering {len(samples)} samples to find valid images...")
 
         valid_samples = []
+        no_url_count = 0
+        no_dataset_count = 0
         debug_shown = False
+
         for sample in tqdm(samples, desc="Validating samples (fast)"):
             url = sample.get('url')
             if not url:
+                no_url_count += 1
                 continue
 
             # Get dataset source from sample
             dataset_name = sample.get('dataset_source')
             if not dataset_name:
+                no_dataset_count += 1
                 continue
 
             # Build path to dataset-specific images/ folder
@@ -450,7 +465,13 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
 
         # Override base_dataset's valid_samples
         self.base_dataset.valid_samples = valid_samples
-        print(f"Filtered dataset: {len(valid_samples)}/{len(samples)} valid samples ({100*len(valid_samples)/len(samples):.1f}%)")
+
+        print(f"\n📊 Validation Summary:")
+        print(f"   Total samples: {len(samples)}")
+        print(f"   Samples without URL: {no_url_count}")
+        print(f"   Samples without dataset_source: {no_dataset_count}")
+        print(f"   Valid samples found: {len(valid_samples)}")
+        print(f"   Success rate: {100*len(valid_samples)/len(samples):.1f}%")
 
     def _build_domain_transforms(self):
         """Build domain adaptation transforms for each dataset."""
