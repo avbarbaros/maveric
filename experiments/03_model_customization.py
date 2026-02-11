@@ -424,7 +424,7 @@ def run_unified_training(config: Dict, args) -> bool:
         customizer = ModelCustomizer(
             base_model_name=clip_model,
             device=config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu'),
-            checkpoint_dir=str(checkpoint_dir) if checkpoint_dir else None,
+            checkpoint_dir=args.output_dir,
             cache_base_dir=config.get('cache_base_dir', './maveric_cache')
         )
 
