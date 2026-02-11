@@ -333,7 +333,21 @@ def run_unified_training(config: Dict, args) -> bool:
         # Step 5: Load CLIP processor
         clip_model = config.get('clip_model', 'ViT-B/32')
         print(f"\n🔧 Loading CLIP processor for {clip_model}...")
-        processor = CLIPProcessor.from_pretrained(f"openai/{clip_model.lower().replace('/', '-')}")
+
+        # Map OpenAI CLIP model names to Hugging Face model identifiers
+        model_mapping = {
+            "ViT-B/32": "openai/clip-vit-base-patch32",
+            "ViT-B/16": "openai/clip-vit-base-patch16",
+            "ViT-L/14": "openai/clip-vit-large-patch14",
+            "ViT-L/14@336px": "openai/clip-vit-large-patch14-336",
+            "RN50": "openai/clip-resnet-50",
+            "RN101": "openai/clip-resnet-101",
+            "RN50x4": "openai/clip-resnet-50x4",
+            "RN50x16": "openai/clip-resnet-50x16",
+            "RN50x64": "openai/clip-resnet-50x64"
+        }
+        hf_model_name = model_mapping.get(clip_model, clip_model)
+        processor = CLIPProcessor.from_pretrained(hf_model_name)
 
         # Step 6: Create unified dataset with dataset-specific domain adaptation
         print("\n📦 Creating unified training dataset...")
