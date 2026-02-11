@@ -414,10 +414,10 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         if samples:
             sample_keys = list(samples[0].keys())
             print(f"   Sample keys: {sample_keys[:10]}...")  # Show first 10 keys
-            if 'dataset_source' in samples[0]:
-                print(f"   First dataset_source: {samples[0]['dataset_source']}")
+            if 'source_dataset' in samples[0]:
+                print(f"   First source_dataset: {samples[0]['source_dataset']}")
             else:
-                print(f"   ⚠️  WARNING: 'dataset_source' field not found in samples!")
+                print(f"   ⚠️  WARNING: 'source_dataset' field not found in samples!")
 
         print(f"Filtering {len(samples)} samples to find valid images...")
 
@@ -432,8 +432,8 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
                 no_url_count += 1
                 continue
 
-            # Get dataset source from sample
-            dataset_name = sample.get('dataset_source')
+            # Get dataset source from sample (field is 'source_dataset', not 'dataset_source')
+            dataset_name = sample.get('source_dataset')
             if not dataset_name:
                 no_dataset_count += 1
                 continue
@@ -469,7 +469,7 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         print(f"\n📊 Validation Summary:")
         print(f"   Total samples: {len(samples)}")
         print(f"   Samples without URL: {no_url_count}")
-        print(f"   Samples without dataset_source: {no_dataset_count}")
+        print(f"   Samples without source_dataset: {no_dataset_count}")
         print(f"   Valid samples found: {len(valid_samples)}")
         print(f"   Success rate: {100*len(valid_samples)/len(samples):.1f}%")
 
