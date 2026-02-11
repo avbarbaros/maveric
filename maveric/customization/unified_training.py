@@ -380,7 +380,8 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
             use_domain_adaptation=False,  # Disabled - we'll apply per-dataset in __getitem__
             domain_adaptation_config=None,
             cache_dir=cache_dir,
-            training_data_path=None  # Use global cache for unified training
+            training_data_path=None,  # Use global cache for unified training
+            skip_validation=True  # Skip slow validation - we'll do fast validation below
         )
 
         # Override validation to use dataset-specific images/ folders if available
@@ -405,7 +406,9 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         from tqdm import tqdm
         import hashlib
 
-        print(f"Using dataset-specific image folders for fast validation")
+        print(f"✨ Using dataset-specific image folders for fast validation")
+        print(f"   Base directory: {self.training_data_dir}")
+        print(f"   Pattern: {{base_dir}}/{{dataset_name}}/images/{{hash}}.{{ext}}")
         print(f"Filtering {len(samples)} samples to find valid images...")
 
         valid_samples = []

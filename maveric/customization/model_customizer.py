@@ -1050,7 +1050,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                  use_domain_adaptation: bool = False,
                  domain_adaptation_config: Optional[Dict] = None,
                  cache_dir: Optional[str] = None,
-                 training_data_path: Optional[str] = None):
+                 training_data_path: Optional[str] = None,
+                 skip_validation: bool = False):
         """
         Initialize dataset.
 
@@ -1064,6 +1065,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             domain_adaptation_config: Domain adaptation configuration
             cache_dir: Directory for caching images (global cache)
             training_data_path: Path to training data JSON (for dataset-specific cache)
+            skip_validation: Skip automatic validation (caller will validate manually)
         """
         self.samples = samples
         self.class_names = class_names
@@ -1101,11 +1103,12 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             print(f"Using default image cache: {self.image_cache_dir}")
 
         os.makedirs(self.image_cache_dir, exist_ok=True)
-        
+
         # Pre-filter samples to only include those with cached images or that can be downloaded
         # This prevents training on placeholder images which can hurt performance
         self.valid_samples = []
-        self._filter_valid_samples()
+        if not skip_validation:
+            self._filter_valid_samples()
     
     def __len__(self):
         return len(self.valid_samples)
