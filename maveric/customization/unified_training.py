@@ -348,7 +348,8 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
                  augmentation_config: Optional[Dict] = None,
                  dataset_domain_adaptation: Optional[Dict] = None,
                  global_domain_config: Optional[Dict] = None,
-                 cache_dir: Optional[str] = None):
+                 cache_dir: Optional[str] = None,
+                 training_data_dir: Optional[str] = None):
         # Import here to avoid circular dependency
         from .model_customizer import LAIONCustomDataset
 
@@ -365,6 +366,9 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         # Store unified samples
         self.unified_samples = unified_data['samples']
 
+        # Store training data directory for dataset-specific images/ folders
+        self.training_data_dir = Path(training_data_dir) if training_data_dir else None
+
         # Create a temporary LAIONCustomDataset WITHOUT domain adaptation
         # We'll apply dataset-specific domain adaptation in __getitem__
         self.base_dataset = LAIONCustomDataset(
@@ -379,6 +383,10 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
             training_data_path=None  # Use global cache for unified training
         )
 
+        # Override validation to use dataset-specific images/ folders if available
+        if self.training_data_dir:
+            self._validate_from_dataset_folders(unified_data['samples'])
+
         # After filtering, we need to update our samples list
         self.valid_samples = self.base_dataset.valid_samples
 
@@ -387,6 +395,52 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
 
         print(f"\n📊 Unified dataset ready: {len(self.valid_samples):,} valid samples, {self.num_total_classes} total classes")
         self._print_domain_adaptation_summary()
+
+    def _validate_from_dataset_folders(self, samples: List[Dict]):
+        """
+        Fast validation using dataset-specific images/ folders.
+        Overrides LAIONCustomDataset's slow global cache validation.
+        """
+        from PIL import Image
+        from tqdm import tqdm
+        import hashlib
+
+        print(f"Using dataset-specific image folders for fast validation")
+        print(f"Filtering {len(samples)} samples to find valid images...")
+
+        valid_samples = []
+        for sample in tqdm(samples, desc="Validating samples (fast)"):
+            url = sample.get('url')
+            if not url:
+                continue
+
+            # Get dataset source from sample
+            dataset_name = sample.get('dataset_source')
+            if not dataset_name:
+                continue
+
+            # Build path to dataset-specific images/ folder
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            dataset_images_dir = self.training_data_dir / dataset_name / 'images'
+
+            # Try all possible image extensions
+            found = False
+            for ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
+                image_path = dataset_images_dir / f'{url_hash}{ext}'
+                if image_path.exists():
+                    try:
+                        # Quick validation: just verify it opens
+                        with Image.open(image_path) as img:
+                            img.load()  # Verify integrity
+                        valid_samples.append(sample)
+                        found = True
+                        break
+                    except Exception:
+                        continue  # Try next extension
+
+        # Override base_dataset's valid_samples
+        self.base_dataset.valid_samples = valid_samples
+        print(f"Filtered dataset: {len(valid_samples)}/{len(samples)} valid samples ({100*len(valid_samples)/len(samples):.1f}%)")
 
     def _build_domain_transforms(self):
         """Build domain adaptation transforms for each dataset."""
