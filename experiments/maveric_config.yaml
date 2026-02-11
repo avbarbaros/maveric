@@ -112,64 +112,66 @@ training:
   # Only specify use_domain_adaptation and domain_target_size per dataset
   # Other parameters (blur, JPEG, downsample probabilities) are global
   dataset_domain_adaptation:
-    # Low-resolution datasets (32x32) - Enable with fixed target
     cifar10:
       use_domain_adaptation: true
       domain_target_size: 32
     cifar100:
       use_domain_adaptation: true
       domain_target_size: 32
-
-    # Very low-resolution (28x28)
     mnist:
       use_domain_adaptation: true
       domain_target_size: 28
-
-    # Medium-resolution datasets - Enable with scale range
     gtsrb:
       use_domain_adaptation: true
-      domain_target_size: null  # Use scale_range
+      domain_target_size: 32
     eurosat:
       use_domain_adaptation: true
-      domain_target_size: null
+      domain_target_size: 64
     resisc45:
       use_domain_adaptation: true
-      domain_target_size: null
-
-    # Special resolution datasets
+      domain_target_size: 256
     fer2013:
       use_domain_adaptation: true
-      domain_target_size: 48  # FER2013 native resolution
+      domain_target_size: 48 
     pcam:
       use_domain_adaptation: true
-      domain_target_size: 96  # PatchCamelyon native resolution
-
-    # High-resolution datasets - Disable domain adaptation
+      domain_target_size: 96 
+    caltech101:
+      use_domain_adaptation: true
+      domain_target_size: 300
+    country211:
+      use_domain_adaptation: true
+      domain_target_size: 500
+    voc2007:
+      use_domain_adaptation: true
+      domain_target_size: 500
+    hatefulmemes:
+      use_domain_adaptation: true
+      domain_target_size: 500
+    renderedsst2:
+      use_domain_adaptation: true
+      domain_target_size: 448
+    kittidistance:
+      use_domain_adaptation: false
+      domain_target_size: null
     food101:
       use_domain_adaptation: false
+      domain_target_size: null 
     dtd:
       use_domain_adaptation: false
+      domain_target_size: null
     flowers102:
       use_domain_adaptation: false
+      domain_target_size: null
     oxfordpets:
       use_domain_adaptation: false
-    caltech101:
-      use_domain_adaptation: false
+      domain_target_size: null
     stanfordcars:
       use_domain_adaptation: false
+      domain_target_size: null
     fgvcaircraft:
       use_domain_adaptation: false
-    country211:
-      use_domain_adaptation: false
-    voc2007:
-      use_domain_adaptation: false
-    hatefulmemes:
-      use_domain_adaptation: false
-    renderedsst2:
-      use_domain_adaptation: false
-    kittidistance:
-      use_domain_adaptation: true
-      domain_target_size: null  # Use scale_range
+      domain_target_size: null
 
   # Optimization settings
   optimizer: "adamw"  # adamw, adam, sgd

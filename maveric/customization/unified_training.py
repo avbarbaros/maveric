@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 from transformers import CLIPProcessor
 
-from ..datasets.elevater_datasets import ELEVATER_DATASETS
+from ..datasets.elevater_datasets import ELEVATERDataset
 
 
 def load_datasets_from_directory(input_dir: str) -> Dict[str, List[Path]]:
@@ -155,9 +155,9 @@ def load_unified_dataset(
             print(f"   ⚖️  {dataset_name}: Limited to {max_samples_per_dataset} samples")
 
         # Get class names from ELEVATER_DATASETS
-        if dataset_name in ELEVATER_DATASETS:
-            class_names = ELEVATER_DATASETS[dataset_name]['class_names']
-            num_classes = ELEVATER_DATASETS[dataset_name]['num_classes']
+        if dataset_name in ELEVATERDataset.ELEVATER_DATASETS:
+            class_names = ELEVATERDataset.ELEVATER_DATASETS[dataset_name]['class_names']
+            num_classes = ELEVATERDataset.ELEVATER_DATASETS[dataset_name]['num_classes']
         else:
             # Fallback: extract from data
             print(f"   ⚠️  {dataset_name}: Not in ELEVATER_DATASETS, extracting classes from data")
