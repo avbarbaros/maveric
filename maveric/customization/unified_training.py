@@ -443,6 +443,7 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         valid_samples = []
         no_url_count = 0
         no_dataset_count = 0
+        debug_shown = False
 
         for sample in tqdm(samples, desc="Validating samples"):
             url = sample.get('url')
@@ -462,6 +463,16 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
 
             # Build expected filename hash
             url_hash = hashlib.md5(url.encode()).hexdigest()
+
+            # Debug: Show what we're looking for vs what's available (first sample only)
+            if not debug_shown and dataset_name in image_index and len(image_index[dataset_name]) > 0:
+                print(f"\n🔍 Debug - First lookup:")
+                print(f"   Dataset: {dataset_name}")
+                print(f"   URL: {url[:80]}...")
+                print(f"   Expected hash: {url_hash}")
+                print(f"   Expected filenames: {url_hash}.jpg, {url_hash}.jpeg, etc.")
+                print(f"   First 5 actual files: {list(image_index[dataset_name])[:5]}")
+                debug_shown = True
 
             # Check if any file with this hash exists in our index
             found = False
