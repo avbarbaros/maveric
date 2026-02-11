@@ -4,6 +4,103 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### February 10, 2026 - Dataset Type Migrations (BREAKING CHANGES)
+
+**Major Changes: Two Datasets Migrated from Torchvision to File-Based**:
+
+#### Food101 Migration to File-Based
+- **Type Change**: 'torchvision' → 'file_based'
+- **Class Names**: All 101 names changed from spaces to underscores
+  - Examples: 'apple pie' → 'apple_pie', 'chocolate cake' → 'chocolate_cake', 'baby back ribs' → 'baby_back_ribs'
+- **Impact**: No automatic download - requires manual test data setup
+- **Setup Guide**: See [FILE_BASED_DATASETS_GUIDE.md](FILE_BASED_DATASETS_GUIDE.md) for Food101 download instructions
+- **Location**: [elevater_datasets.py:588-697](maveric/datasets/elevater_datasets.py#L588-L697)
+- **Commit**: 4f75f38 "Change food101 type from 'torchvision' to 'file_based'"
+
+#### FGVCAircraft Migration to File-Based
+- **Type Change**: 'torchvision' → 'file_based'
+- **Class Names**: 27 aircraft model names changed from spaces to underscores
+  - Examples: 'BAE 146-200' → 'BAE_146-200', 'Boeing 717' → 'Boeing_717', 'Beechcraft 1900' → 'Beechcraft_1900'
+- **Impact**: No automatic download - requires manual test data setup
+- **Setup Guide**: See [FILE_BASED_DATASETS_GUIDE.md](FILE_BASED_DATASETS_GUIDE.md) for FGVCAircraft download instructions
+- **Location**: [elevater_datasets.py:481-587](maveric/datasets/elevater_datasets.py#L481-L587)
+- **Commit**: e041312 "Refactor aircraft names for consistency"
+
+#### Updated Dataset Counts
+- **Torchvision datasets**: ~~9~~ → **7** (removed Food101, FGVCAircraft)
+  - CIFAR-10, CIFAR-100, Country211, EuroSAT, GTSRB, Oxford Flowers102, Oxford Pets
+- **File-based datasets**: ~~8~~ → **13** (added Food101, FGVCAircraft, plus DTD, MNIST, Caltech101)
+  - Caltech101, DTD, FER2013, FGVCAircraft, Food101, HatefulMemes, Kitti Distance, MNIST, PatchCamelyon, RenderedSST2, RESISC45, StanfordCars, VOC2007
+- **Total ELEVATER datasets**: Still 20 (no change)
+
+### February 10, 2026 - Caltech101 Class Count Update (REVERSAL)
+
+**Change: Reverted to 102 Classes (with 'background_google')**:
+- **Previous State** (November 19, 2025): 101 classes (excluded 'BACKGROUND_Google' to match torchvision)
+- **New State**: 102 classes (includes 'background_google' as lowercase)
+- **Class Ordering**: 'faces' and 'faces_easy' reordered alphabetically
+- **Impact**: Reverses November 2025 fix that removed BACKGROUND_Google for torchvision compatibility
+- **Note**: This may reintroduce index mismatch issues with torchvision (which excludes BACKGROUND_Google)
+- **Location**: [elevater_datasets.py:30](maveric/datasets/elevater_datasets.py#L30)
+- **Commit**: 85986d0 "Update number of classes for caltech101 dataset"
+- **Clarification**: Torchvision compatibility implications need verification
+
+### February 8, 2026 - Corrupt Image Handling
+
+**Enhancement: Automatic Placeholder for Degenerate Images**:
+- **Problem**: Corrupt or extremely small images (<10×10 pixels) caused processing failures
+- **Solution**: Automatically replace degenerate images with 224×224 gray placeholder
+- **Threshold**: Images with width OR height < 10 pixels
+- **Placeholder**: RGB(128, 128, 128) gray image at 224×224 resolution
+- **Location**: [model_customizer.py:879-884](maveric/customization/model_customizer.py#L879-L884)
+- **Benefit**: Prevents training crashes from corrupt/unusual images in datasets
+- **Commit**: f2c707c "A corrupt/unusual image caused manual processing, replace them with a placeholder image"
+
+### February 8, 2026 - VOC2007 Multi-Label Evaluation (ATTEMPTED - REVERTED)
+
+**Note: Multi-label evaluation was attempted but fully reverted**:
+- **Attempt**: Implemented comprehensive mAP evaluation for VOC2007 (inherently multi-label dataset)
+- **Scope**: Added multi-label support across 5 files (evaluation.py, model_customizer.py, training.py, elevater_datasets.py, CLAUDE.md)
+- **Status**: **Fully reverted after 57 minutes** - reason unknown
+- **Current State**: VOC2007 remains single-label classification (may not match REACT benchmark expectations)
+- **Commits**:
+  - Implementation: 2e6449c "VOC2007 Multi-Label Evaluation Fix" (February 8, 12:20)
+  - Revert: d5203b0 "Revert VOC2007 Multi-Label Evaluation Fix" (February 8, 13:17)
+- **Impact**: VOC2007 baseline accuracy may differ from REACT benchmark
+- **Future Consideration**: Multi-label evaluation may need to be re-implemented with different approach
+
+### February 6, 2026 - Transformers Version Pinning (RECOMMENDED)
+
+**Decision: Pin Transformers to <5.0.0 for Maximum Stability**:
+- **Change**: Updated `requirements.txt` to specify `transformers>=4.20.0,<5.0.0`
+- **Rationale**: Prevent automatic upgrades to transformers 5.0.0+ which introduced breaking changes
+- **Benefits**:
+  - Maximum stability with known working configuration
+  - Avoids large safetensors downloads (uses pytorch_model.bin format)
+  - Predictable behavior for reproducible research
+  - Prevents future breaking changes without warning
+- **Documentation**:
+  - [TRANSFORMERS_VERSION_GUIDE.md](TRANSFORMERS_VERSION_GUIDE.md) - Complete guide with 3 solution options
+  - [QUICK_ROLLBACK_GUIDE.md](QUICK_ROLLBACK_GUIDE.md) - One-command rollback solutions
+- **Installation**: `pip install -r requirements.txt` now pins to transformers 4.x
+- **Note**: Code remains backward compatible with both 4.x and 5.x versions (fix from February 4 still active)
+- **Location**: [requirements.txt:4-6](requirements.txt#L4-L6)
+- **Commit**: ffa86f8 "Rollingback to transformers library version before 5.0.0"
+
+### February 4, 2026 - Caltech101 Class Name Case Corrections
+
+**Change: Mixed-Case to Lowercase for Consistency**:
+- **Previous State** (January 30): Mixed-case ('Faces_easy', 'Leopards', 'Motorbikes') documented as "intentional"
+- **New State**: All lowercase for consistency ('faces_easy', 'leopards', 'motorbikes')
+- **Changes**:
+  - 'Faces_easy' → 'faces_easy'
+  - 'Faces' → 'faces'
+  - 'Leopards' → 'leopards'
+  - 'Motorbikes' → 'motorbikes'
+- **Note**: Reverses January 30 mixed-case standardization after only 5 days
+- **Location**: [elevater_datasets.py:67-100](maveric/datasets/elevater_datasets.py#L67-L100)
+- **Commit**: 7bad6cd "Caltech101 class name corrections"
+
 ### February 4, 2026 - HuggingFace Transformers API Compatibility Fix (CRITICAL)
 
 **Bug Fix: BaseModelOutputWithPooling Compatibility**:
@@ -33,7 +130,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Backward Compatibility**: Maintains support for both old (`pytorch_model.bin`) and new (`model.safetensors`) formats
 - **Note**: This is a breaking change from HuggingFace, not MAVERIC. The fix ensures MAVERIC works with both old and new transformers versions.
 
-### January 30, 2026 - Caltech101 Class Name Standardization
+### January 30, 2026 - Caltech101 Class Name Standardization (LATER CORRECTED)
 
 **Refactoring: Consistent Class Naming for Caltech101 Dataset**:
 - **Purpose**: Standardize Caltech101 class names for consistency with torchvision's implementation
@@ -41,16 +138,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Naming Convention**:
   - Use underscores instead of spaces or descriptive phrases
   - Maintain consistency with torchvision's Caltech101 class names
-  - Some classes retain capitalization to match torchvision format exactly
+  - ~~Some classes retain capitalization to match torchvision format exactly~~ (Corrected to lowercase on February 4)
 - **Examples of Changes**:
   - 'airplane' → 'airplanes' (pluralization to match torchvision)
   - 'side of a car' → 'car_side' (standardized format)
   - 'ceiling fan' → 'ceiling_fan' (underscore instead of space)
   - 'body of a cougar cat' → 'cougar_body' (concise naming)
-  - 'centered face' → 'Faces_easy' (torchvision compatibility)
-  - 'off-center face' → 'Faces' (simplified)
-  - 'leopard' → 'Leopards' (capitalization consistency)
-  - 'motorbike' → 'Motorbikes' (capitalization consistency)
+  - 'centered face' → ~~'Faces_easy'~~ → 'faces_easy' (February 4 correction)
+  - 'off-center face' → ~~'Faces'~~ → 'faces' (February 4 correction)
+  - 'leopard' → ~~'Leopards'~~ → 'leopards' (February 4 correction)
+  - 'motorbike' → ~~'Motorbikes'~~ → 'motorbikes' (February 4 correction)
   - 'dollar bill' → 'dollar_bill' (underscore format)
 - **Location**: [elevater_datasets.py:33-128](maveric/datasets/elevater_datasets.py#L33-L128)
 - **Impact**:
@@ -58,11 +155,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Class names now match torchvision's exact format
   - Improves consistency across MAVERIC's dataset handling
   - Resolves ambiguities in class naming conventions
-- **Related Fixes**: This completes the Caltech101 improvements that began in November 2025:
-  - November 18: Added missing "leopards" class
-  - November 19: Fixed class list mismatch (102 → 101 classes, excluding 'BACKGROUND_Google')
-  - January 30: Standardized all class names to match torchvision exactly
-- **Note**: Mixed capitalization ('Faces_easy', 'Faces', 'Leopards', 'Motorbikes') is intentional and matches torchvision's format
+- **Related Fixes**: Caltech101 improvements timeline:
+  - November 18, 2025: Added missing "leopards" class
+  - November 19, 2025: Fixed class list mismatch (102 → 101 classes, excluding 'BACKGROUND_Google')
+  - January 30, 2026: Standardized all class names with mixed-case
+  - **February 4, 2026**: Corrected to all lowercase (see separate entry above)
+  - **February 10, 2026**: Reverted to 102 classes with 'background_google' (see separate entry above)
+- **Note**: ~~Mixed capitalization was initially documented as "intentional"~~ but was corrected to lowercase on February 4, 2026
 - **Documentation**: See commit d4c8a69 "Refactor class names for consistency and clarity"
 
 ### January 5, 2026 - Mahalanobis Batch Processing "ALL" Feature
@@ -113,12 +212,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### January 28, 2026 - File-Based Datasets Test Data Issue (LATEST)
 
 **Issue Identified: Test Data Loading for File-Based Datasets**:
-- **Problem**: When running `03_model_customization.py`, torchvision datasets (CIFAR-10, MNIST, etc.) work fine, but file-based datasets (FER2013, PCAM, RESISC45, etc.) fail to load test data for evaluation
+- **Problem**: When running `03_model_customization.py`, torchvision datasets (CIFAR-10, GTSRB, etc.) work fine, but file-based datasets fail to load test data for evaluation
 - **Root Cause**: File-based datasets don't have automatic download support like torchvision datasets. The `_load_dataset()` method does nothing for file-based datasets (`pass` at line 1285), leaving `self._dataset = None`, which causes test data loading to fail in `_create_test_loader()` at line 359
-- **Affected Datasets** (8 total):
+- **Affected Datasets** (~~8~~ → **13 total** as of February 10, 2026):
+  - Caltech101 (Object recognition - 102 classes)
+  - DTD (Texture recognition - 47 classes)
   - FER2013 (Facial Expression Recognition - 7 classes)
+  - **FGVCAircraft** (Aircraft recognition - 100 classes) ⬅️ **NEW** (migrated February 10)
+  - **Food101** (Food recognition - 101 classes) ⬅️ **NEW** (migrated February 10)
   - HatefulMemes (Hate speech detection - 2 classes)
   - Kitti Distance (Car distance estimation - 4 classes)
+  - MNIST (Digit recognition - 10 classes)
   - PatchCamelyon/PCAM (Lymph node classification - 2 classes)
   - RenderedSST2 (Sentiment analysis - 2 classes)
   - RESISC45 (Remote sensing - 45 classes)
@@ -1410,19 +1514,24 @@ Reference texts files contain:
 
 MAVERIC supports all 20 official ELEVATER benchmark datasets through a unified handler:
 
-### Torchvision-based Datasets (9):
+### Torchvision-based Datasets (7) - **Updated February 10, 2026**:
 - CIFAR-10, CIFAR-100
-- Caltech101, Country211, EuroSAT
-- Food101, GTSRB
-- Oxford Flowers102, Oxford Pets
+- Country211, EuroSAT
+- GTSRB, Oxford Flowers102, Oxford Pets
 
-### File-based Datasets (11):
-- DTD, FER2013, FGVCAircraft
+**Note**: Food101 and FGVCAircraft were migrated to file-based on February 10, 2026. Caltech101 was already file-based.
+
+### File-based Datasets (13) - **Updated February 10, 2026**:
+- Caltech101, DTD, FER2013
+- **FGVCAircraft** ⬅️ (migrated from torchvision February 10, 2026)
+- **Food101** ⬅️ (migrated from torchvision February 10, 2026)
 - Hateful Memes, KITTI Distance, MNIST
 - PatchCamelyon, RenderedSST2, RESISC45
 - Stanford Cars, VOC2007
 
-Torchvision datasets benefit from automatic downloading, standardized interfaces, and optimized loading.
+**Important**: File-based datasets require manual test data download and organization. See [FILE_BASED_DATASETS_GUIDE.md](FILE_BASED_DATASETS_GUIDE.md) for setup instructions.
+
+**Benefits of Torchvision datasets**: Automatic downloading, standardized interfaces, and optimized loading.
 
 ### REACT-Style Text Templates
 

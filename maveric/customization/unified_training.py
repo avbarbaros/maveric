@@ -1,0 +1,612 @@
+"""
+Unified training utilities for REACT-style multi-dataset training.
+
+This module provides functions for combining multiple ELEVATER datasets
+into a single unified training session.
+"""
+
+import json
+import random
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import torch
+from transformers import CLIPProcessor
+
+from ..datasets.elevater_datasets import ELEVATER_DATASETS
+
+
+def load_datasets_from_directory(input_dir: str) -> Dict[str, List[Path]]:
+    """
+    Load training data from manually prepared directory structure.
+
+    Expected structure:
+        input_dir/
+        ├── cifar10/
+        │   └── *training*maveric*.json
+        ├── cifar100/
+        │   └── *training*maveric*.json
+        └── ...
+
+    Args:
+        input_dir: Directory containing dataset subdirectories
+
+    Returns:
+        Dict mapping dataset_name → list of JSON file paths
+
+    Raises:
+        ValueError: If input_dir doesn't exist or has no valid datasets
+
+    Example:
+        >>> files = load_datasets_from_directory('./unified_training_data')
+        >>> print(files.keys())
+        dict_keys(['cifar10', 'cifar100', 'caltech101', ...])
+    """
+    input_path = Path(input_dir)
+
+    if not input_path.exists():
+        raise ValueError(f"Input directory does not exist: {input_dir}")
+
+    if not input_path.is_dir():
+        raise ValueError(f"Input path must be a directory when using --unified-training: {input_dir}")
+
+    dataset_files = {}
+
+    print(f"🔍 Loading datasets from: {input_dir}")
+
+    # Scan for dataset subdirectories
+    for subdir in sorted(input_path.iterdir()):
+        if not subdir.is_dir():
+            continue
+
+        dataset_name = subdir.name
+
+        # Find JSON files in subdirectory
+        json_files = list(subdir.glob("*training*maveric*.json"))
+
+        if json_files:
+            # Count total samples
+            total_samples = 0
+            for json_file in json_files:
+                try:
+                    with open(json_file, 'r') as f:
+                        data = json.load(f)
+                        total_samples += len(data) if isinstance(data, list) else 1
+                except Exception as e:
+                    print(f"      ⚠️  Error reading {json_file.name}: {e}")
+                    continue
+
+            if total_samples > 0:
+                dataset_files[dataset_name] = json_files
+                print(f"   ✅ {dataset_name}: {len(json_files)} file(s), {total_samples:,} samples")
+        else:
+            print(f"   ⚠️  {dataset_name}: No training JSON files found, skipped")
+
+    if not dataset_files:
+        raise ValueError(
+            f"No valid datasets found in {input_dir}. "
+            f"Ensure each subdirectory contains *training*maveric*.json files."
+        )
+
+    print(f"\n📊 Total: {len(dataset_files)} datasets loaded")
+    return dataset_files
+
+
+def load_unified_dataset(
+    dataset_files: Dict[str, List[Path]],
+    max_samples_per_dataset: Optional[int] = None,
+    seed: int = 42
+) -> Dict:
+    """
+    Load and combine samples from multiple datasets.
+
+    Each sample gets tagged with:
+    - source_dataset: Original dataset name
+    - dataset_idx: Numeric index for dataset (for tracking)
+
+    Args:
+        dataset_files: Dict mapping dataset_name → list of JSON file paths
+        max_samples_per_dataset: Optional limit on samples per dataset
+        seed: Random seed for reproducible sampling
+
+    Returns:
+        {
+            'samples': List[Dict],  # Combined samples with source_dataset tag
+            'dataset_metadata': {
+                'cifar10': {
+                    'num_samples': 5000,
+                    'num_classes': 10,
+                    'class_names': ['airplane', 'automobile', ...],
+                    'sample_indices': [0, 1, 2, ...]  # Indices in combined list
+                },
+                ...
+            }
+        }
+    """
+    all_samples = []
+    dataset_metadata = {}
+    current_idx = 0
+
+    print("\n🔄 Loading and combining datasets...")
+
+    for dataset_idx, (dataset_name, json_files) in enumerate(sorted(dataset_files.items())):
+        # Load all JSON files for this dataset
+        dataset_samples = []
+        for json_file in json_files:
+            try:
+                with open(json_file, 'r') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        dataset_samples.extend(data)
+                    else:
+                        dataset_samples.append(data)
+            except Exception as e:
+                print(f"      ⚠️  Error loading {json_file.name}: {e}")
+                continue
+
+        if not dataset_samples:
+            print(f"   ⚠️  {dataset_name}: No samples loaded, skipped")
+            continue
+
+        # Apply max samples limit if specified
+        if max_samples_per_dataset and len(dataset_samples) > max_samples_per_dataset:
+            random.seed(seed)
+            dataset_samples = random.sample(dataset_samples, max_samples_per_dataset)
+            print(f"   ⚖️  {dataset_name}: Limited to {max_samples_per_dataset} samples")
+
+        # Get class names from ELEVATER_DATASETS
+        if dataset_name in ELEVATER_DATASETS:
+            class_names = ELEVATER_DATASETS[dataset_name]['class_names']
+            num_classes = ELEVATER_DATASETS[dataset_name]['num_classes']
+        else:
+            # Fallback: extract from data
+            print(f"   ⚠️  {dataset_name}: Not in ELEVATER_DATASETS, extracting classes from data")
+            unique_labels = set(sample.get('label', '') for sample in dataset_samples)
+            class_names = sorted(list(unique_labels))
+            num_classes = len(class_names)
+
+        # Tag samples with source dataset
+        sample_indices = []
+        for sample in dataset_samples:
+            sample['source_dataset'] = dataset_name
+            sample['dataset_idx'] = dataset_idx
+            sample_indices.append(current_idx)
+            all_samples.append(sample)
+            current_idx += 1
+
+        # Store metadata
+        dataset_metadata[dataset_name] = {
+            'num_samples': len(dataset_samples),
+            'num_classes': num_classes,
+            'class_names': class_names,
+            'sample_indices': sample_indices,
+            'dataset_idx': dataset_idx
+        }
+
+        print(f"   ✅ {dataset_name}: {len(dataset_samples):,} samples, {num_classes} classes")
+
+    print(f"\n📊 Combined: {len(all_samples):,} total samples from {len(dataset_metadata)} datasets")
+
+    return {
+        'samples': all_samples,
+        'dataset_metadata': dataset_metadata
+    }
+
+
+def unify_class_names(dataset_metadata: Dict) -> Dict:
+    """
+    Create unified class name mapping across datasets.
+
+    Strategy:
+    - Each dataset keeps its original class names
+    - Create global class_id = (dataset_idx, local_class_idx)
+    - Total classes = sum of all dataset classes
+    - Prefix class names with dataset to avoid collisions
+
+    Args:
+        dataset_metadata: Metadata dict from load_unified_dataset()
+
+    Returns:
+        {
+            'global_class_names': List[str],  # All prefixed class names
+            'dataset_class_offsets': Dict[str, int],  # Starting index per dataset
+            'num_total_classes': int  # Total number of classes
+        }
+
+    Example:
+        >>> result = unify_class_names(metadata)
+        >>> print(result['global_class_names'][:3])
+        ['cifar10::airplane', 'cifar10::automobile', 'cifar10::bird']
+        >>> print(result['dataset_class_offsets'])
+        {'cifar10': 0, 'cifar100': 10, 'caltech101': 110, ...}
+    """
+    global_class_names = []
+    dataset_class_offsets = {}
+    current_offset = 0
+
+    print("\n🔢 Creating unified class space...")
+
+    for dataset_name, metadata in sorted(dataset_metadata.items()):
+        dataset_class_offsets[dataset_name] = current_offset
+
+        # Add prefixed class names
+        for class_name in metadata['class_names']:
+            # Handle list-based class names (FER2013)
+            if isinstance(class_name, list):
+                canonical_name = class_name[0]
+            else:
+                canonical_name = class_name
+
+            prefixed_name = f"{dataset_name}::{canonical_name}"
+            global_class_names.append(prefixed_name)
+
+        print(f"   {dataset_name}: classes {current_offset}-{current_offset + metadata['num_classes'] - 1}")
+
+        current_offset += metadata['num_classes']
+
+    print(f"\n📊 Total unified classes: {len(global_class_names)}")
+
+    return {
+        'global_class_names': global_class_names,
+        'dataset_class_offsets': dataset_class_offsets,
+        'num_total_classes': len(global_class_names)
+    }
+
+
+def create_class_to_idx_mapping(
+    dataset_metadata: Dict,
+    dataset_class_offsets: Dict
+) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]:
+    """
+    Create mappings from class names to indices.
+
+    Args:
+        dataset_metadata: Metadata for each dataset
+        dataset_class_offsets: Starting offset for each dataset
+
+    Returns:
+        - global_class_to_idx: Maps "dataset::class" → global index
+        - local_class_to_idx: Maps dataset → {class → local index}
+
+    Example:
+        >>> global_map, local_maps = create_class_to_idx_mapping(metadata, offsets)
+        >>> print(global_map['cifar10::airplane'])
+        0
+        >>> print(local_maps['cifar10']['airplane'])
+        0
+    """
+    global_class_to_idx = {}
+    local_class_to_idx = {}
+
+    for dataset_name, metadata in dataset_metadata.items():
+        offset = dataset_class_offsets[dataset_name]
+        local_map = {}
+
+        for local_idx, class_name in enumerate(metadata['class_names']):
+            # Handle list-based class names
+            if isinstance(class_name, list):
+                canonical_name = class_name[0]
+            else:
+                canonical_name = class_name
+
+            global_idx = offset + local_idx
+            global_key = f"{dataset_name}::{canonical_name}"
+
+            global_class_to_idx[global_key] = global_idx
+            local_map[canonical_name] = local_idx
+
+        local_class_to_idx[dataset_name] = local_map
+
+    return global_class_to_idx, local_class_to_idx
+
+
+class UnifiedELEVATERDataset(torch.utils.data.Dataset):
+    """
+    Dataset that combines samples from multiple ELEVATER datasets.
+
+    This dataset:
+    - Loads samples from multiple datasets with source tagging
+    - Maps local class labels to unified global class space
+    - Handles image loading and caching
+    - Applies augmentation and domain adaptation
+
+    Args:
+        unified_data: Dict from load_unified_dataset()
+        class_info: Dict from unify_class_names()
+        processor: CLIP processor for image preprocessing
+        use_augmentation: Whether to apply data augmentation
+        augmentation_config: RandAugment configuration
+        use_domain_adaptation: Whether to apply domain adaptation
+        domain_adaptation_config: Domain adaptation configuration
+        cache_dir: Base directory for image caching
+
+    Example:
+        >>> unified_data = load_unified_dataset(dataset_files)
+        >>> class_info = unify_class_names(unified_data['dataset_metadata'])
+        >>> dataset = UnifiedELEVATERDataset(unified_data, class_info, processor)
+        >>> print(len(dataset))
+        102000
+        >>> image, text, label = dataset[0]
+        >>> print(label)  # Global label across all datasets
+        42
+    """
+
+    def __init__(self,
+                 unified_data: Dict,
+                 class_info: Dict,
+                 processor: CLIPProcessor,
+                 use_augmentation: bool = True,
+                 augmentation_config: Optional[Dict] = None,
+                 use_domain_adaptation: bool = False,
+                 domain_adaptation_config: Optional[Dict] = None,
+                 cache_dir: Optional[str] = None):
+        # Import here to avoid circular dependency
+        from .model_customizer import LAIONCustomDataset
+
+        self.dataset_metadata = unified_data['dataset_metadata']
+        self.class_offsets = class_info['dataset_class_offsets']
+        self.num_total_classes = class_info['num_total_classes']
+        self.global_class_names = class_info['global_class_names']
+
+        # Store unified samples
+        self.unified_samples = unified_data['samples']
+
+        # Create a temporary LAIONCustomDataset to handle image loading/filtering
+        # We'll use this as parent to inherit all image handling logic
+        self.base_dataset = LAIONCustomDataset(
+            samples=unified_data['samples'],
+            class_names=class_info['global_class_names'],
+            processor=processor,
+            use_augmentation=use_augmentation,
+            augmentation_config=augmentation_config,
+            use_domain_adaptation=use_domain_adaptation,
+            domain_adaptation_config=domain_adaptation_config,
+            cache_dir=cache_dir,
+            training_data_path=None  # Use global cache for unified training
+        )
+
+        # After filtering, we need to update our samples list
+        self.valid_samples = self.base_dataset.valid_samples
+
+        print(f"\n📊 Unified dataset ready: {len(self.valid_samples):,} valid samples, {self.num_total_classes} total classes")
+
+    def __len__(self):
+        return len(self.valid_samples)
+
+    def __getitem__(self, idx):
+        """
+        Get a training sample with global label.
+
+        Returns:
+            tuple: (image, text, global_label)
+                - image: PIL Image (transformed)
+                - text: Caption string
+                - global_label: Label in global class space (0 to num_total_classes-1)
+        """
+        # Get the sample
+        sample = self.valid_samples[idx]
+
+        # Get image using base dataset's methods (handles caching, augmentation, etc.)
+        image = self.base_dataset._safe_get_image(sample.get('url'))
+        image = self.base_dataset._apply_transforms(image)
+
+        # Get local label from sample
+        sample_label = sample['label']
+        dataset_name = sample['source_dataset']
+
+        # Convert local label to global label
+        dataset_metadata = self.dataset_metadata[dataset_name]
+        class_names = dataset_metadata['class_names']
+
+        # Find local index
+        # Normalize label for matching
+        normalized_label = self.base_dataset._normalize_label(sample_label)
+        local_idx = None
+        for i, class_name in enumerate(class_names):
+            if isinstance(class_name, list):
+                canonical_name = class_name[0]
+            else:
+                canonical_name = class_name
+            if self.base_dataset._normalize_label(canonical_name) == normalized_label:
+                local_idx = i
+                break
+
+        if local_idx is None:
+            # Fallback: use first class
+            local_idx = 0
+
+        # Map to global label
+        offset = self.class_offsets[dataset_name]
+        global_label = offset + local_idx
+
+        return image, sample.get('text', ''), global_label
+
+
+def evaluate_unified_model_per_dataset(
+    model,
+    dataset_metadata: Dict,
+    class_offsets: Dict,
+    processor: CLIPProcessor,
+    device: str = 'cuda',
+    batch_size: int = 32,
+    use_templates: bool = True
+) -> Dict[str, float]:
+    """
+    Evaluate unified model separately on each dataset's test set.
+
+    Args:
+        model: Trained unified model
+        dataset_metadata: Metadata dict from load_unified_dataset()
+        class_offsets: Class offset mapping from unify_class_names()
+        processor: CLIP processor
+        device: Device to run evaluation on
+        batch_size: Batch size for evaluation
+        use_templates: Whether to use REACT-style templates
+
+    Returns:
+        Dict mapping dataset_name → accuracy (e.g., {'cifar10': 0.92, 'cifar100': 0.68})
+
+    Example:
+        >>> results = evaluate_unified_model_per_dataset(
+        ...     model=unified_model,
+        ...     dataset_metadata=unified_data['dataset_metadata'],
+        ...     class_offsets=class_info['dataset_class_offsets'],
+        ...     processor=processor
+        ... )
+        >>> print(results)
+        {'cifar10': 0.9206, 'cifar100': 0.6812, 'caltech101': 0.8745}
+    """
+    from ..customization.evaluation import Evaluator
+    from ..datasets.elevater_datasets import ELEVATERDatasetHandler
+
+    results = {}
+    model.eval()
+
+    print("\n📊 Evaluating unified model on each dataset separately...")
+
+    for dataset_name, metadata in sorted(dataset_metadata.items()):
+        print(f"\n🔍 Evaluating on {dataset_name}...")
+
+        try:
+            # Create dataset handler for this specific dataset
+            dataset_handler = ELEVATERDatasetHandler(
+                dataset_name=dataset_name,
+                root=None,  # Will use default
+                download=False  # Assume test data already present
+            )
+
+            # Load test dataset
+            dataset_handler.load_test_data()
+
+            if dataset_handler._dataset is None:
+                print(f"   ⚠️  {dataset_name}: Test dataset not available, skipped")
+                continue
+
+            # Get class names for this dataset
+            class_names = metadata['class_names']
+
+            # Get templates if using REACT-style evaluation
+            templates = None
+            if use_templates:
+                try:
+                    templates = dataset_handler.get_text_templates()
+                except Exception as e:
+                    print(f"   ⚠️  Could not load templates for {dataset_name}: {e}")
+                    templates = None
+
+            # Create evaluator for this dataset
+            evaluator = Evaluator(
+                model=model,
+                processor=processor,
+                class_names=class_names,
+                device=device,
+                templates=templates
+            )
+
+            # Create test loader
+            from torch.utils.data import DataLoader
+            from ..customization.model_customizer import LAIONCustomDataset
+
+            # Create test samples in MAVERIC format
+            test_samples = []
+            for idx in range(len(dataset_handler._dataset)):
+                image, label = dataset_handler._dataset[idx]
+
+                # Get class name
+                if isinstance(class_names[label], list):
+                    class_name = class_names[label][0]
+                else:
+                    class_name = class_names[label]
+
+                test_samples.append({
+                    'image': image,
+                    'label': class_name,
+                    'text': f"a photo of a {class_name}"
+                })
+
+            # Create dataset wrapper
+            test_dataset = LAIONCustomDataset(
+                samples=test_samples,
+                class_names=class_names,
+                processor=processor,
+                use_augmentation=False,
+                cache_dir=None
+            )
+
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=0
+            )
+
+            # Evaluate
+            accuracy = evaluator.evaluate(test_loader)
+
+            results[dataset_name] = accuracy
+            print(f"   ✅ {dataset_name}: {accuracy:.2%} accuracy ({len(test_samples):,} test samples)")
+
+        except Exception as e:
+            print(f"   ❌ {dataset_name}: Evaluation failed - {e}")
+            continue
+
+    print(f"\n📊 Evaluation complete: {len(results)}/{len(dataset_metadata)} datasets evaluated")
+
+    return results
+
+
+def save_unified_results(
+    results: Dict[str, float],
+    output_dir: str,
+    filename: str = "unified_training_results.json"
+) -> str:
+    """
+    Save per-dataset evaluation results to JSON file.
+
+    Args:
+        results: Dict mapping dataset_name → accuracy
+        output_dir: Output directory
+        filename: Output filename (default: unified_training_results.json)
+
+    Returns:
+        Path to saved file
+
+    Example:
+        >>> save_unified_results(
+        ...     results={'cifar10': 0.92, 'cifar100': 0.68},
+        ...     output_dir='./results/unified_training'
+        ... )
+        './results/unified_training/unified_training_results.json'
+    """
+    from pathlib import Path
+    import json
+    from datetime import datetime
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    output_file = output_path / filename
+
+    # Create output structure
+    output_data = {
+        'evaluation_date': datetime.now().isoformat(),
+        'num_datasets': len(results),
+        'average_accuracy': sum(results.values()) / len(results) if results else 0.0,
+        'per_dataset_results': results,
+        'sorted_by_accuracy': sorted(
+            results.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+    }
+
+    # Save to file
+    with open(output_file, 'w') as f:
+        json.dump(output_data, f, indent=2)
+
+    print(f"\n💾 Results saved to: {output_file}")
+    print(f"   Average accuracy: {output_data['average_accuracy']:.2%}")
+    print(f"   Best dataset: {output_data['sorted_by_accuracy'][0][0]} ({output_data['sorted_by_accuracy'][0][1]:.2%})")
+    print(f"   Worst dataset: {output_data['sorted_by_accuracy'][-1][0]} ({output_data['sorted_by_accuracy'][-1][1]:.2%})")
+
+    return str(output_file)

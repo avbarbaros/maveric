@@ -156,18 +156,28 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 IMPORTANT: Test data evaluation is mandatory for reliable model selection.
-The input files must follow the naming convention: <dataset_name>_training_maveric_<id>.json
-where dataset_name is a valid ELEVATER dataset (e.g., cifar10, cifar100, food101).
+
+MODES:
+  1. Per-Dataset Training (default):
+     Input must follow naming convention: <dataset_name>_training_maveric_<id>.json
+     where dataset_name is a valid ELEVATER dataset (e.g., cifar10, cifar100, food101).
+
+  2. Unified Training (--unified-training):
+     Input must be a directory containing dataset subdirectories, each with JSON files.
+     Structure: unified_data/cifar10/*.json, unified_data/cifar100/*.json, etc.
 
 Examples:
-  # Single file input (uses results_dir from config)
+  # Per-dataset training (single file)
   python 03_model_customization.py --input cifar10_training_maveric_dataset1.json --config maveric_config.yaml
-  
-  # Directory input (uses results_dir from config)
+
+  # Per-dataset training (directory)
   python 03_model_customization.py --input ./results/cifar10/ --config maveric_config.yaml --epochs 10
-  
-  # Custom output directory
-  python 03_model_customization.py -i /path/to/training_data/ -c config.yaml --output-dir /custom/path
+
+  # Unified training (REACT-style, all datasets)
+  python 03_model_customization.py --unified-training --input ./unified_training_data --config maveric_config.yaml
+
+  # Unified training with sample balancing
+  python 03_model_customization.py --unified-training --input ./unified_training_data --max-samples-per-dataset 1000
 
 Note: Models will be saved to <results_dir>/<dataset>/models/ unless --output-dir is specified.
       Results will be saved to <results_dir>/<dataset>/
@@ -176,12 +186,18 @@ Note: Models will be saved to <results_dir>/<dataset>/models/ unless --output-di
 Note: The model will be evaluated on the actual test set of the target dataset at each epoch.
         """
     )
-    
+
     parser.add_argument(
         '--input', '-i',
         type=str,
         required=True,
-        help='Path to training dataset JSON file or directory containing multiple JSON files'
+        help='Path to training dataset JSON file/directory (per-dataset) or unified directory (with --unified-training)'
+    )
+
+    parser.add_argument(
+        '--unified-training',
+        action='store_true',
+        help='Enable REACT-style unified training across multiple datasets'
     )
     
     parser.add_argument(
@@ -225,6 +241,20 @@ Note: The model will be evaluated on the actual test set of the target dataset a
         help='Save 10x10 grid visualizations of augmented/domain-adapted training samples for inspection'
     )
 
+    parser.add_argument(
+        '--max-samples-per-dataset',
+        type=int,
+        default=None,
+        help='(Unified training only) Maximum samples per dataset for balancing (default: no limit)'
+    )
+
+    parser.add_argument(
+        '--save-individual-results',
+        action='store_true',
+        default=True,
+        help='(Unified training only) Save per-dataset results separately (default: True)'
+    )
+
     return parser.parse_args()
 
 
@@ -253,6 +283,185 @@ def setup_maveric(config: Dict, args) -> MAVERIC:
     except Exception as e:
         print(f"❌ Error setting up MAVERIC: {e}")
         return None
+
+
+def run_unified_training(config: Dict, args) -> bool:
+    """
+    Run unified training mode (REACT-style multi-dataset training).
+
+    Args:
+        config: Configuration dictionary
+        args: Command-line arguments
+
+    Returns:
+        True if successful, False otherwise
+    """
+    from maveric.customization.unified_training import (
+        load_datasets_from_directory,
+        load_unified_dataset,
+        unify_class_names,
+        UnifiedELEVATERDataset,
+        evaluate_unified_model_per_dataset,
+        save_unified_results
+    )
+    from torch.utils.data import DataLoader
+    from transformers import CLIPProcessor
+    import torch
+
+    try:
+        print(f"📂 Loading datasets from: {args.input}")
+
+        # Step 1: Load datasets from directory structure
+        dataset_files = load_datasets_from_directory(args.input)
+
+        # Step 2: Load and combine samples
+        unified_data = load_unified_dataset(
+            dataset_files=dataset_files,
+            max_samples_per_dataset=args.max_samples_per_dataset,
+            seed=config.get('seed', 42)
+        )
+
+        # Step 3: Create unified class space
+        class_info = unify_class_names(unified_data['dataset_metadata'])
+
+        # Step 4: Setup MAVERIC
+        maveric = setup_maveric(config, args)
+        if not maveric:
+            print("❌ Failed to initialize MAVERIC")
+            return False
+
+        # Step 5: Load CLIP processor
+        clip_model = config.get('clip_model', 'ViT-B/32')
+        print(f"\n🔧 Loading CLIP processor for {clip_model}...")
+        processor = CLIPProcessor.from_pretrained(f"openai/{clip_model.lower().replace('/', '-')}")
+
+        # Step 6: Create unified dataset
+        print("\n📦 Creating unified training dataset...")
+        training_dataset = UnifiedELEVATERDataset(
+            unified_data=unified_data,
+            class_info=class_info,
+            processor=processor,
+            use_augmentation=config.get('training', {}).get('use_augmentation', True),
+            augmentation_config={
+                'augmentation_strength': config.get('training', {}).get('augmentation_strength', 2),
+                'augmentation_magnitude': config.get('training', {}).get('augmentation_magnitude', 9)
+            },
+            use_domain_adaptation=config.get('training', {}).get('use_domain_adaptation', False),
+            domain_adaptation_config={
+                'domain_blur_probability': config.get('training', {}).get('domain_blur_probability', 0.3),
+                'domain_blur_sigma_range': config.get('training', {}).get('domain_blur_sigma_range', [0.1, 2.0]),
+                'domain_jpeg_probability': config.get('training', {}).get('domain_jpeg_probability', 0.3),
+                'domain_jpeg_quality_range': config.get('training', {}).get('domain_jpeg_quality_range', [30, 95]),
+                'domain_downsample_probability': config.get('training', {}).get('domain_downsample_probability', 0.3),
+                'domain_target_size': config.get('training', {}).get('domain_target_size', None),
+                'domain_downsample_scale_range': config.get('training', {}).get('domain_downsample_scale_range', [0.5, 0.9])
+            },
+            cache_dir=config.get('cache_base_dir', './maveric_cache')
+        )
+
+        # Step 7: Create data loader
+        batch_size = config.get('training', {}).get('batch_size', 32)
+        train_loader = DataLoader(
+            training_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=torch.cuda.is_available()
+        )
+
+        print(f"   Training samples: {len(training_dataset):,}")
+        print(f"   Total classes: {class_info['num_total_classes']}")
+        print(f"   Datasets included: {len(unified_data['dataset_metadata'])}")
+        print(f"   Batch size: {batch_size}")
+
+        # Step 8: Setup output directory
+        if args.output_dir is None:
+            results_dir = config.get('results_dir', './results')
+            args.output_dir = str(Path(results_dir) / 'unified_training' / 'models')
+
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        print(f"📁 Output directory: {args.output_dir}")
+
+        # Step 9: Create training configuration
+        training_config = create_training_config(config, args)
+        print(f"\n⚙️  Training configuration:")
+        print(f"   Epochs: {training_config.epochs}")
+        print(f"   Learning rate: {training_config.learning_rate}")
+        print(f"   Weight decay: {training_config.weight_decay}")
+        print(f"   Optimizer: {training_config.optimizer}")
+        print(f"   Scheduler: {training_config.scheduler}")
+
+        # Step 10: Train unified model
+        print("\n🤖 Training unified model...")
+        from maveric.customization.training import Trainer
+        from maveric.customization.model_customizer import ModelCustomizer
+
+        # Create model customizer
+        customizer = ModelCustomizer(
+            model_name=clip_model,
+            class_names=class_info['global_class_names'],
+            training_config=training_config,
+            device=config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
+        )
+
+        # Train model
+        trainer = Trainer(
+            model=customizer.model,
+            processor=processor,
+            training_config=training_config,
+            device=customizer.device
+        )
+
+        training_results = trainer.train(train_loader, None)  # No validation in unified mode
+
+        print("\n✅ Training completed!")
+        print(f"   Final loss: {training_results.get('final_loss', 'N/A')}")
+
+        # Step 11: Evaluate on each dataset separately
+        if args.save_individual_results:
+            print("\n" + "=" * 80)
+            print("📊 EVALUATING UNIFIED MODEL ON INDIVIDUAL DATASETS")
+            print("=" * 80)
+
+            per_dataset_results = evaluate_unified_model_per_dataset(
+                model=customizer.model,
+                dataset_metadata=unified_data['dataset_metadata'],
+                class_offsets=class_info['dataset_class_offsets'],
+                processor=processor,
+                device=customizer.device,
+                batch_size=config.get('training', {}).get('batch_size', 32),
+                use_templates=True
+            )
+
+            # Step 12: Save results
+            results_dir = Path(args.output_dir).parent  # Go up from models/ to results/unified_training/
+            save_unified_results(
+                results=per_dataset_results,
+                output_dir=str(results_dir),
+                filename="unified_training_results.json"
+            )
+
+        # Step 13: Save unified model checkpoint
+        checkpoint_path = Path(args.output_dir) / "unified_model_best.pth"
+        torch.save({
+            'model_state_dict': customizer.model.state_dict(),
+            'class_info': class_info,
+            'dataset_metadata': unified_data['dataset_metadata'],
+            'training_config': training_config.__dict__,
+            'clip_model': clip_model,
+            'num_total_classes': class_info['num_total_classes']
+        }, checkpoint_path)
+
+        print(f"\n💾 Unified model saved to: {checkpoint_path}")
+        print("\n🎉 Unified training completed successfully!")
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error during unified training: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def create_training_config(config: Dict, args) -> TrainingConfig:
@@ -302,26 +511,32 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
 def main():
     """Main model customization function."""
     args = parse_arguments()
-    
+
     print("🚀 Starting MAVERIC Model Customization...")
     print(f"📁 Input path: {args.input}")
     print(f"📋 Configuration file: {args.config}")
-    
+
     # Validate input path exists
     if not os.path.exists(args.input):
         print(f"❌ Input path not found: {args.input}")
         return False
-    
+
     if not os.path.exists(args.config):
         print(f"❌ Configuration file not found: {args.config}")
         return False
-    
+
     try:
         # Load configuration
         config = load_config_file(args.config)
         if not config:
             print("❌ Failed to load configuration")
             return False
+
+        # Check if unified training mode
+        if args.unified_training:
+            print("\n🌐 UNIFIED TRAINING MODE (REACT-style)")
+            print("=" * 80)
+            return run_unified_training(config, args)
         
         # Load training dataset
         training_data = load_training_dataset(args.input)
