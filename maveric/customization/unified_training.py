@@ -412,6 +412,7 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         print(f"Filtering {len(samples)} samples to find valid images...")
 
         valid_samples = []
+        debug_shown = False
         for sample in tqdm(samples, desc="Validating samples (fast)"):
             url = sample.get('url')
             if not url:
@@ -425,6 +426,12 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
             # Build path to dataset-specific images/ folder
             url_hash = hashlib.md5(url.encode()).hexdigest()
             dataset_images_dir = self.training_data_dir / dataset_name / 'images'
+
+            # Show example path for debugging (first sample only)
+            if not debug_shown:
+                print(f"\n   Example path: {dataset_images_dir / (url_hash + '.jpg')}")
+                print(f"   Dataset source: {dataset_name}")
+                debug_shown = True
 
             # Try all possible image extensions
             found = False
