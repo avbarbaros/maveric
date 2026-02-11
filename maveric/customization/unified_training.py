@@ -401,67 +401,76 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         """
         Fast validation using dataset-specific images/ folders.
         Overrides LAIONCustomDataset's slow global cache validation.
+
+        Strategy: Build in-memory index of all available images per dataset first,
+        then validate against index. This avoids thousands of .exists() calls on Google Drive.
         """
         from PIL import Image
         from tqdm import tqdm
         import hashlib
+        from collections import defaultdict
 
         print(f"✨ Using dataset-specific image folders for fast validation")
         print(f"   Base directory: {self.training_data_dir}")
         print(f"   Pattern: {{base_dir}}/{{dataset_name}}/images/{{hash}}.{{ext}}")
 
-        # Debug: Check sample structure
-        if samples:
-            sample_keys = list(samples[0].keys())
-            print(f"   Sample keys: {sample_keys[:10]}...")  # Show first 10 keys
-            if 'source_dataset' in samples[0]:
-                print(f"   First source_dataset: {samples[0]['source_dataset']}")
-            else:
-                print(f"   ⚠️  WARNING: 'source_dataset' field not found in samples!")
+        # Step 1: Build in-memory index of available images per dataset
+        print(f"\n📂 Building image index (one-time directory scan)...")
+        image_index = defaultdict(set)  # dataset_name -> set of available filenames
 
-        print(f"Filtering {len(samples)} samples to find valid images...")
+        # Get unique datasets from samples
+        unique_datasets = set(s.get('source_dataset') for s in samples if s.get('source_dataset'))
+        print(f"   Found {len(unique_datasets)} unique datasets: {sorted(unique_datasets)}")
+
+        for dataset_name in tqdm(unique_datasets, desc="Indexing datasets"):
+            dataset_images_dir = self.training_data_dir / dataset_name / 'images'
+            if dataset_images_dir.exists() and dataset_images_dir.is_dir():
+                try:
+                    # List all files once, store basenames without extension
+                    for img_file in dataset_images_dir.iterdir():
+                        if img_file.is_file():
+                            # Store full filename (with extension) for lookup
+                            image_index[dataset_name].add(img_file.name)
+                    print(f"   ✓ {dataset_name}: {len(image_index[dataset_name])} images indexed")
+                except Exception as e:
+                    print(f"   ✗ {dataset_name}: Failed to index - {e}")
+            else:
+                print(f"   ✗ {dataset_name}: Directory not found at {dataset_images_dir}")
+
+        # Step 2: Validate samples against index
+        print(f"\n🔍 Validating {len(samples)} samples against image index...")
 
         valid_samples = []
         no_url_count = 0
         no_dataset_count = 0
-        debug_shown = False
 
-        for sample in tqdm(samples, desc="Validating samples (fast)"):
+        for sample in tqdm(samples, desc="Validating samples"):
             url = sample.get('url')
             if not url:
                 no_url_count += 1
                 continue
 
-            # Get dataset source from sample (field is 'source_dataset', not 'dataset_source')
+            # Get dataset source from sample
             dataset_name = sample.get('source_dataset')
             if not dataset_name:
                 no_dataset_count += 1
                 continue
 
-            # Build path to dataset-specific images/ folder
+            # Check if we have this dataset indexed
+            if dataset_name not in image_index:
+                continue
+
+            # Build expected filename hash
             url_hash = hashlib.md5(url.encode()).hexdigest()
-            dataset_images_dir = self.training_data_dir / dataset_name / 'images'
 
-            # Show example path for debugging (first sample only)
-            if not debug_shown:
-                print(f"\n   Example path: {dataset_images_dir / (url_hash + '.jpg')}")
-                print(f"   Dataset source: {dataset_name}")
-                debug_shown = True
-
-            # Try all possible image extensions
+            # Check if any file with this hash exists in our index
             found = False
             for ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
-                image_path = dataset_images_dir / f'{url_hash}{ext}'
-                if image_path.exists():
-                    try:
-                        # Quick validation: just verify it opens
-                        with Image.open(image_path) as img:
-                            img.load()  # Verify integrity
-                        valid_samples.append(sample)
-                        found = True
-                        break
-                    except Exception:
-                        continue  # Try next extension
+                filename = f'{url_hash}{ext}'
+                if filename in image_index[dataset_name]:
+                    valid_samples.append(sample)
+                    found = True
+                    break
 
         # Override base_dataset's valid_samples
         self.base_dataset.valid_samples = valid_samples
