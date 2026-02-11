@@ -335,27 +335,36 @@ def run_unified_training(config: Dict, args) -> bool:
         print(f"\n🔧 Loading CLIP processor for {clip_model}...")
         processor = CLIPProcessor.from_pretrained(f"openai/{clip_model.lower().replace('/', '-')}")
 
-        # Step 6: Create unified dataset
+        # Step 6: Create unified dataset with dataset-specific domain adaptation
         print("\n📦 Creating unified training dataset...")
+        training_cfg = config.get('training', {})
+
+        # Prepare dataset-specific domain adaptation settings
+        dataset_domain_adaptation = training_cfg.get('dataset_domain_adaptation', {})
+
+        # Prepare global domain adaptation config (used as fallback)
+        global_domain_config = {
+            'use_domain_adaptation': training_cfg.get('use_domain_adaptation', False),
+            'domain_blur_probability': training_cfg.get('domain_blur_probability', 0.5),
+            'domain_blur_sigma_range': training_cfg.get('domain_blur_sigma_range', [0.5, 2.0]),
+            'domain_jpeg_probability': training_cfg.get('domain_jpeg_probability', 0.4),
+            'domain_jpeg_quality_range': training_cfg.get('domain_jpeg_quality_range', [50, 90]),
+            'domain_downsample_probability': training_cfg.get('domain_downsample_probability', 0.7),
+            'domain_target_size': training_cfg.get('domain_target_size', None),
+            'domain_downsample_scale_range': training_cfg.get('domain_downsample_scale_range', [0.5, 0.9])
+        }
+
         training_dataset = UnifiedELEVATERDataset(
             unified_data=unified_data,
             class_info=class_info,
             processor=processor,
-            use_augmentation=config.get('training', {}).get('use_augmentation', True),
+            use_augmentation=training_cfg.get('use_augmentation', True),
             augmentation_config={
-                'augmentation_strength': config.get('training', {}).get('augmentation_strength', 2),
-                'augmentation_magnitude': config.get('training', {}).get('augmentation_magnitude', 9)
+                'augmentation_strength': training_cfg.get('augmentation_strength', 2),
+                'augmentation_magnitude': training_cfg.get('augmentation_magnitude', 9)
             },
-            use_domain_adaptation=config.get('training', {}).get('use_domain_adaptation', False),
-            domain_adaptation_config={
-                'domain_blur_probability': config.get('training', {}).get('domain_blur_probability', 0.3),
-                'domain_blur_sigma_range': config.get('training', {}).get('domain_blur_sigma_range', [0.1, 2.0]),
-                'domain_jpeg_probability': config.get('training', {}).get('domain_jpeg_probability', 0.3),
-                'domain_jpeg_quality_range': config.get('training', {}).get('domain_jpeg_quality_range', [30, 95]),
-                'domain_downsample_probability': config.get('training', {}).get('domain_downsample_probability', 0.3),
-                'domain_target_size': config.get('training', {}).get('domain_target_size', None),
-                'domain_downsample_scale_range': config.get('training', {}).get('domain_downsample_scale_range', [0.5, 0.9])
-            },
+            dataset_domain_adaptation=dataset_domain_adaptation,
+            global_domain_config=global_domain_config,
             cache_dir=config.get('cache_base_dir', './maveric_cache')
         )
 

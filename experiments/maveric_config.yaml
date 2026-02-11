@@ -87,7 +87,9 @@ training:
 
   # Domain adaptation settings (simulate test data characteristics)
   # Applied AFTER RandAugment to ensure domain match
-  use_domain_adaptation: true  # Set to true to enable domain adaptation
+
+  # Global defaults (used as fallback when dataset not specified below)
+  use_domain_adaptation: false  # Default: disabled (override per-dataset)
 
   # Gaussian Blur (simulates low quality/pixelation)
   domain_blur_probability: 0.5
@@ -101,10 +103,73 @@ training:
   domain_downsample_probability: 0.7
 
   # Target size mode: Use fixed size for CIFAR-10/MNIST, or null for scale range
-  domain_target_size: 32  # CIFAR-10/100 = 32, MNIST = 28, null = use scale_range
+  domain_target_size: null  # Default: use scale_range (override per-dataset)
 
   # Scale range fallback (used when domain_target_size is null)
   domain_downsample_scale_range: [0.5, 0.9]
+
+  # Per-dataset domain adaptation overrides
+  # Only specify use_domain_adaptation and domain_target_size per dataset
+  # Other parameters (blur, JPEG, downsample probabilities) are global
+  dataset_domain_adaptation:
+    # Low-resolution datasets (32x32) - Enable with fixed target
+    cifar10:
+      use_domain_adaptation: true
+      domain_target_size: 32
+    cifar100:
+      use_domain_adaptation: true
+      domain_target_size: 32
+
+    # Very low-resolution (28x28)
+    mnist:
+      use_domain_adaptation: true
+      domain_target_size: 28
+
+    # Medium-resolution datasets - Enable with scale range
+    gtsrb:
+      use_domain_adaptation: true
+      domain_target_size: null  # Use scale_range
+    eurosat:
+      use_domain_adaptation: true
+      domain_target_size: null
+    resisc45:
+      use_domain_adaptation: true
+      domain_target_size: null
+
+    # Special resolution datasets
+    fer2013:
+      use_domain_adaptation: true
+      domain_target_size: 48  # FER2013 native resolution
+    pcam:
+      use_domain_adaptation: true
+      domain_target_size: 96  # PatchCamelyon native resolution
+
+    # High-resolution datasets - Disable domain adaptation
+    food101:
+      use_domain_adaptation: false
+    dtd:
+      use_domain_adaptation: false
+    flowers102:
+      use_domain_adaptation: false
+    oxfordpets:
+      use_domain_adaptation: false
+    caltech101:
+      use_domain_adaptation: false
+    stanfordcars:
+      use_domain_adaptation: false
+    fgvcaircraft:
+      use_domain_adaptation: false
+    country211:
+      use_domain_adaptation: false
+    voc2007:
+      use_domain_adaptation: false
+    hatefulmemes:
+      use_domain_adaptation: false
+    renderedsst2:
+      use_domain_adaptation: false
+    kittidistance:
+      use_domain_adaptation: true
+      domain_target_size: null  # Use scale_range
 
   # Optimization settings
   optimizer: "adamw"  # adamw, adam, sgd

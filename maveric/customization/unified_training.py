@@ -308,7 +308,7 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
     - Loads samples from multiple datasets with source tagging
     - Maps local class labels to unified global class space
     - Handles image loading and caching
-    - Applies augmentation and domain adaptation
+    - Applies augmentation and DATASET-SPECIFIC domain adaptation
 
     Args:
         unified_data: Dict from load_unified_dataset()
@@ -316,14 +316,23 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         processor: CLIP processor for image preprocessing
         use_augmentation: Whether to apply data augmentation
         augmentation_config: RandAugment configuration
-        use_domain_adaptation: Whether to apply domain adaptation
-        domain_adaptation_config: Domain adaptation configuration
+        dataset_domain_adaptation: Dict of dataset-specific domain adaptation settings
+            Format: {dataset_name: {'use_domain_adaptation': bool, 'domain_target_size': int|None}}
+        global_domain_config: Global domain adaptation config (used as fallback)
+            Includes: use_domain_adaptation, domain_target_size, blur/jpeg/downsample settings
         cache_dir: Base directory for image caching
 
     Example:
         >>> unified_data = load_unified_dataset(dataset_files)
         >>> class_info = unify_class_names(unified_data['dataset_metadata'])
-        >>> dataset = UnifiedELEVATERDataset(unified_data, class_info, processor)
+        >>> dataset_domain_adaptation = {
+        ...     'cifar10': {'use_domain_adaptation': True, 'domain_target_size': 32},
+        ...     'mnist': {'use_domain_adaptation': True, 'domain_target_size': 28}
+        ... }
+        >>> dataset = UnifiedELEVATERDataset(
+        ...     unified_data, class_info, processor,
+        ...     dataset_domain_adaptation=dataset_domain_adaptation
+        ... )
         >>> print(len(dataset))
         102000
         >>> image, text, label = dataset[0]
@@ -337,8 +346,8 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
                  processor: CLIPProcessor,
                  use_augmentation: bool = True,
                  augmentation_config: Optional[Dict] = None,
-                 use_domain_adaptation: bool = False,
-                 domain_adaptation_config: Optional[Dict] = None,
+                 dataset_domain_adaptation: Optional[Dict] = None,
+                 global_domain_config: Optional[Dict] = None,
                  cache_dir: Optional[str] = None):
         # Import here to avoid circular dependency
         from .model_customizer import LAIONCustomDataset
@@ -347,20 +356,25 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         self.class_offsets = class_info['dataset_class_offsets']
         self.num_total_classes = class_info['num_total_classes']
         self.global_class_names = class_info['global_class_names']
+        self.processor = processor
+
+        # Store dataset-specific domain adaptation settings
+        self.dataset_domain_adaptation = dataset_domain_adaptation or {}
+        self.global_domain_config = global_domain_config or {}
 
         # Store unified samples
         self.unified_samples = unified_data['samples']
 
-        # Create a temporary LAIONCustomDataset to handle image loading/filtering
-        # We'll use this as parent to inherit all image handling logic
+        # Create a temporary LAIONCustomDataset WITHOUT domain adaptation
+        # We'll apply dataset-specific domain adaptation in __getitem__
         self.base_dataset = LAIONCustomDataset(
             samples=unified_data['samples'],
             class_names=class_info['global_class_names'],
             processor=processor,
             use_augmentation=use_augmentation,
             augmentation_config=augmentation_config,
-            use_domain_adaptation=use_domain_adaptation,
-            domain_adaptation_config=domain_adaptation_config,
+            use_domain_adaptation=False,  # Disabled - we'll apply per-dataset in __getitem__
+            domain_adaptation_config=None,
             cache_dir=cache_dir,
             training_data_path=None  # Use global cache for unified training
         )
@@ -368,31 +382,122 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         # After filtering, we need to update our samples list
         self.valid_samples = self.base_dataset.valid_samples
 
+        # Build dataset-specific domain transforms
+        self._build_domain_transforms()
+
         print(f"\n📊 Unified dataset ready: {len(self.valid_samples):,} valid samples, {self.num_total_classes} total classes")
+        self._print_domain_adaptation_summary()
+
+    def _build_domain_transforms(self):
+        """Build domain adaptation transforms for each dataset."""
+        from PIL import Image, ImageFilter
+        import io
+
+        self.dataset_transforms = {}
+
+        for dataset_name in self.dataset_metadata.keys():
+            # Get dataset-specific settings or use global defaults
+            dataset_config = self.dataset_domain_adaptation.get(dataset_name, {})
+            use_da = dataset_config.get('use_domain_adaptation',
+                                       self.global_domain_config.get('use_domain_adaptation', False))
+
+            if use_da:
+                target_size = dataset_config.get('domain_target_size',
+                                                self.global_domain_config.get('domain_target_size', None))
+
+                self.dataset_transforms[dataset_name] = {
+                    'enabled': True,
+                    'target_size': target_size,
+                    'blur_prob': self.global_domain_config.get('domain_blur_probability', 0.5),
+                    'blur_sigma_range': self.global_domain_config.get('domain_blur_sigma_range', [0.5, 2.0]),
+                    'jpeg_prob': self.global_domain_config.get('domain_jpeg_probability', 0.4),
+                    'jpeg_quality_range': self.global_domain_config.get('domain_jpeg_quality_range', [50, 90]),
+                    'downsample_prob': self.global_domain_config.get('domain_downsample_probability', 0.7),
+                    'scale_range': self.global_domain_config.get('domain_downsample_scale_range', [0.5, 0.9])
+                }
+            else:
+                self.dataset_transforms[dataset_name] = {'enabled': False}
+
+    def _print_domain_adaptation_summary(self):
+        """Print summary of domain adaptation settings per dataset."""
+        enabled_datasets = [name for name, config in self.dataset_transforms.items() if config['enabled']]
+        if enabled_datasets:
+            print(f"\n🎨 Domain Adaptation enabled for {len(enabled_datasets)} datasets:")
+            for dataset_name in enabled_datasets:
+                config = self.dataset_transforms[dataset_name]
+                target = f"{config['target_size']}x{config['target_size']}" if config['target_size'] else "scale_range"
+                print(f"   • {dataset_name}: target={target}")
+
+    def _apply_domain_adaptation(self, image, dataset_name: str):
+        """Apply dataset-specific domain adaptation to image."""
+        import random
+        from PIL import Image, ImageFilter
+        import io
+
+        transform_config = self.dataset_transforms.get(dataset_name, {'enabled': False})
+
+        if not transform_config['enabled']:
+            return image
+
+        # Apply Gaussian blur
+        if random.random() < transform_config['blur_prob']:
+            sigma = random.uniform(*transform_config['blur_sigma_range'])
+            image = image.filter(ImageFilter.GaussianBlur(radius=sigma))
+
+        # Apply JPEG compression
+        if random.random() < transform_config['jpeg_prob']:
+            quality = random.randint(*transform_config['jpeg_quality_range'])
+            buffer = io.BytesIO()
+            image.save(buffer, format='JPEG', quality=quality)
+            buffer.seek(0)
+            image = Image.open(buffer).copy()
+
+        # Apply downsampling
+        if random.random() < transform_config['downsample_prob']:
+            orig_w, orig_h = image.size
+
+            if transform_config['target_size'] is not None:
+                # Fixed target size
+                new_size = transform_config['target_size']
+                image = image.resize((new_size, new_size), Image.BILINEAR)
+                image = image.resize((orig_w, orig_h), Image.BILINEAR)
+            else:
+                # Scale range
+                scale = random.uniform(*transform_config['scale_range'])
+                new_w, new_h = int(orig_w * scale), int(orig_h * scale)
+                image = image.resize((new_w, new_h), Image.BILINEAR)
+                image = image.resize((orig_w, orig_h), Image.BILINEAR)
+
+        return image
 
     def __len__(self):
         return len(self.valid_samples)
 
     def __getitem__(self, idx):
         """
-        Get a training sample with global label.
+        Get a training sample with global label and dataset-specific domain adaptation.
 
         Returns:
             tuple: (image, text, global_label)
-                - image: PIL Image (transformed)
+                - image: PIL Image (transformed with dataset-specific domain adaptation)
                 - text: Caption string
                 - global_label: Label in global class space (0 to num_total_classes-1)
         """
         # Get the sample
         sample = self.valid_samples[idx]
 
-        # Get image using base dataset's methods (handles caching, augmentation, etc.)
+        # Get dataset name for dataset-specific transforms
+        dataset_name = sample['source_dataset']
+
+        # Get image using base dataset's methods (handles caching + augmentation)
         image = self.base_dataset._safe_get_image(sample.get('url'))
-        image = self.base_dataset._apply_transforms(image)
+        image = self.base_dataset._apply_transforms(image)  # Applies augmentation
+
+        # Apply dataset-specific domain adaptation AFTER augmentation
+        image = self._apply_domain_adaptation(image, dataset_name)
 
         # Get local label from sample
         sample_label = sample['label']
-        dataset_name = sample['source_dataset']
 
         # Convert local label to global label
         dataset_metadata = self.dataset_metadata[dataset_name]

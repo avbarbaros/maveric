@@ -639,6 +639,7 @@ UNIFIED_TRAINING_IMPLEMENTATION.md   # ✅ COMPLETE - This document
 ## Related Documentation
 
 - **Design Document**: [UNIFIED_TRAINING_DESIGN.md](UNIFIED_TRAINING_DESIGN.md)
+- **Dataset-Specific Domain Adaptation**: [DATASET_SPECIFIC_DOMAIN_ADAPTATION.md](DATASET_SPECIFIC_DOMAIN_ADAPTATION.md) ⭐ NEW
 - **ELEVATER Datasets Guide**: [FILE_BASED_DATASETS_GUIDE.md](FILE_BASED_DATASETS_GUIDE.md)
 - **Main Documentation**: [CLAUDE.md](CLAUDE.md)
 - **REACT Framework Paper**: "Task Residual for Tuning Vision-Language Models"
@@ -662,6 +663,7 @@ UNIFIED_TRAINING_IMPLEMENTATION.md   # ✅ COMPLETE - This document
 - ✅ Manual directory-based data loading
 - ✅ Global class space with prefixing
 - ✅ Unified dataset creation with augmentation
+- ✅ **Dataset-specific domain adaptation** ⭐ NEW - Different domain adaptation per dataset
 - ✅ Training on combined data
 - ✅ Per-dataset evaluation
 - ✅ Results saving and checkpointing
