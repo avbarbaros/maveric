@@ -428,6 +428,9 @@ def run_unified_training(config: Dict, args) -> bool:
             cache_base_dir=config.get('cache_base_dir', './maveric_cache')
         )
 
+        # Attach processor to model (required by Trainer)
+        customizer.model.processor = processor
+
         # Train model
         trainer = Trainer(
             model=customizer.model,
