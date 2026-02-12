@@ -418,7 +418,7 @@ def run_unified_training(config: Dict, args) -> bool:
         # Step 10: Train unified model
         print("\n🤖 Training unified model...")
         from maveric.customization.training import Trainer
-        from maveric.customization.model_customizer import ModelCustomizer
+        from maveric.customization.model_customizer import ModelCustomizer, CustomizedCLIP
 
         # Create model customizer
         customizer = ModelCustomizer(
@@ -428,12 +428,16 @@ def run_unified_training(config: Dict, args) -> bool:
             cache_base_dir=config.get('cache_base_dir', './maveric_cache')
         )
 
-        # Attach processor to model (required by Trainer)
-        customizer.model.processor = processor
+        # Wrap model in CustomizedCLIP (provides clip_model attribute and locked text encoder)
+        customized_model = CustomizedCLIP(
+            customizer.model,
+            customizer.processor,
+            regularize=training_config.use_regularization
+        ).to(customizer.device)
 
         # Train model
         trainer = Trainer(
-            model=customizer.model,
+            model=customized_model,
             device=customizer.device,
             checkpoint_dir=Path(args.output_dir)
         )
