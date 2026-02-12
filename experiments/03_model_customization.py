@@ -383,14 +383,17 @@ def run_unified_training(config: Dict, args) -> bool:
             training_data_dir=Path(args.input).parent.resolve()  # Parent dir contains dataset folders with images/ subdirs
         )
 
-        # Step 7: Create data loader
+        # Step 7: Create data loader with custom collate function for PIL images
+        from maveric.customization.model_customizer import custom_collate_fn
+
         batch_size = config.get('training', {}).get('batch_size', 32)
         train_loader = DataLoader(
             training_dataset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=4,
-            pin_memory=torch.cuda.is_available()
+            pin_memory=torch.cuda.is_available(),
+            collate_fn=custom_collate_fn
         )
 
         print(f"   Training samples: {len(training_dataset):,}")
