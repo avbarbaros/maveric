@@ -471,7 +471,8 @@ def run_unified_training(config: Dict, args) -> bool:
                 processor=processor,
                 device=customizer.device,
                 batch_size=config.get('training', {}).get('batch_size', 32),
-                use_templates=True
+                use_templates=True,
+                cache_base_dir=config.get('cache_base_dir', './maveric_cache')
             )
 
             # Step 12: Save results

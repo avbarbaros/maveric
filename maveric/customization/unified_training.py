@@ -640,72 +640,83 @@ def evaluate_unified_model_per_dataset(
     processor: CLIPProcessor,
     device: str = 'cuda',
     batch_size: int = 32,
-    use_templates: bool = True
+    use_templates: bool = True,
+    cache_base_dir: Optional[str] = None
 ) -> Dict[str, float]:
     """
     Evaluate unified model separately on each dataset's test set.
 
+    Delegates to ModelCustomizer._create_test_loader() which already handles:
+    - torchvision vs file-based datasets
+    - class name normalisation (REACT / ELEVATER exact names)
+    - ImageFolder fallback for file-based datasets
+    - FER2013 list-based class names
+
     Args:
-        model: Trained unified model
+        model: Trained unified model (CustomizedCLIP)
         dataset_metadata: Metadata dict from load_unified_dataset()
         class_offsets: Class offset mapping from unify_class_names()
         processor: CLIP processor
         device: Device to run evaluation on
         batch_size: Batch size for evaluation
         use_templates: Whether to use REACT-style templates
+        cache_base_dir: Base directory for dataset caching
 
     Returns:
-        Dict mapping dataset_name → accuracy (e.g., {'cifar10': 0.92, 'cifar100': 0.68})
-
-    Example:
-        >>> results = evaluate_unified_model_per_dataset(
-        ...     model=unified_model,
-        ...     dataset_metadata=unified_data['dataset_metadata'],
-        ...     class_offsets=class_info['dataset_class_offsets'],
-        ...     processor=processor
-        ... )
-        >>> print(results)
-        {'cifar10': 0.9206, 'cifar100': 0.6812, 'caltech101': 0.8745}
+        Dict mapping dataset_name → accuracy
     """
+    from ..datasets.elevater_datasets import ELEVATERDataset
     from ..customization.evaluation import Evaluator
-    from ..datasets.elevater_datasets import ELEVATERDatasetHandler
+    from ..customization.model_customizer import ModelCustomizer
 
     results = {}
     model.eval()
 
     print("\n📊 Evaluating unified model on each dataset separately...")
 
+    # Build a lightweight ModelCustomizer that carries our trained model/processor
+    # so we can reuse _create_test_loader without re-downloading any model.
+    customizer = ModelCustomizer.__new__(ModelCustomizer)  # bypass __init__
+    from ..core.base import BaseComponent
+    BaseComponent.__init__(customizer, "ModelCustomizer")
+    customizer.base_model_name = "unified"
+    customizer.device = device
+    customizer.checkpoint_dir = None
+    customizer.cache_base_dir = cache_base_dir
+    customizer.model = model       # our trained weights
+    customizer.processor = processor
+    customizer.trainer = None
+    customizer.evaluator = None
+
     for dataset_name, metadata in sorted(dataset_metadata.items()):
         print(f"\n🔍 Evaluating on {dataset_name}...")
 
         try:
-            # Create dataset handler for this specific dataset
-            dataset_handler = ELEVATERDatasetHandler(
-                dataset_name=dataset_name,
-                root=None,  # Will use default
-                download=False  # Assume test data already present
+            # Authoritative REACT class names from ELEVATER_DATASETS
+            if dataset_name in ELEVATERDataset.ELEVATER_DATASETS:
+                class_names = ELEVATERDataset.ELEVATER_DATASETS[dataset_name]['class_names']
+            else:
+                class_names = metadata['class_names']
+
+            # Reuse the battle-tested test loader from ModelCustomizer
+            test_loader = customizer._create_test_loader(
+                target_dataset_name=dataset_name,
+                class_names=class_names
             )
 
-            # Load test dataset
-            dataset_handler.load_test_data()
-
-            if dataset_handler._dataset is None:
-                print(f"   ⚠️  {dataset_name}: Test dataset not available, skipped")
+            if test_loader is None:
+                print(f"   ⚠️  {dataset_name}: Test data not available, skipped")
                 continue
 
-            # Get class names for this dataset
-            class_names = metadata['class_names']
-
-            # Get templates if using REACT-style evaluation
+            # Get REACT-style templates
             templates = None
             if use_templates:
                 try:
+                    dataset_handler = ELEVATERDataset(dataset_name, train=False)
                     templates = dataset_handler.get_text_templates()
-                except Exception as e:
-                    print(f"   ⚠️  Could not load templates for {dataset_name}: {e}")
-                    templates = None
+                except Exception:
+                    pass
 
-            # Create evaluator for this dataset
             evaluator = Evaluator(
                 model=model,
                 processor=processor,
@@ -714,55 +725,19 @@ def evaluate_unified_model_per_dataset(
                 templates=templates
             )
 
-            # Create test loader
-            from torch.utils.data import DataLoader
-            from ..customization.model_customizer import LAIONCustomDataset
-
-            # Create test samples in MAVERIC format
-            test_samples = []
-            for idx in range(len(dataset_handler._dataset)):
-                image, label = dataset_handler._dataset[idx]
-
-                # Get class name
-                if isinstance(class_names[label], list):
-                    class_name = class_names[label][0]
-                else:
-                    class_name = class_names[label]
-
-                test_samples.append({
-                    'image': image,
-                    'label': class_name,
-                    'text': f"a photo of a {class_name}"
-                })
-
-            # Create dataset wrapper
-            test_dataset = LAIONCustomDataset(
-                samples=test_samples,
-                class_names=class_names,
-                processor=processor,
-                use_augmentation=False,
-                cache_dir=None
-            )
-
-            test_loader = DataLoader(
-                test_dataset,
-                batch_size=batch_size,
-                shuffle=False,
-                num_workers=0
-            )
-
-            # Evaluate
             accuracy = evaluator.evaluate(test_loader)
+            num_samples = len(test_loader.dataset)
 
             results[dataset_name] = accuracy
-            print(f"   ✅ {dataset_name}: {accuracy:.2%} accuracy ({len(test_samples):,} test samples)")
+            print(f"   ✅ {dataset_name}: {accuracy:.2%} accuracy ({num_samples:,} test samples)")
 
         except Exception as e:
             print(f"   ❌ {dataset_name}: Evaluation failed - {e}")
+            import traceback
+            traceback.print_exc()
             continue
 
     print(f"\n📊 Evaluation complete: {len(results)}/{len(dataset_metadata)} datasets evaluated")
-
     return results
 
 
