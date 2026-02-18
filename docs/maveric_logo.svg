@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0D1117;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0F1923;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0A0F1A;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Electric blue glow gradient for M emblem -->
+    <radialGradient id="glowCenter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00E5FF;stop-opacity:0.25" />
+      <stop offset="100%" style="stop-color:#00B4FF;stop-opacity:0" />
+    </radialGradient>
+
+    <!-- Outer glow for the hexagon ring -->
+    <filter id="glowBlue" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Strong glow filter for nodes -->
+    <filter id="nodeGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Text glow -->
+    <filter id="textGlow" x="-10%" y="-30%" width="120%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Subtle glow for tagline -->
+    <filter id="softGlow" x="-10%" y="-50%" width="120%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- M letter gradient -->
+    <linearGradient id="mGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00E5FF" />
+      <stop offset="100%" style="stop-color:#00B4FF" />
+    </linearGradient>
+
+    <!-- Purple accent gradient -->
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7B2FFF" />
+      <stop offset="100%" style="stop-color:#00B4FF" />
+    </linearGradient>
+
+    <!-- Title text gradient -->
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FFFFFF" />
+      <stop offset="40%" style="stop-color:#E8F4FF" />
+      <stop offset="100%" style="stop-color:#00E5FF" />
+    </linearGradient>
+
+    <!-- Separator line gradient -->
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#7B2FFF;stop-opacity:0.8" />
+      <stop offset="50%" style="stop-color:#00E5FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00B4FF;stop-opacity:0.3" />
+    </linearGradient>
+
+    <!-- Grid pattern for subtle bg texture -->
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1A2640" stroke-width="0.5" opacity="0.5" />
+    </pattern>
+
+    <!-- Radial fade for grid -->
+    <radialGradient id="gridFade" cx="20%" cy="50%" r="60%">
+      <stop offset="0%" style="stop-color:white;stop-opacity:0.12" />
+      <stop offset="100%" style="stop-color:white;stop-opacity:0" />
+    </radialGradient>
+    <mask id="gridMask">
+      <rect width="800" height="200" fill="url(#gridFade)" />
+    </mask>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" rx="12" ry="12" fill="url(#bgGrad)" />
+
+  <!-- Subtle grid texture -->
+  <rect width="800" height="200" rx="12" ry="12" fill="url(#grid)" mask="url(#gridMask)" />
+
+  <!-- Ambient glow halo around emblem area -->
+  <ellipse cx="105" cy="100" rx="80" ry="70" fill="url(#glowCenter)" />
+
+  <!-- Outer hexagon ring -->
+  <polygon
+    points="105,42 140,61 140,99 105,118 70,99 70,61"
+    fill="none"
+    stroke="#00B4FF"
+    stroke-width="1.2"
+    stroke-opacity="0.5"
+    filter="url(#glowBlue)"
+  />
+
+  <!-- Inner hexagon fill -->
+  <polygon
+    points="105,50 134,67 134,101 105,118 76,101 76,67"
+    fill="#00B4FF"
+    fill-opacity="0.04"
+  />
+
+  <!-- Neural network connector lines -->
+  <line x1="105" y1="80" x2="80" y2="60" stroke="#00B4FF" stroke-width="0.8" stroke-opacity="0.35" />
+  <line x1="105" y1="80" x2="130" y2="60" stroke="#00B4FF" stroke-width="0.8" stroke-opacity="0.35" />
+  <line x1="105" y1="80" x2="80" y2="120" stroke="#00E5FF" stroke-width="0.8" stroke-opacity="0.3" />
+  <line x1="105" y1="80" x2="130" y2="120" stroke="#00E5FF" stroke-width="0.8" stroke-opacity="0.3" />
+  <line x1="105" y1="80" x2="105" y2="50" stroke="#7B2FFF" stroke-width="0.8" stroke-opacity="0.45" />
+  <line x1="105" y1="80" x2="105" y2="130" stroke="#7B2FFF" stroke-width="0.8" stroke-opacity="0.3" />
+  <line x1="80" y1="60" x2="130" y2="60" stroke="#00B4FF" stroke-width="0.6" stroke-opacity="0.2" />
+  <line x1="80" y1="120" x2="130" y2="120" stroke="#00E5FF" stroke-width="0.6" stroke-opacity="0.2" />
+  <line x1="80" y1="60" x2="80" y2="120" stroke="#7B2FFF" stroke-width="0.6" stroke-opacity="0.2" />
+  <line x1="130" y1="60" x2="130" y2="120" stroke="#7B2FFF" stroke-width="0.6" stroke-opacity="0.2" />
+
+  <!-- Stylized "M" letterform -->
+  <path
+    d="M 80 118 L 80 62 L 105 92 L 130 62 L 130 118"
+    fill="none"
+    stroke="url(#mGrad)"
+    stroke-width="5.5"
+    stroke-linejoin="miter"
+    stroke-linecap="butt"
+    filter="url(#glowBlue)"
+  />
+  <path
+    d="M 80 118 L 80 62 L 105 92 L 130 62 L 130 118"
+    fill="none"
+    stroke="#00E5FF"
+    stroke-width="2"
+    stroke-linejoin="miter"
+    stroke-linecap="butt"
+    opacity="0.9"
+  />
+
+  <!-- Neural network nodes -->
+  <circle cx="80" cy="62" r="4.5" fill="#0D1117" stroke="#00E5FF" stroke-width="1.5" filter="url(#nodeGlow)" />
+  <circle cx="80" cy="62" r="2" fill="#00E5FF" />
+  <circle cx="130" cy="62" r="4.5" fill="#0D1117" stroke="#00E5FF" stroke-width="1.5" filter="url(#nodeGlow)" />
+  <circle cx="130" cy="62" r="2" fill="#00E5FF" />
+  <circle cx="80" cy="118" r="4.5" fill="#0D1117" stroke="#7B2FFF" stroke-width="1.5" filter="url(#nodeGlow)" />
+  <circle cx="80" cy="118" r="2" fill="#7B2FFF" />
+  <circle cx="130" cy="118" r="4.5" fill="#0D1117" stroke="#7B2FFF" stroke-width="1.5" filter="url(#nodeGlow)" />
+  <circle cx="130" cy="118" r="2" fill="#7B2FFF" />
+  <circle cx="105" cy="92" r="5.5" fill="#0D1117" stroke="#00B4FF" stroke-width="1.8" filter="url(#nodeGlow)" />
+  <circle cx="105" cy="92" r="2.5" fill="#00B4FF" />
+  <circle cx="105" cy="50" r="3" fill="#0D1117" stroke="#7B2FFF" stroke-width="1.2" filter="url(#nodeGlow)" />
+  <circle cx="105" cy="50" r="1.2" fill="#7B2FFF" />
+  <circle cx="105" cy="130" r="3" fill="#0D1117" stroke="#00E5FF" stroke-width="1.2" filter="url(#nodeGlow)" />
+  <circle cx="105" cy="130" r="1.2" fill="#00E5FF" />
+
+  <!-- Vertical separator -->
+  <line x1="170" y1="45" x2="170" y2="155" stroke="url(#lineGrad)" stroke-width="1.5" stroke-opacity="0.7" />
+
+  <!-- MAVERIC title - glow shadow -->
+  <text
+    x="200" y="115"
+    font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+    font-size="64" font-weight="800" letter-spacing="6"
+    fill="#00B4FF" opacity="0.18"
+    filter="url(#textGlow)"
+  >MAVERIC</text>
+
+  <!-- MAVERIC title - main -->
+  <text
+    x="200" y="115"
+    font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+    font-size="64" font-weight="800" letter-spacing="6"
+    fill="url(#titleGrad)"
+  >MAVERIC</text>
+
+  <!-- Tagline -->
+  <text
+    x="202" y="142"
+    font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+    font-size="13.5" font-weight="400" letter-spacing="3.5"
+    fill="#00E5FF" fill-opacity="0.7"
+    filter="url(#softGlow)"
+  >MULTI-MODAL DATASET CURATION</text>
+
+  <!-- Tagline accent dots -->
+  <circle cx="198" cy="137" r="1.5" fill="#7B2FFF" opacity="0.7" />
+  <circle cx="762" cy="137" r="1.5" fill="#00E5FF" opacity="0.5" />
+
+  <!-- Bottom accent bar -->
+  <rect x="200" y="153" width="560" height="1.5" rx="1" fill="url(#purpleGrad)" opacity="0.4" />
+
+  <!-- Top-right decorative node cluster -->
+  <circle cx="762" cy="38" r="3" fill="none" stroke="#7B2FFF" stroke-width="1" opacity="0.5" />
+  <circle cx="773" cy="44" r="1.8" fill="#7B2FFF" opacity="0.4" />
+  <circle cx="751" cy="44" r="1.8" fill="#00B4FF" opacity="0.4" />
+  <line x1="762" y1="38" x2="773" y2="44" stroke="#7B2FFF" stroke-width="0.7" opacity="0.4" />
+  <line x1="762" y1="38" x2="751" y2="44" stroke="#00B4FF" stroke-width="0.7" opacity="0.4" />
+
+  <!-- Bottom-left corner accent -->
+  <circle cx="30" cy="170" r="2.5" fill="none" stroke="#00E5FF" stroke-width="0.8" opacity="0.35" />
+  <circle cx="30" cy="170" r="1" fill="#00E5FF" opacity="0.35" />
+
+  <!-- Outer border -->
+  <rect width="800" height="200" rx="12" ry="12" fill="none" stroke="#00B4FF" stroke-width="1" stroke-opacity="0.2" />
+</svg>
