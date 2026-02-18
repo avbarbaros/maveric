@@ -1,483 +1,528 @@
 # MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency
 
-MAVERIC is a sophisticated quality control system for multi-modal dataset curation, designed to improve the performance of vision-language models through intelligent data filtering and selection.
+MAVERIC is a quality-driven dataset curation system for vision-language models. It retrieves training samples from large web-crawled datasets, scores them with multi-modal quality metrics, and fine-tunes CLIP models on the curated data — following the [REACT benchmark](https://react-vl.github.io/) protocol across all 20 ELEVATER datasets.
 
-## Features
+---
 
-- **Multi-modal Quality Assessment**: Comprehensive quality metrics including visual (sharpness, resolution, color diversity) and semantic (consistency, alignment) measures
-- **Interactive Threshold Selection**: Real-time GUI for finding optimal quality thresholds
-- **Efficient Caching**: Smart image caching system for handling large-scale datasets
-- **Model Customization**: Fine-tune vision-language models with high-quality curated data
-- **Visualization Tools**: Rich visualization of quality distributions and sample galleries
-- **Extensible Architecture**: Easy to add new quality metrics, datasets, and models
+## Table of Contents
 
-## Requirements
+- [Overview](#overview)
+- [Pipeline](#pipeline)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Experiment Scripts](#experiment-scripts)
+- [Unified Training](#unified-training)
+- [Interactive GUI](#interactive-gui)
+- [Datasets](#datasets)
+- [CLI Reference](#cli-reference)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Citation](#citation)
 
-- Python 3.8+
-- PyTorch 1.9+
-- CUDA (optional, for GPU acceleration)
+---
+
+## Overview
+
+MAVERIC implements a 4-stage pipeline:
+
+1. **Retrieve** — Download candidate images from source datasets (LAION, etc.) using CLIP embedding similarity to a target dataset's reference images
+2. **Curate** — Score each sample with visual, semantic, and multimodal quality metrics; filter interactively via a Jupyter GUI
+3. **Customize** — Fine-tune CLIP's vision encoder on curated data with regularization to prevent catastrophic forgetting
+4. **Evaluate** — Assess the customized model against baseline zero-shot CLIP per ELEVATER dataset
+
+Key design decisions:
+- **REACT-style evaluation**: Dataset-specific text templates with template ensembling for reproducible benchmarks
+- **Locked-text tuning**: Only the vision encoder is fine-tuned; the text encoder is frozen
+- **MSE regularization**: Prevents the vision encoder from drifting too far from its pre-trained weights
+- **Smart caching**: Cross-dataset sample metadata cache (v3) stores CLIP embeddings to eliminate redundant inference on subsequent runs
+
+---
+
+## Pipeline
+
+```
+Source Dataset (LAION/CC3M/...)
+        │
+        ▼
+┌─────────────────────┐
+│  01_data_retrieval  │  CLIP similarity matching → raw JSON with quality scores
+└─────────────────────┘
+        │
+        ▼
+┌─────────────────────┐
+│  02_data_curation   │  Interactive GUI thresholds → filtered training JSON
+└─────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│  03_model_customization  │  Fine-tune CLIP vision encoder → best_model.pth
+└──────────────────────────┘
+        │
+        ▼
+┌─────────────────────┐
+│  04_results_analysis│  Plots, tables, markdown report
+└─────────────────────┘
+```
+
+For multi-dataset training, `03_model_customization.py --unified-training` combines all datasets into a single training run, evaluated by `05_unified_evaluation.py`.
+
+---
 
 ## Installation
 
-### Standard Installation
-```bash
-pip install maveric
-```
+### Requirements
 
-### Development Installation
+- Python 3.8+
+- PyTorch 1.9+
+- CUDA (optional but recommended)
+
+### Standard Install
+
 ```bash
 git clone https://github.com/avbarbaros/maveric.git
 cd maveric
-
-# Install system dependencies (Ubuntu/Debian)
-sudo apt-get update
-sudo apt-get install -y $(cat system-requirements.txt | grep -v "^#" | xargs)
-
-# Install Python dependencies
 pip install -r requirements.txt
-
-# Install in development mode
 pip install -e ".[dev]"
 ```
 
-### System Requirements
-MAVERIC requires several system packages for computer vision and ML operations. These are listed in `system-requirements.txt`:
-
-- `libgl1-mesa-glx`: OpenGL support for OpenCV image operations
-- `libglib2.0-0`: GLib library for low-level system operations
-- `libsm6`: X11 Session Management library for GUI applications
-- `libxext6`: X11 Extension library for display operations  
-- `libxrender-dev`: X11 Render extension for graphics rendering
-- `libgomp1`: GNU OpenMP runtime for parallel processing
-
-### Automated Setup Script
-For Google Colab or automated environments, use the provided setup script:
+### System Dependencies (Ubuntu/Debian)
 
 ```bash
-cd experiments
-python 01_setup.py --config maveric_config.yaml
+sudo apt-get update
+sudo apt-get install -y $(grep -v "^#" system-requirements.txt | xargs)
 ```
 
-This script will:
-- Install system dependencies from `system-requirements.txt`
-- Mount Google Drive (if in Colab)
-- Set up environment variables including `MAVERIC_BASE_DIR`
-- Create necessary directories based on configuration
-- Install MAVERIC package and dependencies
-- Validate the installation
+Required system packages: `libgl1-mesa-glx`, `libglib2.0-0`, `libsm6`, `libxext6`, `libxrender-dev`, `libgomp1`
 
-### Docker/Headless Environment Setup
-For environments without display (Docker, CI/CD, remote servers):
+### Headless / Docker / CI
 
 ```bash
-# Install with headless OpenCV
 pip install opencv-python-headless
-
-# Set matplotlib backend for headless environments
 export MPLBACKEND=Agg
 ```
 
-### Common Installation Issues
+### Google Colab Setup
 
-1. **Missing CLIP**: Install with `pip install openai-clip`
-2. **OpenGL errors**: Use `opencv-python-headless` instead of `opencv-python`
-3. **Matplotlib style errors**: Set `MPLBACKEND=Agg` for headless environments
-4. **PyTorch CPU-only**: Install with `pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu`
-
-## Quick Start
-
-```python
-from maveric import MAVERIC, MAVERICConfig
-
-# Initialize MAVERIC with base directory configuration
-config = MAVERICConfig(
-    maveric_base_dir="/content/drive/MyDrive/MAVERIC",  # Base directory for all MAVERIC files
-    cache_base_dir="/content/drive/MyDrive/MAVERIC/maveric_cache",
-    results_dir="/content/drive/MyDrive/MAVERIC/maveric_experiments", 
-    clip_model="ViT-B/32"
-)
-maveric = MAVERIC(config)
-
-# Retrieve and filter data
-retrieval_result = maveric.retrieve(
-    dataset_name="react-vl/react-retrieval-datasets",
-    target_dataset="cifar100",
-    num_samples=100000
-)
-
-# Launch interactive dashboard (for Jupyter/Colab)
-from maveric.visualization import start_interactive_gui
-gui = start_interactive_gui('cifar100', config_file=None)
-
-# Apply quality control
-quality_result = maveric.quality_control(
-    retrieval_result,
-    thresholds={'sharpness_score': 0.85, 'consistency': 0.80}
-)
-
-# Customize model
-customization_result = maveric.customize_model(
-    quality_result,
-    model_name="openai/clip-vit-base-patch32"
-)
+```bash
+python experiments/00_setup.py --config experiments/maveric_config.yaml
 ```
+
+This script mounts Google Drive, installs dependencies, sets environment variables, and validates the installation.
+
+### Common Issues
+
+| Error | Fix |
+|-------|-----|
+| `ModuleNotFoundError: clip` | `pip install openai-clip` |
+| `libGL.so.1` not found | Use `opencv-python-headless` |
+| Matplotlib display error | `export MPLBACKEND=Agg` |
+| `transformers` breaking changes | Pin with `pip install "transformers>=4.20.0,<5.0.0"` |
+
+---
 
 ## Configuration
 
-MAVERIC uses YAML-based configuration for easy management. The configuration system supports hierarchical directory structure through the `maveric_base_dir` parameter.
+All behaviour is controlled via `experiments/maveric_config.yaml`. Load it programmatically:
 
-### Configuration File Structure
+```python
+from maveric import MAVERIC
+maveric = MAVERIC.from_config_file('experiments/maveric_config.yaml')
+```
+
+### Key Parameters
 
 ```yaml
-# Base configuration - all paths will be relative to this
+# Paths
 maveric_base_dir: "/content/drive/MyDrive/MAVERIC"
-cache_base_dir: "/content/drive/MyDrive/MAVERIC/maveric_cache"
-results_dir: "/content/drive/MyDrive/MAVERIC/maveric_experiments"
+cache_base_dir:   "/content/drive/MyDrive/MAVERIC/maveric_cache"
+results_dir:      "/content/drive/MyDrive/MAVERIC/maveric_experiments"
 
-# Model settings
-clip_model: "ViT-B/32"
-batch_size: 64
+# Model
+clip_model: "ViT-B/32"   # also: ViT-B/16, ViT-L/14, ViT-L/14@336px
 device: "cuda"
+batch_size: 32
 
-# Quality thresholds
-quality_thresholds:
-  sharpness_score: 0.7
-  consistency: 0.7
-  clip_similarity: 0.6
+# Retrieval
+enable_target_class_quality: false   # Disable EfficientNet for 50-70% faster retrieval
+n_reference_images: 10
+request_timeout: 1
+max_retries: 0
+
+# Caching
+enable_image_cache: true
+enable_sample_cache: true            # Cross-dataset CLIP embedding cache (v3)
+sample_cache_version: 3
+
+# Quality metric weights
+metric_weights:
+  img2img: 0.25
+  txt2txt: 0.25
+  img2txt: 0.25
+  txt2img: 0.25
+
+# Training
+training:
+  epochs: 50
+  learning_rate: 0.0000003
+  weight_decay: 0.05
+  regularization_weight: 0.7        # MSE regularization (prevents catastrophic forgetting)
+  use_augmentation: true
+  augmentation_strength: 3
+  augmentation_magnitude: 12
+  optimizer: "adamw"
+  scheduler: "cosine"
+  gradient_clip_value: 0.5
+  use_domain_adaptation: false       # Enable per-dataset domain simulation
 ```
 
 ### Environment Variables
 
-The setup script automatically configures these environment variables:
+| Variable | Description |
+|----------|-------------|
+| `MAVERIC_BASE_DIR` | Root directory for all MAVERIC files |
+| `MAVERIC_CACHE_DIR` | Image and embedding cache |
+| `MAVERIC_RESULTS_DIR` | Experiment results and logs |
+| `MAVERIC_CONFIG_PATH` | Path to configuration file |
+| `HF_HOME` | Hugging Face model cache |
 
-- `MAVERIC_BASE_DIR`: Base directory for all MAVERIC files
-- `MAVERIC_CACHE_DIR`: Directory for caching images and embeddings  
-- `MAVERIC_RESULTS_DIR`: Directory for experiment results and logs
-- `MAVERIC_CONFIG_PATH`: Path to the configuration file
-- `HF_HOME`: Hugging Face model cache directory
+---
 
-### Loading Configuration
+## Experiment Scripts
 
-```python
-from maveric import MAVERIC
+Run scripts in order from the `experiments/` directory:
 
-# Load from YAML file
-maveric = MAVERIC.from_config_file('experiments/maveric_config.yaml')
+### 00_setup.py — Environment Setup
 
-# Or use environment variable
-import os
-config_path = os.getenv('MAVERIC_CONFIG_PATH', 'maveric_config.yaml')
-maveric = MAVERIC.from_config_file(config_path)
+```bash
+python experiments/00_setup.py --config experiments/maveric_config.yaml
 ```
 
-## Testing
+Sets up the environment for Colab or local use: mounts Drive, installs packages, creates directories.
 
-### Basic Testing Commands
+---
+
+### 01_data_retrieval.py — Data Retrieval
+
+```bash
+python experiments/01_data_retrieval.py \
+    --config experiments/maveric_config.yaml \
+    --dataset cifar10 \
+    --output ./maveric_experiments/cifar10/raw/
+
+# With EfficientNet quality scores (slower but more comprehensive)
+python experiments/01_data_retrieval.py \
+    --config experiments/maveric_config.yaml \
+    --dataset cifar10 \
+    --enable-efficientnet
+```
+
+**Output**: Rotation JSON files with per-sample quality scores:
+- Visual: `resolution_score`, `sharpness_score`, `color_score`
+- Semantic: `text_quality_score`, `caption_length_score`
+- Multimodal: `weighted_class_score`, `consistency`, per-class `Class_{name}_img2img`, etc.
+
+**Caching**: Sample metadata (including CLIP embeddings) cached at `{cache_dir}/sample_metadata_cache/`. Second retrieval on the same source is ~85% faster.
+
+---
+
+### 02_data_curation.py — Quality Control
+
+```bash
+python experiments/02_data_curation.py \
+    --input-dir ./maveric_experiments/cifar10/raw/ \
+    --dataset-name cifar10 \
+    --config experiments/maveric_config.yaml \
+    --output ./maveric_experiments/cifar10/curated/
+```
+
+Applies quality thresholds and balances the dataset. For interactive threshold selection, use the [GUI](#interactive-gui) instead.
+
+---
+
+### 03_model_customization.py — Model Fine-Tuning
+
+**Single dataset:**
+```bash
+python experiments/03_model_customization.py \
+    --input ./maveric_experiments/cifar10/curated/ \
+    --config experiments/maveric_config.yaml \
+    --output-dir ./maveric_experiments/cifar10/models/
+
+# Save augmented sample grids for inspection
+python experiments/03_model_customization.py \
+    --input ./maveric_experiments/cifar10/curated/ \
+    --config experiments/maveric_config.yaml \
+    --save-augmented-grids
+```
+
+**Unified training across all datasets:**
+```bash
+python experiments/03_model_customization.py \
+    --input ./maveric_experiments/unified_training_data/ \
+    --config experiments/maveric_config.yaml \
+    --unified-training \
+    --output-dir ./maveric_experiments/unified_training/models/
+```
+
+The fine-tuning process:
+1. Loads curated training JSON files
+2. Wraps CLIP in `CustomizedCLIP` (locks text encoder, enables MSE regularization)
+3. Trains vision encoder with RandAugment + optional domain adaptation
+4. Evaluates per epoch using REACT-style template ensembling
+5. Saves `best_model.pth` checkpoint
+
+---
+
+### 04_results_analysis.py — Analysis & Visualization
+
+```bash
+python experiments/04_results_analysis.py \
+    --input-dir ./maveric_experiments/ \
+    --output-dir ./maveric_experiments/analysis/
+```
+
+Generates comparison plots, accuracy tables, and a markdown report.
+
+---
+
+### 05_unified_evaluation.py — Unified Model Evaluation
+
+```bash
+# Evaluate unified model on all datasets
+python experiments/05_unified_evaluation.py \
+    --checkpoint ./maveric_experiments/unified_training/models/best_model.pth \
+    --config experiments/maveric_config.yaml
+
+# Skip baseline evaluation (faster)
+python experiments/05_unified_evaluation.py \
+    --checkpoint ./maveric_experiments/unified_training/models/best_model.pth \
+    --no-baseline
+
+# Evaluate on specific datasets only
+python experiments/05_unified_evaluation.py \
+    --checkpoint ./maveric_experiments/unified_training/models/best_model.pth \
+    --datasets cifar10 cifar100 oxford_pets
+```
+
+Compares baseline zero-shot CLIP vs. customized model per dataset using REACT-style template ensembling.
+
+---
+
+## Unified Training
+
+Unified training combines curated data from multiple ELEVATER datasets into a single fine-tuning session, producing one model evaluated across all datasets.
+
+### Directory Structure
+
+```
+maveric_experiments/
+├── cifar10/
+│   ├── images/          # Locally cached images (fast access)
+│   └── *training*maveric*.json
+├── cifar100/
+│   ├── images/
+│   └── *training*maveric*.json
+├── oxford_pets/
+│   ├── images/
+│   └── *training*maveric*.json
+└── unified_training_data/   # Symlinks or copies for unified training
+    ├── cifar10/ → ../cifar10/
+    ├── cifar100/ → ../cifar100/
+    └── ...
+```
+
+The unified trainer automatically:
+- Builds a merged class space across all datasets (e.g. 1,151 classes for 20 datasets)
+- Indexes dataset-specific `images/` folders for fast local validation (avoids slow network cache)
+- Applies dataset-specific domain adaptation transforms (blur, JPEG compression, resolution scaling)
+
+---
+
+## Interactive GUI
+
+For interactive data curation in Jupyter or Google Colab:
+
+```python
+from maveric.visualization import start_interactive_gui
+
+gui = start_interactive_gui('cifar10', config_file='experiments/maveric_config.yaml')
+```
+
+### GUI Tabs
+
+| Tab | Purpose |
+|-----|---------|
+| **Metric Weights** | Adjust img2img / txt2txt / img2txt / txt2img weights with live preview |
+| **Quality Thresholds** | Set per-metric thresholds; see sample counts update in real time |
+| **Mahalanobis Filter** | Joint filtering on `weighted_class_score` + `consistency` via distance from ideal point |
+| **EfficientNet Prediction** | Filter by ImageNet class predictions (when EfficientNet scores available) |
+| **Balance Settings** | Undersample/oversample to target class balance; sort by consistency or weighted score |
+
+### Mahalanobis Filter
+
+The Mahalanobis filter jointly optimizes two quality axes instead of independent thresholds:
+
+- **Global mode**: Filter all classes at once
+- **Class-based mode**: Filter each class individually, accumulate results
+- **Batch ALL**: Process all classes with same parameters in one click
+- **Keep Count**: Enter exact sample count (e.g. 350) instead of a percentage
+
+```python
+# Programmatic usage
+gui.apply_thresholds()    # Apply Tab 2 thresholds
+gui.apply_balance()       # Apply Tab 5 balancing
+gui.save_data()           # Export to JSON + auto-generate image grids
+```
+
+### Saving Data
+
+Clicking **Save Data** exports:
+- Training JSON files (rotation files, 1000 samples each)
+- 10×10 image grids organized by class for manual inspection (`curationResults/`)
+
+---
+
+## Datasets
+
+MAVERIC supports all 20 official ELEVATER benchmark datasets:
+
+### Torchvision-based (7) — auto-download
+
+| Dataset | Classes | Notes |
+|---------|---------|-------|
+| CIFAR-10 | 10 | |
+| CIFAR-100 | 100 | Alphabetically ordered classes |
+| Country211 | 211 | |
+| EuroSAT | 10 | Satellite imagery |
+| GTSRB | 43 | Traffic signs |
+| Oxford Flowers102 | 102 | |
+| Oxford Pets | 37 | |
+
+### File-based (13) — manual test data required
+
+| Dataset | Classes | Notes |
+|---------|---------|-------|
+| Caltech101 | 102 | Includes `background_google` |
+| DTD | 47 | Texture recognition |
+| FER2013 | 7 | Facial expressions; list-based class names |
+| FGVCAircraft | 100 | Migrated from torchvision Feb 2026 |
+| Food101 | 101 | Migrated from torchvision Feb 2026 |
+| HatefulMemes | 2 | |
+| Kitti Distance | 4 | |
+| MNIST | 10 | |
+| PatchCamelyon | 2 | Lymph node classification |
+| RenderedSST2 | 2 | Sentiment |
+| RESISC45 | 45 | Remote sensing |
+| StanfordCars | 196 | |
+| VOC2007 | 20 | |
+
+For file-based dataset setup instructions see [docs/newfeatures/FILE_BASED_DATASETS_GUIDE.md](docs/newfeatures/FILE_BASED_DATASETS_GUIDE.md).
+
+Expected directory structure for file-based datasets:
+```
+{results_dir}/{dataset_name}/
+├── train/
+│   ├── class_name_1/
+│   │   ├── image001.jpg
+│   │   └── ...
+│   └── ...
+└── test/
+    ├── class_name_1/
+    └── ...
+```
+
+---
+
+## CLI Reference
+
+```bash
+# Retrieve samples
+maveric retrieve \
+    --source react-vl/react-retrieval-datasets \
+    --target cifar10 \
+    --num-samples 100000 \
+    --config experiments/maveric_config.yaml
+
+# Quality control
+maveric quality-control \
+    --input results.json \
+    --thresholds thresholds.json \
+    --balance median \
+    --output filtered.json
+
+# Fine-tune model
+maveric customize \
+    --input filtered.json \
+    --model openai/clip-vit-base-patch32 \
+    --epochs 20 \
+    --output-dir ./models
+
+# Visualize distributions
+maveric visualize \
+    --input results.json \
+    --output-dir ./plots
+```
+
+---
+
+## Testing
 
 ```bash
 # Run all tests
 pytest
 
-# Run with coverage (requires: pip install pytest-cov)
-pytest --cov=maveric --cov-report=html
-
-# Run specific test file
-pytest tests/test_quality_metrics.py
-
-# Run specific test
-pytest tests/test_main.py::TestMAVERIC::test_retrieve
-
-# Run tests with verbose output
-pytest -v
-
-# Run tests with short traceback for cleaner output
-pytest --tb=short
-```
-
-**Note**: Coverage commands require `pytest-cov`. Install with:
-```bash
-pip install pytest-cov
-# OR install dev dependencies
-pip install -e ".[dev]"
-```
-
-### Headless Environment Testing
-
-**Important**: For Docker containers, CI/CD pipelines, or remote servers without display capabilities, use these commands:
-
-```bash
-# Basic headless testing (RECOMMENDED)
+# Headless environments (Docker, CI, remote servers)
 MPLBACKEND=Agg pytest
 
-# Headless with coverage (requires pytest-cov)
+# With coverage
 MPLBACKEND=Agg pytest --cov=maveric --cov-report=html
 
-# Headless with verbose output (no extra dependencies)
-MPLBACKEND=Agg pytest -v --tb=short
-
-# Headless minimal (fastest, least output)
-MPLBACKEND=Agg pytest -q
-
-# Set environment variable permanently (Linux/Mac)
-export MPLBACKEND=Agg
-pytest
-
-# Set environment variable permanently (Windows)
-set MPLBACKEND=Agg
-pytest
+# Specific test file
+pytest tests/test_quality_metrics.py -v
 ```
 
-**Why `MPLBACKEND=Agg`?** 
-- **Prevents display errors**: Matplotlib tries to open GUI windows by default, which fails in headless environments
-- **Enables visualization tests**: All plotting and visualization tests require this backend in Docker/CI environments  
-- **Universal compatibility**: Works across local development, containers, and cloud environments
-- **No functionality loss**: Agg backend supports all matplotlib features except interactive displays
+Test files are located in [tests/](tests/).
 
-### Docker Testing
+---
 
-```bash
-# Test inside Docker container
-docker run -it --rm -v $(pwd):/workspace -w /workspace python:3.9 bash -c "
-  pip install -r requirements.txt && 
-  pip install -e .[dev] && 
-  MPLBACKEND=Agg pytest
-"
+## Project Structure
 
-# Using docker-compose (if available)
-docker-compose run --rm test bash -c "MPLBACKEND=Agg pytest"
+```
+maveric/
+├── experiments/
+│   ├── 00_setup.py                  # Environment setup
+│   ├── 01_data_retrieval.py         # Retrieval stage
+│   ├── 02_data_curation.py          # Quality control stage
+│   ├── 03_model_customization.py    # Fine-tuning stage
+│   ├── 04_results_analysis.py       # Analysis & visualization
+│   ├── 05_unified_evaluation.py     # Unified model evaluation
+│   └── maveric_config.yaml          # Configuration
+├── maveric/
+│   ├── main.py                      # MAVERIC class (high-level API)
+│   ├── config.py                    # MAVERICConfig, TrainingConfig
+│   ├── core/                        # Base classes, interfaces, exceptions
+│   ├── retrieval/                   # Retrieval engine + caching
+│   ├── datasets/                    # ELEVATER dataset handlers
+│   ├── quality/                     # Quality metrics & filtering
+│   ├── customization/               # Model fine-tuning & evaluation
+│   │   ├── model_customizer.py
+│   │   ├── training.py
+│   │   ├── evaluation.py
+│   │   └── unified_training.py
+│   ├── models/                      # CLIP wrappers
+│   ├── visualization/               # Interactive GUI & plots
+│   └── utils/                       # CLI, I/O, logging
+├── tests/                           # Test suite
+├── docs/
+│   ├── bugfixes/                    # Bug fix documentation
+│   ├── newfeatures/                 # Feature documentation
+│   └── maveric_pipeline.svg         # Architecture diagram
+├── requirements.txt
+├── system-requirements.txt
+└── setup.py
 ```
 
-### CI/CD Pipeline Commands
-
-```bash
-# Basic CI testing (no extra dependencies)
-MPLBACKEND=Agg pytest --junitxml=test-results.xml
-
-# With coverage for CI (requires pytest-cov)
-MPLBACKEND=Agg pytest --junitxml=test-results.xml --cov=maveric --cov-report=xml
-
-# With parallel testing (requires pytest-xdist)  
-MPLBACKEND=Agg pytest -n auto --dist=loadfile
-
-# Memory-efficient testing for constrained environments
-MPLBACKEND=Agg pytest --maxfail=1 --tb=short -q
-
-# Complete CI setup with dependencies
-pip install pytest pytest-cov pytest-xdist
-MPLBACKEND=Agg pytest --junitxml=test-results.xml --cov=maveric --cov-report=xml
-```
-
-## CLI Usage
-
-```bash
-# Retrieve samples
-maveric retrieve --source react-vl/react-retrieval-datasets --target cifar100 --num-samples 10000
-
-# Apply quality control
-maveric quality-control --input results.json --thresholds thresholds.json --output filtered.json
-
-# Customize model
-maveric customize --input filtered.json --model openai/clip-vit-base-patch32 --epochs 10 --output-dir ./models
-
-# Visualize distributions
-maveric visualize --input results.json --output-dir ./plots
-```
-
-## ELEVATER Experiments on Google Colab
-
-To evaluate MAVERIC's quality-driven filtering effectiveness across all ELEVATER datasets on Google Colab T4 GPU:
-
-### Prerequisites
-- Google Colab account with T4 GPU runtime
-- Google Drive with 10+ GB free space
-- Stable internet connection
-- 3-4 hours of computation time
-
-### Overview
-
-These experiments systematically test MAVERIC's ability to improve dataset quality through intelligent filtering across 20 diverse computer vision datasets from the ELEVATER benchmark.
-
-### ELEVATER Datasets Processed
-
-The experiments process these 20 datasets:
-- Cars, CIFAR10, CIFAR100, DTD, EuroSAT, FER2013
-- FGVCAircraft, Flowers102, Food101, GTSRB, HatefulMemes
-- MNIST, OxfordIIITPet, PCAM, RESISC45, RenderedSST2
-- StanfordCars, STL10, SUN397, SVHN
-
-### Experiment Scripts
-
-The `experiments/` folder contains sequentially numbered scripts for running comprehensive ELEVATER dataset experiments:
-
-#### 1. Setup and Installation (`01_setup.py`)
-**Purpose**: Complete MAVERIC setup including installation and Google Drive integration
-**Usage**:
-```python
-python /content/maveric/experiments/01_setup.py --config /path/to/maveric_config.yaml
-```
-**Command Line Options**:
-- `--config`, `-c`: Path to MAVERIC configuration YAML file (required)
-- `--help`, `-h`: Show help message and usage examples
-
-**Example Usage**:
-```bash
-# Using relative path
-python 01_setup.py --config ./maveric_config.yaml
-
-# Using absolute path 
-python 01_setup.py --config /content/drive/MyDrive/MAVERIC/config.yaml
-
-# Short form
-python 01_setup.py -c maveric_config.yaml
-```
-
-**Expected Behavior**:
-- Validates configuration file exists and is valid YAML
-- Checks GPU availability and system information
-- Installs system dependencies for headless environment
-- Mounts Google Drive to `/content/drive`
-- Sets up environment variables from config (`MPLBACKEND=Agg`, cache paths)
-- Creates cache directory structure on Google Drive
-- Clones MAVERIC repository from GitHub (if needed)
-- Installs dependencies from `requirements.txt`
-- Installs MAVERIC in development mode
-- Tests installation with import checks
-- Tests read/write access to cache directories
-- Backs up configuration to Google Drive
-- Shows setup summary with disk usage and configuration details
-- **Duration**: ~10-15 minutes
-
-#### 2. ELEVATER Datasets Experiments (`03_elevater_experiments.py`)
-**Purpose**: Run MAVERIC quality filtering on all 20 ELEVATER datasets
-**Usage**:
-```python
-python /content/maveric/experiments/03_elevater_experiments.py
-```
-**Expected Behavior**:
-- Processes datasets: Cars, CIFAR10/100, DTD, EuroSAT, FER2013, FGVCAircraft, Flowers102, Food101, GTSRB, HatefulMemes, MNIST, OxfordIIITPet, PCAM, RESISC45, RenderedSST2, StanfordCars, STL10, SUN397, SVHN
-- For each dataset:
-  - Retrieves samples using CLIP embedding similarity
-  - Applies quality assessment metrics (visual, semantic, multimodal)
-  - Filters data based on configured thresholds
-  - Saves detailed results and summaries
-  - Generates visualizations (quality distributions, sample galleries)
-  - Updates experiment progress log
-- Creates comprehensive experiment summary with aggregate statistics
-- **Duration**: ~2-3 hours (5-10 minutes per dataset)
-- **Output**: Individual results per dataset + overall summary
-
-#### 3. Results Analysis and Visualization (`04_results_analysis.py`)
-**Purpose**: Analyze experiment results and generate comprehensive reports
-**Usage**:
-```python
-python /content/maveric/experiments/04_results_analysis.py
-```
-**Expected Behavior**:
-- Loads experiment results from all datasets
-- Creates pandas DataFrame for statistical analysis
-- Generates summary statistics (retention rates, quality scores, execution times)
-- Creates comprehensive visualizations:
-  - Success rate pie chart
-  - Retention rate distribution histogram
-  - Sample counts by dataset
-  - Execution time analysis
-  - Quality scores heatmap
-  - Detailed retention rate comparison
-- Generates markdown analysis report with:
-  - Executive summary with key findings
-  - Dataset-specific performance results
-  - Quality metrics analysis
-  - Conclusions and recommendations
-- **Duration**: ~5-10 minutes
-
-### Configuration
-
-The experiments use `experiments/maveric_config.yaml` for configuration:
-- **Quality Thresholds**: Adjustable quality filtering thresholds for different metrics
-- **Processing Settings**: Batch sizes, sample limits, caching options optimized for T4 GPU
-- **ELEVATER Datasets**: Complete list of 20 datasets to process
-- **Output Settings**: Results format, visualization options, experiment tracking
-
-### Expected Results Structure
-
-After running all experiments, you'll find in `/content/drive/MyDrive/MAVERIC/maveric_experiments/`:
-```
-maveric_experiments/
-├── maveric_config.yaml                 # Configuration backup
-├── experiment_log.md                   # Progress tracking with checkboxes
-├── elevater_experiment_summary.json    # Overall experiment results
-├── maveric_analysis_report.md          # Comprehensive analysis report
-├── maveric.log                         # Detailed execution logs
-├── elevater_results/                   # Individual dataset results
-│   ├── Cars/
-│   ├── CIFAR10/
-│   └── ... (20 datasets)
-└── analysis_visualizations/            # Charts and plots
-    ├── experiment_overview.png
-    └── retention_rates_detailed.png
-```
-
-### Key Research Insights
-
-The experiments will quantify MAVERIC's effectiveness by measuring:
-- **Retention Rates**: Percentage of data passing quality filters per dataset
-- **Quality Score Distributions**: How quality metrics vary across datasets
-- **Filtering Effectiveness**: Data reduction vs. quality improvement trade-offs
-- **Processing Efficiency**: Execution times and resource utilization
-- **Cross-Dataset Patterns**: Which datasets benefit most from quality filtering
-
-### Configuration Options
-
-Edit `experiments/maveric_config.yaml` to adjust:
-- **Quality Thresholds**: Adjustable quality filtering thresholds for different metrics
-- **Processing Settings**: Batch sizes, sample limits, caching options optimized for T4 GPU
-- **ELEVATER Datasets**: Complete list of 20 datasets to process
-- **Output Settings**: Results format, visualization options, experiment tracking
-
-### Troubleshooting
-
-**Common Issues:**
-- GPU not detected: Ensure T4 runtime is selected in Colab
-- Google Drive mounting fails: Re-authenticate Drive permissions
-- Out of memory errors: Reduce batch_size in config
-- Long execution times: Check internet connection stability
-
-**Performance Tips:**
-- Use GPU runtime for faster processing
-- Keep Colab tab active to prevent timeouts
-- Monitor Google Drive storage space
-- Run during off-peak hours for better performance
-
-### Running the Complete Pipeline
-
-Execute scripts in sequence:
-```bash
-# Step 1: Setup and configuration (run once)
-python /content/maveric/experiments/01_setup.py --config /content/maveric/experiments/maveric_config.yaml
-
-# Step 2: Run experiments (main analysis)
-python /content/maveric/experiments/03_elevater_experiments.py
-
-# Step 3: Generate analysis report
-python /content/maveric/experiments/04_results_analysis.py
-```
-
-**Alternative setup options**:
-```bash
-# Using relative path (if running from experiments directory)
-cd /content/maveric/experiments
-python 01_setup.py --config ./maveric_config.yaml
-
-# Using custom config file
-python 01_setup.py --config /path/to/custom_config.yaml
-
-# Show help and usage examples
-python 01_setup.py --help
-```
-
-## Documentation
-
-Full documentation is available at [https://maveric.readthedocs.io](https://maveric.readthedocs.io)
+---
 
 ## Citation
 
@@ -485,13 +530,15 @@ If you use MAVERIC in your research, please cite:
 
 ```bibtex
 @software{maveric2025,
-  title={MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency},
-  author={Ali V. Barbaros},
-  year={2025},
-  url={https://github.com/avbarbaros/maveric}
+  title   = {MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency},
+  author  = {Ali V. Barbaros},
+  year    = {2025},
+  url     = {https://github.com/avbarbaros/maveric}
 }
 ```
 
+---
+
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License — see [LICENSE](LICENSE) for details.
