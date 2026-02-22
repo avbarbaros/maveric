@@ -72,18 +72,18 @@ processing:
 # Training configuration (for model customization)
 training:
   epochs: 50
-  learning_rate: 0.0000003
+  learning_rate: 0.0000001
   weight_decay: 0.05
-  warmup_steps: 150
+  warmup_steps: 200
 
   # Regularization settings
   use_regularization: true  # Prevent catastrophic forgetting with MSE loss to original weights
-  regularization_weight: 0.7  # Weight for regularization loss (0.0-1.0)
+  regularization_weight: 0.9  # Weight for regularization loss (0.0-1.0)
 
   # Data augmentation settings
   use_augmentation: true
-  augmentation_strength: 3  # RandAugment num_ops
-  augmentation_magnitude: 12  # RandAugment magnitude
+  augmentation_strength: 2  # RandAugment num_ops
+  augmentation_magnitude: 8  # RandAugment magnitude
 
   # Domain adaptation settings (simulate test data characteristics)
   # Applied AFTER RandAugment to ensure domain match

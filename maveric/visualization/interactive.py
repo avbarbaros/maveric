@@ -2039,15 +2039,8 @@ class MAVERICInteractiveQualityControl:
             selected_mask = np.zeros(len(all_weighted), dtype=bool)
             selected_mask[selected_indices] = True
 
-        # Create figure with gridspec for marginal plots
-        fig = plt.figure(figsize=(12, 10))
-        gs = fig.add_gridspec(3, 3, width_ratios=[4, 1, 0.2], height_ratios=[0.2, 4, 1],
-                             hspace=0.05, wspace=0.05)
-
-        # Main scatter plot
-        ax_main = fig.add_subplot(gs[1, 0])
-        ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
-        ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+        # Create figure without marginal plots
+        fig, ax_main = plt.subplots(figsize=(10, 8))
 
         # Plot rejected samples (gray)
         ax_main.scatter(all_weighted[~selected_mask], all_consistency[~selected_mask],
@@ -2090,31 +2083,16 @@ class MAVERICInteractiveQualityControl:
         # Main plot formatting
         ax_main.set_xlabel('Weighted Class Score', fontsize=11)
         ax_main.set_ylabel('Consistency', fontsize=11)
+        ax_main.set_title('Joint Distribution with Mahalanobis Selection Boundary',
+                         fontsize=12, fontweight='bold', pad=10)
         ax_main.grid(True, alpha=0.3)
-        ax_main.legend(loc='lower right', fontsize=9)
+        ax_main.legend(loc='upper right', fontsize=9)
 
         # Add correlation text
         ax_main.text(0.02, 0.98, f'ρ = {correlation:.3f}',
                     transform=ax_main.transAxes, fontsize=10,
                     verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-
-        # Top histogram (weighted_class_score) - normalized density
-        ax_top.hist(all_weighted, bins=50, alpha=0.3, color='gray', label='All', density=True)
-        ax_top.hist(all_weighted[selected_mask], bins=50, alpha=0.7, color='green', label='Selected', density=True)
-        ax_top.axvline(ideal_point[0], color='red', linestyle='--', linewidth=1, label='Ideal')
-        ax_top.set_ylabel('Density', fontsize=9)
-        ax_top.tick_params(labelbottom=False)
-        ax_top.legend(loc='upper right', fontsize=8)
-        ax_top.set_title(f'Joint Distribution with Mahalanobis Selection Boundary\n(Top {keep_percentile}% closest to ideal)',
-                        fontsize=12, fontweight='bold', pad=10)
-
-        # Right histogram (consistency) - normalized density
-        ax_right.hist(all_consistency, bins=50, alpha=0.3, color='gray', orientation='horizontal', density=True)
-        ax_right.hist(all_consistency[selected_mask], bins=50, alpha=0.7, color='green', orientation='horizontal', density=True)
-        ax_right.axhline(ideal_point[1], color='red', linestyle='--', linewidth=1)
-        ax_right.set_xlabel('Density', fontsize=9)
-        ax_right.tick_params(labelleft=False)
 
         plt.tight_layout()
         plt.show()
@@ -2290,15 +2268,8 @@ class MAVERICInteractiveQualityControl:
         all_consistency = all_samples['consistency']
         all_distances = all_samples['distances']
 
-        # Create figure with gridspec for marginal plots
-        fig = plt.figure(figsize=(12, 10))
-        gs = fig.add_gridspec(3, 3, width_ratios=[4, 1, 0.2], height_ratios=[0.2, 4, 1],
-                             hspace=0.05, wspace=0.05)
-
-        # Main scatter plot
-        ax_main = fig.add_subplot(gs[1, 0])
-        ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
-        ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+        # Create simple figure without marginal plots
+        fig, ax_main = plt.subplots(figsize=(10, 8))
 
         # Plot rejected samples (gray)
         ax_main.scatter(all_weighted[~selected_mask], all_consistency[~selected_mask],
@@ -2330,33 +2301,18 @@ class MAVERICInteractiveQualityControl:
         ax_main.add_patch(ellipse)
 
         # Main plot formatting
+        ax_main.set_title(f'Class: {class_name} - Mahalanobis Selection',
+                         fontsize=12, fontweight='bold', pad=10)
         ax_main.set_xlabel('Weighted Class Score', fontsize=11)
         ax_main.set_ylabel('Consistency', fontsize=11)
         ax_main.grid(True, alpha=0.3)
-        ax_main.legend(loc='lower right', fontsize=9)
+        ax_main.legend(loc='upper right', fontsize=9)
 
         # Add correlation text
         ax_main.text(0.02, 0.98, f'ρ = {correlation:.3f}',
                     transform=ax_main.transAxes, fontsize=10,
                     verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-
-        # Top histogram (weighted_class_score) - normalized density
-        ax_top.hist(all_weighted, bins=50, alpha=0.3, color='gray', label='All', density=True)
-        ax_top.hist(all_weighted[selected_mask], bins=50, alpha=0.7, color='green', label='Selected', density=True)
-        ax_top.axvline(ideal_point[0], color='red', linestyle='--', linewidth=1, label='Ideal')
-        ax_top.set_ylabel('Density', fontsize=9)
-        ax_top.tick_params(labelbottom=False)
-        ax_top.legend(loc='upper right', fontsize=8)
-        ax_top.set_title(f'Class: {class_name} - Mahalanobis Selection (Top {keep_percentile}%)',
-                        fontsize=12, fontweight='bold', pad=10)
-
-        # Right histogram (consistency) - normalized density
-        ax_right.hist(all_consistency, bins=50, alpha=0.3, color='gray', orientation='horizontal', density=True)
-        ax_right.hist(all_consistency[selected_mask], bins=50, alpha=0.7, color='green', orientation='horizontal', density=True)
-        ax_right.axhline(ideal_point[1], color='red', linestyle='--', linewidth=1)
-        ax_right.set_xlabel('Density', fontsize=9)
-        ax_right.tick_params(labelleft=False)
 
         plt.tight_layout()
         plt.show()
