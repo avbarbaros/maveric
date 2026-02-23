@@ -292,6 +292,7 @@ class TrainingConfig:
     # Evaluation
     eval_frequency: int = 1  # Evaluate every N epochs
     save_best_model: bool = True
+    skip_epoch_evaluation: bool = False  # Skip per-epoch evaluation (useful for unified training)
     
     # Validation strategy
     use_validation: bool = True  # Whether to use validation during training

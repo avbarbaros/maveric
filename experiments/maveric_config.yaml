@@ -189,6 +189,7 @@ training:
   eval_frequency: 1
   save_frequency: 1
   keep_last_n_checkpoints: 3
+  skip_epoch_evaluation: false  # Set to true for unified training to skip per-epoch evaluation
 
   # Advanced settings
   mixed_precision: false

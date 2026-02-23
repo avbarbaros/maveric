@@ -60,7 +60,10 @@ class Trainer(BaseComponent):
             Training history dictionary
 
         Note:
-            Test data evaluation is mandatory at each epoch for reliable model selection.
+            Test data evaluation is mandatory at each epoch for reliable model selection,
+            UNLESS training_config.skip_epoch_evaluation is True (useful for unified training).
+            When skip_epoch_evaluation=True, only training metrics are logged and periodic
+            checkpoints are saved without evaluation overhead.
             If templates and evaluator are provided, uses REACT-style template ensembling
             for consistent evaluation between training and final evaluation.
         """
@@ -130,9 +133,9 @@ class Trainer(BaseComponent):
             
             history['train_loss'].append(train_loss)
             history['train_acc'].append(train_acc)
-            
-            # Validate and Test
-            if epoch % training_config.eval_frequency == 0:
+
+            # Validate and Test (skip if disabled for unified training)
+            if not training_config.skip_epoch_evaluation and epoch % training_config.eval_frequency == 0:
                 # Validation (optional)
                 if val_loader is not None:
                     val_loss, val_acc = self._validate_epoch(
@@ -147,7 +150,7 @@ class Trainer(BaseComponent):
                     val_loss, val_acc = 0.0, 0.0
                     history['val_loss'].append(val_loss)
                     history['val_acc'].append(val_acc)
-                
+
                 # Evaluate on test set (mandatory)
                 test_loss, test_acc = self._validate_epoch(
                     test_loader,
@@ -157,7 +160,7 @@ class Trainer(BaseComponent):
                 )
                 history['test_loss'].append(test_loss)
                 history['test_acc'].append(test_acc)
-                
+
                 # Log results (always includes test metrics)
                 if val_loader is not None:
                     log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
@@ -167,36 +170,53 @@ class Trainer(BaseComponent):
                     log_msg = (f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
                               f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}% (no validation)")
                 self.log_info(log_msg)
-                
+
                 # Check for improvement (always use test accuracy)
                 eval_acc = test_acc
                 if eval_acc > best_val_acc:
                     best_val_acc = eval_acc
                     best_epoch = epoch
-                    
+
                     # Save best model (remove previous best if exists)
                     if training_config.save_best_model and self.checkpoint_dir:
                         # Remove previous best checkpoint to save disk space
                         if best_checkpoint_path and best_checkpoint_path.exists():
                             best_checkpoint_path.unlink()
                             self.log_info(f"Removed previous best checkpoint: {best_checkpoint_path}")
-                        
+
                         checkpoint_metadata = {
-                            'epoch': epoch, 
-                            'test_acc': eval_acc, 
+                            'epoch': epoch,
+                            'test_acc': eval_acc,
                             'is_best': True
                         }
                         if val_loader is not None:
                             checkpoint_metadata['val_acc'] = val_acc
                         else:
                             checkpoint_metadata['val_acc'] = 0.0  # No validation
-                            
+
                         best_checkpoint_path = self.save_checkpoint(
                             self.model,
                             f"best_model",
                             checkpoint_metadata
                         )
-            
+            elif training_config.skip_epoch_evaluation:
+                # Skip evaluation but save periodic checkpoints for unified training
+                self.log_info(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% (evaluation skipped)")
+
+                # Save checkpoint every save_frequency epochs
+                if epoch % training_config.save_frequency == 0:
+                    checkpoint_metadata = {
+                        'epoch': epoch,
+                        'train_acc': train_acc,
+                        'train_loss': train_loss,
+                        'is_best': False
+                    }
+                    checkpoint_path = self.save_checkpoint(
+                        self.model,
+                        f"checkpoint_epoch_{epoch+1}",
+                        checkpoint_metadata
+                    )
+
             # Skip periodic checkpoints to save disk space - only keep best model
             # Periodic checkpoints disabled for disk efficiency
         

@@ -417,6 +417,10 @@ def run_unified_training(config: Dict, args) -> bool:
         print(f"   Weight decay: {training_config.weight_decay}")
         print(f"   Optimizer: {training_config.optimizer}")
         print(f"   Scheduler: {training_config.scheduler}")
+        print(f"   Skip epoch evaluation: {training_config.skip_epoch_evaluation}")
+        if training_config.skip_epoch_evaluation:
+            print(f"   ⚠️  Per-epoch evaluation DISABLED (unified training mode)")
+            print(f"   ✓  Checkpoints will be saved every {training_config.save_frequency} epoch(s)")
 
         # Step 10: Train unified model
         print("\n🤖 Training unified model...")
@@ -437,6 +441,9 @@ def run_unified_training(config: Dict, args) -> bool:
             customizer.processor,
             regularize=training_config.use_regularization
         ).to(customizer.device)
+
+        # Attach processor to model (required by Trainer for text encoding)
+        customized_model.processor = processor
 
         # Train model
         trainer = Trainer(
@@ -538,6 +545,7 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
         gradient_clip_value=training_cfg.get('gradient_clip_value', 1.0),
         eval_frequency=training_cfg.get('eval_frequency', 1),
         save_best_model=training_cfg.get('save_best_model', True),
+        skip_epoch_evaluation=training_cfg.get('skip_epoch_evaluation', False),
         use_validation=training_cfg.get('use_validation', True),
         validation_method=training_cfg.get('validation_method', 'stratified_kfold'),
         validation_k_folds=training_cfg.get('validation_k_folds', 5),
