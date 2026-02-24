@@ -204,7 +204,7 @@ class Trainer(BaseComponent):
                 self.log_info(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% (evaluation skipped)")
 
                 # Save checkpoint every save_frequency epochs
-                if epoch % training_config.save_frequency == 0:
+                if (epoch + 1) % training_config.save_frequency == 0:
                     checkpoint_metadata = {
                         'epoch': epoch,
                         'train_acc': train_acc,
