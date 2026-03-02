@@ -766,7 +766,7 @@ class ELEVATERDataset(BaseDataset):
         'mnist': {
             'num_classes': 10,
             'task': 'classification',
-            'type': 'torchvision',
+            'type': 'file_based',
             'class_names': [
                 '0',
                 '1',
