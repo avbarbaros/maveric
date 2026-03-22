@@ -1447,6 +1447,23 @@ class MAVERICInteractiveQualityControl:
             layout=widgets.Layout(width='100px')
         )
 
+        # Format selector for saving plots
+        format_selector = widgets.Dropdown(
+            options=['EPS', 'PNG', 'PDF', 'SVG'],
+            value='EPS',
+            description='Format:',
+            layout=widgets.Layout(width='150px'),
+            style={'description_width': '50px'}
+        )
+
+        # Save plot button
+        save_plot_button = widgets.Button(
+            description='Save Plot',
+            button_style='info',
+            icon='download',
+            layout=widgets.Layout(width='120px')
+        )
+
         # Output widget for plot
         plot_output = widgets.Output()
 
@@ -1838,10 +1855,69 @@ class MAVERICInteractiveQualityControl:
                     status_display.value = f"<p style='color:red;'>❌ Error resetting: {str(e)}</p>"
                     traceback.print_exc()
 
+        # Callback for save plot button
+        def on_save_plot_clicked(b):
+            try:
+                mode = mode_selector.value
+                file_format = format_selector.value.lower()
+
+                if mode == 'Global':
+                    # Save global plot
+                    if not hasattr(self, 'mahalanobis_filter_info') or not self.mahalanobis_filter_info:
+                        print("❌ No Mahalanobis filter info available. Apply filter first.")
+                        status_display.value = "<p style='color:red;'>❌ Apply filter before saving plot.</p>"
+                        return
+
+                    plot_path, csv_path = self._save_mahalanobis_plot_and_data(
+                        mode='Global',
+                        file_format=file_format
+                    )
+
+                    if plot_path and csv_path:
+                        status_display.value = (
+                            f"<p style='color:green;'>✅ Plot and data saved<br>"
+                            f"<small>Format: {file_format.upper()}</small></p>"
+                        )
+                    else:
+                        status_display.value = "<p style='color:red;'>❌ Failed to save plot.</p>"
+
+                else:  # Class-Based
+                    selected_class = class_selector.value
+                    if selected_class == 'Select class...':
+                        print("❌ Please select a class first.")
+                        status_display.value = "<p style='color:red;'>❌ Select a class before saving plot.</p>"
+                        return
+
+                    if not hasattr(self, 'mahalanobis_filter_info_class') or not self.mahalanobis_filter_info_class:
+                        print("❌ No class-based Mahalanobis filter info available. Apply filter first.")
+                        status_display.value = "<p style='color:red;'>❌ Apply filter before saving plot.</p>"
+                        return
+
+                    plot_path, csv_path = self._save_mahalanobis_plot_and_data(
+                        mode='Class-Based',
+                        class_name=selected_class,
+                        file_format=file_format
+                    )
+
+                    if plot_path and csv_path:
+                        status_display.value = (
+                            f"<p style='color:green;'>✅ Plot and data saved for '{selected_class}'<br>"
+                            f"<small>Format: {file_format.upper()}</small></p>"
+                        )
+                    else:
+                        status_display.value = "<p style='color:red;'>❌ Failed to save plot.</p>"
+
+            except Exception as e:
+                import traceback
+                print(f"❌ Error saving plot: {str(e)}")
+                status_display.value = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
+                traceback.print_exc()
+
         apply_button.on_click(on_apply_clicked)
         add_data_button.on_click(on_add_data_clicked)
         save_filtered_button.on_click(on_save_filtered_clicked)
         reset_button.on_click(on_reset_clicked)
+        save_plot_button.on_click(on_save_plot_clicked)
 
         # Layout
         tab_content = widgets.VBox([
@@ -1859,6 +1935,10 @@ class MAVERICInteractiveQualityControl:
                 add_data_button,
                 save_filtered_button,
                 reset_button
+            ], layout=widgets.Layout(margin='5px 0')),
+            widgets.HBox([
+                format_selector,
+                save_plot_button
             ], layout=widgets.Layout(margin='5px 0')),
             status_display,
             plot_output
@@ -2012,18 +2092,36 @@ class MAVERICInteractiveQualityControl:
             'threshold': threshold if not per_class else None
         }
 
-    def _plot_mahalanobis_analysis(self):
-        """Plot Mahalanobis distance analysis with scatter plot and ellipse"""
-        if not self.mahalanobis_filter_info:
-            print("❌ No Mahalanobis filter info available")
-            return
+    def _create_mahalanobis_figure(self, mode='Global', class_name=None):
+        """
+        Create Mahalanobis plot figure without displaying it.
 
-        info = self.mahalanobis_filter_info
+        Args:
+            mode: 'Global' or 'Class-Based'
+            class_name: Name of class (required for Class-Based mode)
+
+        Returns:
+            matplotlib Figure object, or None if no data available
+        """
+        # Get appropriate filter info based on mode
+        if mode == 'Global':
+            if not hasattr(self, 'mahalanobis_filter_info') or not self.mahalanobis_filter_info:
+                return None
+            info = self.mahalanobis_filter_info
+            title = 'Joint Distribution with Mahalanobis Selection Boundary'
+        else:  # Class-Based
+            if not hasattr(self, 'mahalanobis_filter_info_class') or not self.mahalanobis_filter_info_class:
+                return None
+            info = self.mahalanobis_filter_info_class
+            if info['class_name'] != class_name:
+                return None
+            title = f'Class: {class_name} - Mahalanobis Selection'
+
+        # Extract data from info
         ideal_point = info['ideal_point']
         covariance = info['covariance']
         correlation = info['correlation']
         all_samples = info['all_samples']
-        keep_percentile = info['keep_percentile']
 
         # Get all samples data
         all_weighted = all_samples['weighted']
@@ -2039,7 +2137,7 @@ class MAVERICInteractiveQualityControl:
             selected_mask = np.zeros(len(all_weighted), dtype=bool)
             selected_mask[selected_indices] = True
 
-        # Create figure without marginal plots
+        # Create figure
         fig, ax_main = plt.subplots(figsize=(10, 8))
 
         # Plot rejected samples (gray)
@@ -2056,20 +2154,17 @@ class MAVERICInteractiveQualityControl:
                        edgecolors='darkred', linewidth=1.5, zorder=10)
 
         # Plot Mahalanobis ellipse
-        # Compute eigenvalues and eigenvectors
         eigenvalues, eigenvectors = np.linalg.eigh(covariance)
         order = eigenvalues.argsort()[::-1]
         eigenvalues = eigenvalues[order]
         eigenvectors = eigenvectors[:, order]
 
-        # Angle of ellipse
         angle = np.degrees(np.arctan2(*eigenvectors[:, 0][::-1]))
 
         # Use the threshold distance for ellipse size
         if info['threshold'] is not None:
             n_std = info['threshold']
         else:
-            # For per-class, use median distance of selected samples
             n_std = np.median(all_distances[selected_mask])
 
         width = 2 * n_std * np.sqrt(eigenvalues[0])
@@ -2083,8 +2178,7 @@ class MAVERICInteractiveQualityControl:
         # Main plot formatting
         ax_main.set_xlabel('Weighted Class Score', fontsize=11)
         ax_main.set_ylabel('Consistency', fontsize=11)
-        ax_main.set_title('Joint Distribution with Mahalanobis Selection Boundary',
-                         fontsize=12, fontweight='bold', pad=10)
+        ax_main.set_title(title, fontsize=12, fontweight='bold', pad=10)
         ax_main.grid(True, alpha=0.3)
         ax_main.legend(loc='upper right', fontsize=9)
 
@@ -2095,6 +2189,19 @@ class MAVERICInteractiveQualityControl:
                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
         plt.tight_layout()
+        return fig
+
+    def _plot_mahalanobis_analysis(self):
+        """Plot Mahalanobis distance analysis with scatter plot and ellipse"""
+        if not self.mahalanobis_filter_info:
+            print("❌ No Mahalanobis filter info available")
+            return
+
+        fig = self._create_mahalanobis_figure(mode='Global')
+        if fig is None:
+            print("❌ Failed to create Mahalanobis plot")
+            return
+
         plt.show()
 
     def _show_mahalanobis_statistics(self, original_count, new_count, percentage):
@@ -2256,65 +2363,11 @@ class MAVERICInteractiveQualityControl:
             print(f"❌ Filter info is for class '{info['class_name']}', not '{class_name}'")
             return
 
-        ideal_point = info['ideal_point']
-        covariance = info['covariance']
-        correlation = info['correlation']
-        all_samples = info['all_samples']
-        keep_percentile = info['keep_percentile']
-        selected_mask = info['selected_mask']
+        fig = self._create_mahalanobis_figure(mode='Class-Based', class_name=class_name)
+        if fig is None:
+            print("❌ Failed to create Mahalanobis plot")
+            return
 
-        # Get all samples data
-        all_weighted = all_samples['weighted']
-        all_consistency = all_samples['consistency']
-        all_distances = all_samples['distances']
-
-        # Create simple figure without marginal plots
-        fig, ax_main = plt.subplots(figsize=(10, 8))
-
-        # Plot rejected samples (gray)
-        ax_main.scatter(all_weighted[~selected_mask], all_consistency[~selected_mask],
-                       c='gray', alpha=0.3, s=20, label=f'Rejected ({(~selected_mask).sum():,})')
-
-        # Plot selected samples (green)
-        ax_main.scatter(all_weighted[selected_mask], all_consistency[selected_mask],
-                       c='green', alpha=0.7, s=20, label=f'Selected ({selected_mask.sum():,})')
-
-        # Plot ideal point (red star)
-        ax_main.scatter(ideal_point[0], ideal_point[1],
-                       c='red', marker='*', s=300, label='Ideal Point',
-                       edgecolors='darkred', linewidth=1.5, zorder=10)
-
-        # Plot Mahalanobis ellipse
-        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
-        order = eigenvalues.argsort()[::-1]
-        eigenvalues = eigenvalues[order]
-        eigenvectors = eigenvectors[:, order]
-
-        angle = np.degrees(np.arctan2(*eigenvectors[:, 0][::-1]))
-        n_std = info['threshold']
-        width = 2 * n_std * np.sqrt(eigenvalues[0])
-        height = 2 * n_std * np.sqrt(eigenvalues[1])
-
-        ellipse = Ellipse(xy=ideal_point, width=width, height=height,
-                         angle=angle, edgecolor='red', facecolor='none',
-                         linewidth=2, linestyle='--', label='Selection Boundary')
-        ax_main.add_patch(ellipse)
-
-        # Main plot formatting
-        ax_main.set_title(f'Class: {class_name} - Mahalanobis Selection',
-                         fontsize=12, fontweight='bold', pad=10)
-        ax_main.set_xlabel('Weighted Class Score', fontsize=11)
-        ax_main.set_ylabel('Consistency', fontsize=11)
-        ax_main.grid(True, alpha=0.3)
-        ax_main.legend(loc='upper right', fontsize=9)
-
-        # Add correlation text
-        ax_main.text(0.02, 0.98, f'ρ = {correlation:.3f}',
-                    transform=ax_main.transAxes, fontsize=10,
-                    verticalalignment='top',
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-
-        plt.tight_layout()
         plt.show()
 
     def _save_class_filtered_grids(self, class_name):
@@ -2470,6 +2523,100 @@ class MAVERICInteractiveQualityControl:
                 print(f"   {class_name}: {count:,} samples")
         else:
             print("⚠️  No data to consolidate")
+
+    def _save_mahalanobis_plot_and_data(self, mode='Global', class_name=None, file_format='eps'):
+        """
+        Save Mahalanobis plot and data points to files.
+
+        Args:
+            mode: 'Global' or 'Class-Based'
+            class_name: Name of class (required for Class-Based mode)
+            file_format: File format for plot ('eps', 'png', 'pdf', 'svg')
+
+        Returns:
+            Tuple of (plot_path, csv_path) or (None, None) if error
+        """
+        # Validate filter info exists
+        if mode == 'Global':
+            if not hasattr(self, 'mahalanobis_filter_info') or not self.mahalanobis_filter_info:
+                print("❌ No Mahalanobis filter info available. Apply filter first.")
+                return None, None
+            info = self.mahalanobis_filter_info
+        else:  # Class-Based
+            if not hasattr(self, 'mahalanobis_filter_info_class') or not self.mahalanobis_filter_info_class:
+                print("❌ No class-based Mahalanobis filter info available. Apply filter first.")
+                return None, None
+            info = self.mahalanobis_filter_info_class
+            if class_name and info['class_name'] != class_name:
+                print(f"❌ Filter info is for class '{info['class_name']}', not '{class_name}'")
+                return None, None
+            class_name = info['class_name']  # Use class name from info
+
+        # Determine output directory
+        if self.data_path:
+            if self.data_path.endswith('/raw'):
+                base_dir = os.path.dirname(self.data_path)
+            else:
+                base_dir = self.data_path
+        else:
+            base_dir = '.'
+
+        results_dir = os.path.join(base_dir, 'curationResults')
+        os.makedirs(results_dir, exist_ok=True)
+
+        # Generate filenames
+        if mode == 'Global':
+            base_filename = f"{self.dataset_name}_mahalanobis_global"
+        else:
+            safe_class_name = class_name.replace('/', '_').replace('\\', '_').replace(' ', '_')
+            base_filename = f"{self.dataset_name}_mahalanobis_{safe_class_name}"
+
+        plot_filename = f"{base_filename}.{file_format}"
+        csv_filename = f"{base_filename}_data.csv"
+        plot_path = os.path.join(results_dir, plot_filename)
+        csv_path = os.path.join(results_dir, csv_filename)
+
+        try:
+            # Save plot
+            fig = self._create_mahalanobis_figure(mode=mode, class_name=class_name)
+            if fig is None:
+                print("❌ Failed to create Mahalanobis plot")
+                return None, None
+
+            fig.savefig(plot_path, format=file_format, bbox_inches='tight', dpi=300)
+            plt.close(fig)
+            print(f"✅ Plot saved: {plot_path}")
+
+            # Save CSV data
+            all_samples = info['all_samples']
+            selected_mask = info['selected_mask']
+
+            # Create DataFrame with all points
+            data_df = pd.DataFrame({
+                'weighted_class_score': all_samples['weighted'],
+                'consistency': all_samples['consistency'],
+                'mahalanobis_distance': all_samples['distances'],
+                'selected': selected_mask
+            })
+
+            # Sort by selection status (selected first), then by distance
+            data_df = data_df.sort_values(['selected', 'mahalanobis_distance'],
+                                          ascending=[False, True])
+
+            # Save to CSV
+            data_df.to_csv(csv_path, index=False, float_format='%.6f')
+            print(f"✅ Data saved: {csv_path}")
+            print(f"   Total points: {len(data_df):,}")
+            print(f"   Selected: {selected_mask.sum():,}")
+            print(f"   Rejected: {(~selected_mask).sum():,}")
+
+            return plot_path, csv_path
+
+        except Exception as e:
+            import traceback
+            print(f"❌ Error saving plot and data: {str(e)}")
+            traceback.print_exc()
+            return None, None
 
     def _analyze_class_predictions(self):
         """Analyze class predictions from weighted scores vs EfficientNet"""
