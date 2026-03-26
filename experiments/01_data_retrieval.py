@@ -281,7 +281,8 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
             seed=config.get('processing', {}).get('seed', 42),
             enable_target_class_quality=enable_target_class_quality,
             max_retries=config.get('max_retries', 3),
-            request_timeout=config.get('request_timeout', 5)
+            request_timeout=config.get('request_timeout', 5),
+            scoring_mode=config.get('scoring_mode', 'clip')
         )
 
         # Initialize MAVERIC (real-time stats are enabled by default)
@@ -292,6 +293,13 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
         print(f"⏱️  Request timeout configured: {maveric_config.request_timeout}s")
         print(f"💾 Image cache: {'ENABLED' if maveric_config.enable_image_cache else 'DISABLED'}")
         print(f"📦 Sample cache: {'ENABLED' if maveric_config.enable_sample_cache else 'DISABLED'}")
+
+        # Display scoring mode
+        scoring_mode = maveric_config.scoring_mode
+        if scoring_mode == "hu_moments":
+            print("📐 Scoring mode: HU MOMENTS (shape-based similarity)")
+        else:
+            print("🎨 Scoring mode: CLIP (multi-modal similarity)")
 
         if not enable_target_class_quality:
             print("⚡ EfficientNet-based TargetClassQualityMetric DISABLED (faster retrieval)")
