@@ -202,7 +202,34 @@ class Retriever(BaseComponent):
                                 self.reference_embeddings = ref_cache
                                 self.text_embeddings = text_cache
                                 self.log_info("Loaded reference embeddings from cache")
-                                return self.reference_embeddings, self.text_embeddings
+
+                                # In Hu moments mode, also need to load/compute Hu vectors
+                                if self.scoring_mode == "hu_moments":
+                                    print(f"[DEBUG] Hu moments mode - checking for cached Hu vectors...")
+                                    # Try to load cached Hu vectors
+                                    hu_cache_name = f"{target_dataset}_hu_reference"
+                                    hu_cached = self.cache_manager.load_embeddings(hu_cache_name)
+
+                                    if hu_cached:
+                                        print(f"[DEBUG] Found cached Hu vectors")
+                                        # Extract Hu vectors from cache
+                                        hu_vectors = {}
+                                        for key, value in hu_cached.items():
+                                            if key.startswith('hu_'):
+                                                class_name = key[3:]  # Remove 'hu_' prefix
+                                                hu_vectors[class_name] = value
+
+                                        if hu_vectors:
+                                            self.reference_hu_vectors = hu_vectors
+                                            self.hu_metric.set_reference_vectors(hu_vectors)
+                                            print(f"[DEBUG] Loaded {len(hu_vectors)} Hu reference vectors from cache")
+                                            return self.reference_embeddings, self.text_embeddings
+
+                                    print(f"[DEBUG] No cached Hu vectors - need to regenerate")
+                                    # Fall through to regenerate (need to compute Hu vectors from images)
+                                else:
+                                    # CLIP mode - we have everything we need from cache
+                                    return self.reference_embeddings, self.text_embeddings
                     except Exception as e:
                         self.log_warning(f"Error loading cached embeddings: {e}")
                 
@@ -607,10 +634,13 @@ class Retriever(BaseComponent):
 
             # Get target classes based on scoring mode
             if self.scoring_mode == "hu_moments":
+                print(f"[DEBUG] Checking reference_hu_vectors: {len(self.reference_hu_vectors)} classes")
                 if not self.reference_hu_vectors:
+                    print(f"[DEBUG] RETURNING EMPTY - No reference Hu vectors!")
                     self.log_debug("No reference Hu vectors available for class score computation")
                     return {}, {}
                 target_classes = list(self.reference_hu_vectors.keys())
+                print(f"[DEBUG] target_classes from reference_hu_vectors: {target_classes}")
             else:
                 if not self.reference_embeddings:
                     self.log_debug("No reference embeddings available for class score computation")
