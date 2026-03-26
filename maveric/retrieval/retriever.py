@@ -680,20 +680,28 @@ class Retriever(BaseComponent):
                 hu_vector = HuMomentsSimilarityMetric.compute_hu_vector(image)
 
                 if hu_vector is None:
+                    print(f"[DEBUG] Hu vector computation FAILED - returning empty")
                     self.log_debug(f"Failed to compute Hu vector for {image_url[:50]}...")
                     return {}, {}
+
+                print(f"[DEBUG] Hu vector computed successfully: {hu_vector[:3]}...")
+                print(f"[DEBUG] hu_metric has {len(self.hu_metric._reference_hu_vectors)} reference classes")
+                print(f"[DEBUG] target_classes has {len(target_classes)} classes")
 
                 # Debug: Check hu_vector computation
                 self.log_debug(f"Computed Hu vector: {hu_vector[:3]}... (first 3 elements)")
                 self.log_debug(f"hu_metric has {len(self.hu_metric._reference_hu_vectors)} reference classes")
 
                 # Compute similarity to all classes
+                print(f"[DEBUG] Computing similarities for {len(target_classes)} target classes")
                 for class_name in target_classes:
                     similarity = self.hu_metric.compute_similarity(hu_vector, class_name)
+                    print(f"[DEBUG] Class '{class_name}' Hu similarity: {similarity}")
                     self.log_debug(f"Class '{class_name}' Hu similarity: {similarity}")
                     class_scores[class_name] = {
                         'hu_similarity': similarity,
                     }
+                print(f"[DEBUG] class_scores populated with {len(class_scores)} classes")
 
             else:
                 # CLIP MODE: Multi-modal CLIP-based similarity (existing logic)
@@ -752,12 +760,15 @@ class Retriever(BaseComponent):
                 quality_scores['imagenet_predicted_class'] = global_imagenet_pred
                 quality_scores['imagenet_probability'] = round(float(global_imagenet_prob), 5)
 
+            print(f"[DEBUG] Returning class_scores: {len(class_scores)} classes, quality_scores: {len(quality_scores)} metrics")
             return class_scores, quality_scores
             
         except Exception as e:
             # Log to debug level instead of warning to reduce console output
-            self.log_debug(f"Error processing sample {image_url[:50]}...: {str(e)}")
+            print(f"[DEBUG] EXCEPTION in compute_sample_scores: {str(e)}")
             import traceback
+            print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            self.log_debug(f"Error processing sample {image_url[:50]}...: {str(e)}")
             self.log_debug(f"Full traceback: {traceback.format_exc()}")
             return {}, {}
     
