@@ -305,9 +305,19 @@ class Retriever(BaseComponent):
 
                 if hu_vectors:
                     self.reference_hu_vectors[class_name] = np.vstack(hu_vectors)
+                    print(f"   Class '{class_name}': {len(hu_vectors)} Hu vectors computed")
+                else:
+                    print(f"   ⚠️  Class '{class_name}': No valid Hu vectors!")
 
             # Set reference vectors on the metric instance
             self.hu_metric.set_reference_vectors(self.reference_hu_vectors)
+            print(f"   ✅ Reference vectors set on hu_metric instance")
+
+            # Debug: Check if metric can compute similarities
+            if self.reference_hu_vectors:
+                first_class = list(self.reference_hu_vectors.keys())[0]
+                print(f"   🔍 Debug: self.hu_metric has {len(self.hu_metric._reference_hu_vectors)} classes")
+                print(f"   🔍 Debug: First class '{first_class}' has shape {self.reference_hu_vectors[first_class].shape}")
 
             # Save Hu reference vectors to cache
             if save_cache and self.cache_manager:
@@ -564,11 +574,17 @@ class Retriever(BaseComponent):
             # STEP 2: Compute dataset-specific per-class scores (NOT CACHED)
             class_scores = {}
 
-            if not self.reference_embeddings:
-                self.log_debug("No reference embeddings available for class score computation")
-                return {}, {}
-
-            target_classes = list(self.reference_embeddings.keys())
+            # Get target classes based on scoring mode
+            if self.scoring_mode == "hu_moments":
+                if not self.reference_hu_vectors:
+                    self.log_debug("No reference Hu vectors available for class score computation")
+                    return {}, {}
+                target_classes = list(self.reference_hu_vectors.keys())
+            else:
+                if not self.reference_embeddings:
+                    self.log_debug("No reference embeddings available for class score computation")
+                    return {}, {}
+                target_classes = list(self.reference_embeddings.keys())
 
             # Compute EfficientNet-based scores if enabled and we have an image
             if self.enable_target_class_quality and image is not None:
@@ -626,11 +642,17 @@ class Retriever(BaseComponent):
                 hu_vector = HuMomentsSimilarityMetric.compute_hu_vector(image)
 
                 if hu_vector is None:
+                    self.log_debug(f"Failed to compute Hu vector for {image_url[:50]}...")
                     return {}, {}
+
+                # Debug: Check hu_vector computation
+                self.log_debug(f"Computed Hu vector: {hu_vector[:3]}... (first 3 elements)")
+                self.log_debug(f"hu_metric has {len(self.hu_metric._reference_hu_vectors)} reference classes")
 
                 # Compute similarity to all classes
                 for class_name in target_classes:
                     similarity = self.hu_metric.compute_similarity(hu_vector, class_name)
+                    self.log_debug(f"Class '{class_name}' Hu similarity: {similarity}")
                     class_scores[class_name] = {
                         'hu_similarity': similarity,
                     }
