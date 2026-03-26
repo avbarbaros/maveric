@@ -448,18 +448,23 @@ class Retriever(BaseComponent):
 
                     # In Hu moments mode, we MUST load the image (Hu moments need pixel data)
                     if self.scoring_mode == "hu_moments":
+                        print(f"[DEBUG] Cache HIT with CLIP embeddings, but in Hu mode - loading image...")
                         if self.cache_manager:
                             image = self.cache_manager.get_cached_image(image_url)
+                            print(f"[DEBUG] get_cached_image returned: {image is not None}")
                         else:
                             # Fallback to direct download
+                            print(f"[DEBUG] No cache manager - direct download")
                             import requests
                             from io import BytesIO
                             response = requests.get(image_url, timeout=self.request_timeout)
                             image = Image.open(BytesIO(response.content)).convert('RGB')
 
                         if image is None:
+                            print(f"[DEBUG] Image load FAILED - returning empty")
                             self.log_debug(f"Failed to load image for Hu moments: {image_url[:50]}...")
                             return {}, {}
+                        print(f"[DEBUG] Image loaded successfully, proceeding...")
                     else:
                         image = None  # Don't need to load image in CLIP mode if we have embeddings
                 else:
@@ -649,19 +654,26 @@ class Retriever(BaseComponent):
 
             # Branch based on scoring mode
             if self.scoring_mode == "hu_moments":
+                print(f"[DEBUG] Hu moments mode branch - image is None: {image is None}")
                 # HU MOMENTS MODE: Shape-based similarity only
                 # Need to load image if not already loaded
                 if image is None:
+                    print(f"[DEBUG] Image is None, attempting to load from cache...")
                     if self.cache_manager:
                         image = self.cache_manager.get_cached_image(image_url)
+                        print(f"[DEBUG] Cache manager returned image: {image is not None}")
                     else:
+                        print(f"[DEBUG] No cache manager, downloading directly...")
                         import requests
                         from io import BytesIO
                         response = requests.get(image_url, timeout=self.request_timeout)
                         image = Image.open(BytesIO(response.content)).convert('RGB')
 
                     if image is None:
+                        print(f"[DEBUG] Image still None after loading attempt - RETURNING EMPTY")
                         return {}, {}
+                else:
+                    print(f"[DEBUG] Image already loaded, proceeding with Hu computation")
 
                 # Compute Hu vector once for this image
                 from ..quality.metrics.hu_moments_metric import HuMomentsSimilarityMetric
@@ -870,9 +882,10 @@ class Retriever(BaseComponent):
             
             # Compute scores
             class_scores, quality_scores = self.compute_sample_scores(url, text)
-            
+
             if not class_scores or not quality_scores:
                 # Log to debug level instead of warning to reduce console output
+                print(f"[DEBUG] Failed to compute scores - class_scores: {bool(class_scores)}, quality_scores: {bool(quality_scores)}")
                 self.log_debug(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
