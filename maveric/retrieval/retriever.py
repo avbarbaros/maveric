@@ -445,7 +445,23 @@ class Retriever(BaseComponent):
                     # Use cached embeddings - no need to recompute!
                     img_embedding = clip_data['image_embedding']
                     text_embedding = clip_data['text_embedding']
-                    image = None  # Don't need to load image if we have embeddings
+
+                    # In Hu moments mode, we MUST load the image (Hu moments need pixel data)
+                    if self.scoring_mode == "hu_moments":
+                        if self.cache_manager:
+                            image = self.cache_manager.get_cached_image(image_url)
+                        else:
+                            # Fallback to direct download
+                            import requests
+                            from io import BytesIO
+                            response = requests.get(image_url, timeout=self.request_timeout)
+                            image = Image.open(BytesIO(response.content)).convert('RGB')
+
+                        if image is None:
+                            self.log_debug(f"Failed to load image for Hu moments: {image_url[:50]}...")
+                            return {}, {}
+                    else:
+                        image = None  # Don't need to load image in CLIP mode if we have embeddings
                 else:
                     # Fallback: cache hit but no embeddings (old cache format)
                     # Load image and compute embeddings
@@ -461,19 +477,24 @@ class Retriever(BaseComponent):
                     if image is None:
                         return {}, {}
 
-                    # Compute CLIP embeddings from cached image
-                    with torch.no_grad():
-                        # Image embedding
-                        img_input = self.preprocess(image).unsqueeze(0).to(self.device)
-                        img_embedding = self.model.encode_image(img_input)
-                        img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
-                        img_embedding = img_embedding.cpu().numpy()
+                    # Compute CLIP embeddings from cached image (only in CLIP mode)
+                    if self.scoring_mode == "clip":
+                        with torch.no_grad():
+                            # Image embedding
+                            img_input = self.preprocess(image).unsqueeze(0).to(self.device)
+                            img_embedding = self.model.encode_image(img_input)
+                            img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
+                            img_embedding = img_embedding.cpu().numpy()
 
-                        # Text embedding
-                        text_tokens = clip.tokenize([text], truncate=True).to(self.device)
-                        text_embedding = self.model.encode_text(text_tokens)
-                        text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
-                        text_embedding = text_embedding.cpu().numpy()
+                            # Text embedding
+                            text_tokens = clip.tokenize([text], truncate=True).to(self.device)
+                            text_embedding = self.model.encode_text(text_tokens)
+                            text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
+                            text_embedding = text_embedding.cpu().numpy()
+                    else:
+                        # Hu moments mode - skip CLIP embedding computation
+                        img_embedding = None
+                        text_embedding = None
 
             else:
                 # Cache miss! Compute everything (SLOW PATH)
@@ -502,19 +523,24 @@ class Retriever(BaseComponent):
                 if image is None:
                     return {}, {}
 
-                # Compute CLIP embeddings
-                with torch.no_grad():
-                    # Image embedding
-                    img_input = self.preprocess(image).unsqueeze(0).to(self.device)
-                    img_embedding = self.model.encode_image(img_input)
-                    img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
-                    img_embedding = img_embedding.cpu().numpy()
+                # Compute CLIP embeddings (only in CLIP mode)
+                if self.scoring_mode == "clip":
+                    with torch.no_grad():
+                        # Image embedding
+                        img_input = self.preprocess(image).unsqueeze(0).to(self.device)
+                        img_embedding = self.model.encode_image(img_input)
+                        img_embedding = img_embedding / img_embedding.norm(dim=-1, keepdim=True)
+                        img_embedding = img_embedding.cpu().numpy()
 
-                    # Text embedding
-                    text_tokens = clip.tokenize([text], truncate=True).to(self.device)
-                    text_embedding = self.model.encode_text(text_tokens)
-                    text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
-                    text_embedding = text_embedding.cpu().numpy()
+                        # Text embedding
+                        text_tokens = clip.tokenize([text], truncate=True).to(self.device)
+                        text_embedding = self.model.encode_text(text_tokens)
+                        text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
+                        text_embedding = text_embedding.cpu().numpy()
+                else:
+                    # Hu moments mode - skip CLIP embedding computation
+                    img_embedding = None
+                    text_embedding = None
 
                 # Compute visual metrics
                 visual_metrics = {}
