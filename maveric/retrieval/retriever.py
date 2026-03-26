@@ -46,7 +46,8 @@ class Retriever(BaseComponent):
                  max_retries: int = 3,
                  request_timeout: int = 5,
                  enable_sample_cache: bool = True,
-                 sample_cache_version: int = 2):
+                 sample_cache_version: int = 2,
+                 scoring_mode: str = "clip"):
         """
         Initialize retriever.
 
@@ -62,6 +63,7 @@ class Retriever(BaseComponent):
             request_timeout: HTTP request timeout in seconds
             enable_sample_cache: Enable cross-dataset sample caching
             sample_cache_version: Sample cache format version
+            scoring_mode: Scoring mode - "clip" (multi-modal) or "hu_moments" (shape-based)
         """
         super().__init__("Retriever")
 
@@ -74,12 +76,22 @@ class Retriever(BaseComponent):
         self.enable_target_class_quality = enable_target_class_quality
         self.max_retries = max_retries
         self.request_timeout = request_timeout
+        self.scoring_mode = scoring_mode
 
         # Initialize CLIP model
         self._init_clip_model()
 
         # Initialize quality metrics
         self._init_quality_metrics()
+
+        # Initialize Hu moments metric if needed
+        if self.scoring_mode == "hu_moments":
+            from ..quality.metrics.hu_moments_metric import HuMomentsSimilarityMetric
+            self.hu_metric = HuMomentsSimilarityMetric()
+            self.reference_hu_vectors = {}
+        else:
+            self.hu_metric = None
+            self.reference_hu_vectors = {}
 
         # Initialize sample cache manager
         if enable_sample_cache and cache_manager:
@@ -276,7 +288,36 @@ class Retriever(BaseComponent):
             
             print(f"📸 Reference images saved: {sum(len(images) for images in reference_samples.values())} images across {len(reference_samples)} classes")
             print(f"📝 Reference texts saved: {len(text_templates)} templates for {len(dataset.class_names)} classes")
-        
+
+        # Compute Hu moments reference vectors if in hu_moments mode
+        if self.scoring_mode == "hu_moments":
+            print("🔄 Computing Hu moment reference vectors...")
+            self.log_info("Computing Hu moment reference vectors...")
+
+            from ..quality.metrics.hu_moments_metric import HuMomentsSimilarityMetric
+
+            for class_name, images in reference_samples.items():
+                hu_vectors = []
+                for img in images:
+                    hv = HuMomentsSimilarityMetric.compute_hu_vector(img)
+                    if hv is not None:
+                        hu_vectors.append(hv)
+
+                if hu_vectors:
+                    self.reference_hu_vectors[class_name] = np.vstack(hu_vectors)
+
+            # Set reference vectors on the metric instance
+            self.hu_metric.set_reference_vectors(self.reference_hu_vectors)
+
+            # Save Hu reference vectors to cache
+            if save_cache and self.cache_manager:
+                hu_cache_data = {f"hu_{k}": v for k, v in self.reference_hu_vectors.items()}
+                self.cache_manager.save_embeddings(hu_cache_data, f"{target_dataset}_hu_reference")
+                self.log_info(f"Saved Hu moment reference vectors for {target_dataset}")
+
+            print(f"📐 Hu moment references: {len(self.reference_hu_vectors)} classes, "
+                  f"{sum(len(v) for v in self.reference_hu_vectors.values())} vectors")
+
         return self.reference_embeddings, self.text_embeddings
     
     def _export_rotation_file(self,
@@ -563,53 +604,85 @@ class Retriever(BaseComponent):
                 global_imagenet_prob = efficientnet_data.get('imagenet_probability', 0.0)
             else:
                 global_imagenet_pred, global_imagenet_prob = ("", 0.0)
-            
-            for class_name in target_classes:
-                # Similarity computations
-                img2img = cosine_similarity(
-                    img_embedding,
-                    self.reference_embeddings[class_name]
-                ).max()
-                
-                txt2txt = cosine_similarity(
-                    text_embedding,
-                    self.text_embeddings[class_name]
-                ).max()
-                
-                img2txt = cosine_similarity(
-                    img_embedding,
-                    self.text_embeddings[class_name]
-                ).max()
-                
-                txt2img = cosine_similarity(
-                    text_embedding,
-                    self.reference_embeddings[class_name]
-                ).max()
-                
-                # Calculate hybrid score
-                hybrid_score = 0.25 * (img2img + txt2txt + img2txt + txt2img)
-                
-                # Calculate consistency
-                similarities = [img2img, txt2txt, img2txt, txt2img]
-                consistency = 1.0 - np.std(similarities)
-                
-                # Get pre-computed EfficientNet score and CLIP similarity (no additional EfficientNet calls!)
-                predicted_imagenet_class, clip_similarity, efficientNet_score = imagenet_mappings.get(class_name, ("", 0.0, 0.0))
 
-                # Build class scores dictionary
-                class_scores[class_name] = {
-                    'hybrid_score': round(float(hybrid_score), 5),
-                    'img2img': round(float(img2img), 5),
-                    'txt2txt': round(float(txt2txt), 5),
-                    'img2txt': round(float(img2txt), 5),
-                    'txt2img': round(float(txt2img), 5),
-                    'consistency': round(float(consistency), 5),
-                }
+            # Branch based on scoring mode
+            if self.scoring_mode == "hu_moments":
+                # HU MOMENTS MODE: Shape-based similarity only
+                # Need to load image if not already loaded
+                if image is None:
+                    if self.cache_manager:
+                        image = self.cache_manager.get_cached_image(image_url)
+                    else:
+                        import requests
+                        from io import BytesIO
+                        response = requests.get(image_url, timeout=self.request_timeout)
+                        image = Image.open(BytesIO(response.content)).convert('RGB')
 
-                # Only include EfficientNet-based scores if enabled
-                if self.enable_target_class_quality:
-                    class_scores[class_name]['clip_similarity_to_imagenet'] = round(float(clip_similarity), 5)
-                    class_scores[class_name]['efficientNet_score'] = round(float(efficientNet_score), 5)
+                    if image is None:
+                        return {}, {}
+
+                # Compute Hu vector once for this image
+                from ..quality.metrics.hu_moments_metric import HuMomentsSimilarityMetric
+                hu_vector = HuMomentsSimilarityMetric.compute_hu_vector(image)
+
+                if hu_vector is None:
+                    return {}, {}
+
+                # Compute similarity to all classes
+                for class_name in target_classes:
+                    similarity = self.hu_metric.compute_similarity(hu_vector, class_name)
+                    class_scores[class_name] = {
+                        'hu_similarity': similarity,
+                    }
+
+            else:
+                # CLIP MODE: Multi-modal CLIP-based similarity (existing logic)
+                for class_name in target_classes:
+                    # Similarity computations
+                    img2img = cosine_similarity(
+                        img_embedding,
+                        self.reference_embeddings[class_name]
+                    ).max()
+
+                    txt2txt = cosine_similarity(
+                        text_embedding,
+                        self.text_embeddings[class_name]
+                    ).max()
+
+                    img2txt = cosine_similarity(
+                        img_embedding,
+                        self.text_embeddings[class_name]
+                    ).max()
+
+                    txt2img = cosine_similarity(
+                        text_embedding,
+                        self.reference_embeddings[class_name]
+                    ).max()
+
+                    # Calculate hybrid score
+                    hybrid_score = 0.25 * (img2img + txt2txt + img2txt + txt2img)
+
+                    # Calculate consistency
+                    similarities = [img2img, txt2txt, img2txt, txt2img]
+                    consistency = 1.0 - np.std(similarities)
+
+                    # Get pre-computed EfficientNet score and CLIP similarity (no additional EfficientNet calls!)
+                    predicted_imagenet_class, clip_similarity, efficientNet_score = imagenet_mappings.get(class_name, ("", 0.0, 0.0))
+
+                    # Build class scores dictionary
+                    class_scores[class_name] = {
+                        'hybrid_score': round(float(hybrid_score), 5),
+                        'img2img': round(float(img2img), 5),
+                        'txt2txt': round(float(txt2txt), 5),
+                        'img2txt': round(float(img2txt), 5),
+                        'txt2img': round(float(txt2img), 5),
+                        'consistency': round(float(consistency), 5),
+                    }
+
+                    # Only include EfficientNet-based scores if enabled
+                    if self.enable_target_class_quality:
+                        class_scores[class_name]['clip_similarity_to_imagenet'] = round(float(clip_similarity), 5)
+                        class_scores[class_name]['efficientNet_score'] = round(float(efficientNet_score), 5)
             
             # STEP 3: Build quality scores from cached or computed metrics
             quality_scores = {**visual_metrics, **semantic_metrics}

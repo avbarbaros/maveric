@@ -4,6 +4,81 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### March 26, 2026 - Hu Moments Alternative Scoring Mode (NEW FEATURE)
+
+**Enhancement: Shape-Based Similarity Scoring via Hu Invariant Moments**:
+- **Purpose**: Alternative to CLIP-based multi-modal scoring using Hu invariant moments for shape-based image similarity
+- **Motivation**: Based on Wu et al. (2020) showing 12.5%-56.25% per-class retrieval accuracy on CIFAR-10, with shape-distinctive classes performing better
+- **Implementation**: Config-driven scoring mode selection (`scoring_mode: "clip"` or `"hu_moments"`)
+- **Key Benefits**:
+  - Zero breaking changes - all existing CLIP functionality preserved
+  - Single config parameter switches entire pipeline
+  - Auto-detection of mode from column names (no manual specification needed)
+  - Same curated output format for both modes
+- **Files Added**:
+  - [hu_moments_metric.py](maveric/quality/metrics/hu_moments_metric.py) - HuMomentsSimilarityMetric class
+- **Files Modified**:
+  - [config.py](maveric/config.py#L39) - Added `scoring_mode` parameter with validation
+  - [retriever.py](maveric/retrieval/retriever.py#L51-L56) - Hu reference vectors and branched similarity computation
+  - [quality_controller.py](maveric/quality/quality_controller.py#L117-L225) - Auto-detection and mode-specific best class calculation
+  - [interactive.py](maveric/visualization/interactive.py#L274-L400) - GUI support with auto-detection
+  - [main.py](maveric/main.py#L88) - Wired scoring_mode to Retriever
+  - [sample_cache_manager.py](maveric/retrieval/sample_cache_manager.py#L218-L283) - Optional Hu vector caching
+  - [maveric_config.yaml](experiments/maveric_config.yaml#L36) - Added scoring_mode configuration option
+
+**Hu Moments Mode Characteristics**:
+- **Metric**: `Class_{class_name}_hu_similarity` (shape-based, rotation/scale/translation invariant)
+- **Algorithm**: 7 Hu invariant moments → log transform → Euclidean distance → `1/(1+d)` similarity
+- **Consistency**: Always 1.0 (no cross-modal agreement in shape-only mode)
+- **Visual Metrics**: Still computed (resolution, sharpness, color) regardless of mode
+- **Reference**: 10 reference images per class (same as CLIP mode)
+
+**CLIP Mode Characteristics** (default, unchanged):
+- **Metrics**: `img2img`, `txt2txt`, `img2txt`, `txt2img`, `hybrid_score`, `consistency`
+- **Algorithm**: CLIP embeddings → cosine similarity → weighted average
+- **Reference**: 10 reference images + 18 text templates per class
+
+**Output Format Comparison**:
+```python
+# CLIP mode (default):
+{
+  "Class_airplane_img2img": 0.234,
+  "Class_airplane_txt2txt": 0.189,
+  "Class_airplane_img2txt": 0.201,
+  "Class_airplane_txt2img": 0.178,
+  "Class_airplane_consistency": 0.823,
+  "resolution_score": 2.143,
+  "sharpness_score": 0.891,
+  "color_score": 0.823
+}
+
+# Hu moments mode:
+{
+  "Class_airplane_hu_similarity": 0.567,
+  "resolution_score": 2.143,
+  "sharpness_score": 0.891,
+  "color_score": 0.823
+}
+
+# Both produce identical curated output:
+{
+  "label": "truck",
+  "weighted_class_score": 0.567,
+  "consistency": 1.0,  # Always 1.0 in Hu mode
+  "url": "https://...",
+  "text": "a red truck"
+}
+```
+
+**Usage**:
+```yaml
+# maveric_config.yaml
+scoring_mode: "clip"       # Default - multi-modal CLIP-based
+scoring_mode: "hu_moments" # Alternative - shape-based Hu moments
+```
+
+**Reference**: Wu et al., "Application of image retrieval based on CNN and Hu invariant moment algorithm," Computer Communications, 2020
+
 ### February 10, 2026 - Dataset Type Migrations (BREAKING CHANGES)
 
 **Major Changes: Two Datasets Migrated from Torchvision to File-Based**:

@@ -15,6 +15,7 @@ from .multimodal_metrics import (
     CrossModalAlignmentMetric,
     TargetClassQualityMetric
 )
+from .hu_moments_metric import HuMomentsSimilarityMetric
 
 __all__ = [
     "BaseQualityMetric",
@@ -26,5 +27,6 @@ __all__ = [
     "TextQualityMetric",
     "CaptionLengthMetric",
     "MultimodalConsistencyMetric",
-    "CrossModalAlignmentMetric"
+    "CrossModalAlignmentMetric",
+    "HuMomentsSimilarityMetric"
 ]

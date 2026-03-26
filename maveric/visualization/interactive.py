@@ -272,12 +272,31 @@ class MAVERICInteractiveQualityControl:
             print("❌ No data loaded")
     
     def _calculate_best_class(self):
-        """Calculate the best class for each item using weighted scores"""
+        """Calculate the best class for each item using weighted scores.
+
+        Auto-detects scoring mode from column names and dispatches to
+        appropriate implementation (CLIP or Hu moments).
+        """
         if self.data is None:
             return
-        
-        print("🧮 Calculating best class scores...")
-        
+
+        # Auto-detect scoring mode from columns
+        class_columns = [col for col in self.data.columns if col.startswith('Class_')]
+        has_hu = any('_hu_similarity' in col for col in class_columns)
+        has_clip = any('_img2img' in col for col in class_columns)
+
+        if has_hu and not has_clip:
+            self._calculate_best_class_hu()
+        else:
+            self._calculate_best_class_clip()
+
+    def _calculate_best_class_clip(self):
+        """Calculate the best class using CLIP-based multi-modal similarity."""
+        if self.data is None:
+            return
+
+        print("🧮 Calculating best class scores (CLIP mode)...")
+
         # Auto-detect class names if not predefined
         if not self.class_names:
             class_columns = [col for col in self.data.columns if col.startswith('Class_')]
@@ -296,14 +315,14 @@ class MAVERICInteractiveQualityControl:
                         break
             self.class_names = list(class_names_set)
             print(f"📋 Auto-detected classes: {len(self.class_names)}")
-        
+
         best_classes = []
         weighted_scores = []
         consistency_scores = []
-        
+
         for _, row in self.data.iterrows():
             class_scores = {}
-            
+
             for class_name in self.class_names:
                 similarity_score = 0.0
                 valid_weights_sum = 0.0
@@ -320,13 +339,13 @@ class MAVERICInteractiveQualityControl:
                 if valid_weights_sum > 0:
                     similarity_score /= valid_weights_sum
                     class_scores[class_name] = similarity_score
-            
+
             # Find best class
             if class_scores:
                 best_class = max(class_scores.items(), key=lambda x: x[1])
                 best_classes.append(best_class[0])
                 weighted_scores.append(best_class[1])
-                
+
                 # Get consistency score
                 consistency_col = f"Class_{best_class[0]}_consistency"
                 consistency_scores.append(row.get(consistency_col, 0.8))
@@ -334,13 +353,67 @@ class MAVERICInteractiveQualityControl:
                 best_classes.append('unknown')
                 weighted_scores.append(0.0)
                 consistency_scores.append(0.0)
-        
+
         # Add calculated columns
         self.data['label'] = best_classes
         self.data['weighted_class_score'] = weighted_scores
         self.data['consistency'] = consistency_scores
-        
-        print(f"✅ Calculated best class scores")
+
+        print(f"✅ Calculated best class scores (CLIP mode)")
+
+    def _calculate_best_class_hu(self):
+        """Calculate the best class using Hu moments shape-based similarity."""
+        if self.data is None:
+            return
+
+        print("🧮 Calculating best class scores (Hu moments mode)...")
+
+        # Auto-detect class names from hu_similarity columns
+        if not self.class_names:
+            class_columns = [col for col in self.data.columns if col.startswith('Class_')]
+            known_suffixes = ['_img2img', '_txt2txt', '_img2txt', '_txt2img',
+                              '_efficientNet_score', '_clip_similarity_to_imagenet',
+                              '_hu_similarity']  # Add Hu suffix
+            class_names_set = set()
+            for col in class_columns:
+                name_with_suffix = col[6:]  # Remove 'Class_' prefix
+                for suffix in known_suffixes:
+                    if name_with_suffix.endswith(suffix):
+                        class_name = name_with_suffix[:-len(suffix)]
+                        class_names_set.add(class_name)
+                        break
+            self.class_names = list(class_names_set)
+            print(f"📋 Auto-detected classes: {len(self.class_names)}")
+
+        best_classes = []
+        weighted_scores = []
+        consistency_scores = []
+
+        for _, row in self.data.iterrows():
+            best_class = None
+            best_score = -1
+
+            for class_name in self.class_names:
+                col = f"Class_{class_name}_hu_similarity"
+                score = row.get(col, 0.0)
+                if not pd.isna(score) and score > best_score:
+                    best_score = score
+                    best_class = class_name
+
+            best_classes.append(best_class or 'unknown')
+            weighted_scores.append(round(float(best_score), 5))
+            # Hu mode has no cross-modal consistency - set to 1.0
+            consistency_scores.append(1.0)
+
+        # Add calculated columns
+        self.data['label'] = best_classes
+        self.data['weighted_class_score'] = weighted_scores
+        self.data['consistency'] = consistency_scores
+
+        # Set consistency threshold to 0 in Hu mode
+        self.thresholds['consistency'] = 0.0
+
+        print(f"✅ Calculated best class scores (Hu moments mode)")
     
     def set_threshold(self, metric, value):
         """Set a threshold for a quality metric"""

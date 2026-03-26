@@ -118,19 +118,42 @@ class QualityController(BaseComponent):
         """
         Calculate the best class for each item using similarity scores.
 
-        This method identifies the most likely class for each sample using
-        weighted similarity-based scores (img2img, txt2txt, img2txt, txt2img).
+        Auto-detects scoring mode from column names and dispatches to
+        appropriate implementation (CLIP or Hu moments).
+        """
+        if self.data is None:
+            return
+
+        # Auto-detect scoring mode from columns
+        class_columns = [col for col in self.data.columns if col.startswith('Class_')]
+        if not class_columns:
+            self.log_warning("No class score columns found")
+            return
+
+        has_hu_columns = any('_hu_similarity' in col for col in class_columns)
+        has_clip_columns = any('_img2img' in col for col in class_columns)
+
+        if has_hu_columns and not has_clip_columns:
+            self._calculate_best_class_hu()
+        else:
+            self._calculate_best_class_clip()
+
+    def _calculate_best_class_clip(self):
+        """
+        Calculate the best class using CLIP-based multi-modal similarity scores.
+
+        Uses weighted similarity-based scores (img2img, txt2txt, img2txt, txt2img).
         The weights are defined in metric_weights configuration.
         """
         if self.data is None:
             return
-        
+
         # Extract class names from column names
         class_columns = [col for col in self.data.columns if col.startswith('Class_')]
         if not class_columns:
             self.log_warning("No class score columns found")
             return
-        
+
         # Get unique class names
         class_names = set()
         for col in class_columns:
@@ -138,40 +161,40 @@ class QualityController(BaseComponent):
             if len(parts) >= 3:
                 class_name = parts[1]
                 class_names.add(class_name)
-        
+
         class_names = sorted(list(class_names))
-        
+
         # Calculate weighted scores for each sample
         best_classes = []
         weighted_scores = []
         consistency_scores = []
-        
+
         for _, row in self.data.iterrows():
             class_scores = {}
-            
+
             for class_name in class_names:
                 similarity_score = 0.0
                 valid_weights_sum = 0.0
-                
+
                 # Calculate weighted similarity score
                 for metric, weight in self.class_weights.items():
                     col_name = f"Class_{class_name}_{metric}"
-                    
+
                     if col_name in row and not pd.isna(row[col_name]):
                         similarity_score += row[col_name] * weight
                         valid_weights_sum += weight
-                
+
                 # Normalize similarity score
                 if valid_weights_sum > 0:
                     similarity_score /= valid_weights_sum
                     class_scores[class_name] = similarity_score
-            
+
             # Find best class
             if class_scores:
                 best_class = max(class_scores.items(), key=lambda x: x[1])
                 best_classes.append(best_class[0])
                 weighted_scores.append(best_class[1])
-                
+
                 # Get consistency score
                 consistency_col = f"Class_{best_class[0]}_consistency"
                 if consistency_col in row:
@@ -182,13 +205,54 @@ class QualityController(BaseComponent):
                 best_classes.append(None)
                 weighted_scores.append(0.0)
                 consistency_scores.append(0.0)
-        
+
         # Add calculated columns
         self.data['label'] = best_classes
         self.data['weighted_class_score'] = weighted_scores
         self.data['consistency'] = consistency_scores
-        
-        self.log_info("Calculated best class for all samples")
+
+        self.log_info("Calculated best class using CLIP multi-modal similarity")
+
+    def _calculate_best_class_hu(self):
+        """
+        Calculate the best class using Hu moments shape-based similarity.
+
+        Finds the class with maximum hu_similarity score for each sample.
+        Sets consistency to 1.0 (no cross-modal agreement concept in Hu mode).
+        """
+        if self.data is None:
+            return
+
+        # Extract class names from hu_similarity columns
+        hu_columns = [col for col in self.data.columns if col.endswith('_hu_similarity')]
+        class_names = [col.replace('Class_', '').replace('_hu_similarity', '')
+                       for col in hu_columns]
+
+        best_classes = []
+        weighted_scores = []
+        consistency_scores = []
+
+        for _, row in self.data.iterrows():
+            best_class = None
+            best_score = -1
+
+            for class_name in class_names:
+                col = f"Class_{class_name}_hu_similarity"
+                score = row.get(col, 0.0)
+                if not pd.isna(score) and score > best_score:
+                    best_score = score
+                    best_class = class_name
+
+            best_classes.append(best_class or 'unknown')
+            weighted_scores.append(round(float(best_score), 5))
+            # Hu mode has no cross-modal consistency - set to 1.0
+            consistency_scores.append(1.0)
+
+        self.data['label'] = best_classes
+        self.data['weighted_class_score'] = weighted_scores
+        self.data['consistency'] = consistency_scores
+
+        self.log_info("Calculated best class using Hu moments similarity")
     
     def set_threshold(self, metric: str, value: float):
         """

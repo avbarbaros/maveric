@@ -32,7 +32,10 @@ quality_metrics:
   - "target_class_quality"
   - "multimodal_consistency"
 
-# Metric weights for composite scoring
+# Scoring mode: "clip" (default, CLIP-based multi-modal) or "hu_moments" (shape-based)
+scoring_mode: "clip"
+
+# Metric weights for composite scoring (only used in CLIP mode)
 metric_weights:
   img2img: 0.25    # Image-to-image similarity weight
   txt2txt: 0.25    # Text-to-text similarity weight

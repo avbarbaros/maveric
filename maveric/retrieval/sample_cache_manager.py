@@ -198,6 +198,10 @@ class SampleCacheManager(BaseComponent):
                     self.stats['errors'] += 1
                     return None
 
+            # Decode Hu moments vector if present
+            if 'hu_vector' in data:
+                data['hu_vector'] = np.array(data['hu_vector'], dtype=np.float32)
+
             self.stats['hits'] += 1
             return data
 
@@ -222,9 +226,10 @@ class SampleCacheManager(BaseComponent):
                      semantic_metrics: Dict[str, float],
                      image_embedding: Optional[np.ndarray] = None,
                      text_embedding: Optional[np.ndarray] = None,
-                     efficientnet_data: Optional[Dict[str, Any]] = None) -> bool:
+                     efficientnet_data: Optional[Dict[str, Any]] = None,
+                     hu_vector: Optional[np.ndarray] = None) -> bool:
         """
-        Cache sample metadata and computed metrics including CLIP embeddings.
+        Cache sample metadata and computed metrics including CLIP embeddings and Hu moments.
 
         Args:
             url: Image URL (used as cache key)
@@ -234,6 +239,7 @@ class SampleCacheManager(BaseComponent):
             image_embedding: CLIP image embedding (numpy array)
             text_embedding: CLIP text embedding (numpy array)
             efficientnet_data: Optional EfficientNet predictions and metadata
+            hu_vector: Optional Hu moments vector (numpy array of shape (7,))
 
         Returns:
             True if caching succeeded, False otherwise
@@ -269,6 +275,10 @@ class SampleCacheManager(BaseComponent):
             # Add EfficientNet data if provided
             if efficientnet_data:
                 data['efficientnet_predictions'] = efficientnet_data
+
+            # Add Hu moments vector if provided
+            if hu_vector is not None:
+                data['hu_vector'] = hu_vector.tolist()  # Store as list for JSON
 
             # Use atomic write to prevent corruption
             save_json_atomic(data, cache_path, indent=None)  # No indent for smaller files

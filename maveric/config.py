@@ -32,7 +32,10 @@ class MAVERICConfig:
     n_reference_images: int = 10
     retrieval_rotation_size: int = 1000
     max_retries: int = 3
-    request_timeout: int = 5 
+    request_timeout: int = 5
+
+    # Scoring mode configuration
+    scoring_mode: str = "clip"  # "clip" (default, CLIP-based multi-modal) or "hu_moments" (shape-based) 
 
     # Quality metrics configuration - organized by category
     quality_metrics: List[str] = field(default_factory=lambda: [
@@ -230,7 +233,11 @@ class MAVERICConfig:
         # Validate batch size
         if self.batch_size < 1:
             warnings.append("Batch size must be at least 1")
-        
+
+        # Validate scoring mode
+        if self.scoring_mode not in ["clip", "hu_moments"]:
+            warnings.append(f"Invalid scoring_mode '{self.scoring_mode}'. Must be 'clip' or 'hu_moments'")
+
         # Validate weights sum to 1.0
         weight_sum = sum(self.metric_weights.values())
         if abs(weight_sum - 1.0) > 0.001:
