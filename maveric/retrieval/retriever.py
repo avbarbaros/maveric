@@ -888,10 +888,18 @@ class Retriever(BaseComponent):
                 continue
             
             # Compute scores
-            class_scores, quality_scores = self.compute_sample_scores(url, text)
+            try:
+                class_scores, quality_scores = self.compute_sample_scores(url, text)
+            except Exception as e:
+                print(f"\n❌ ERROR in compute_sample_scores: {e}")
+                import traceback
+                print(traceback.format_exc())
+                continue
 
             if not class_scores or not quality_scores:
-                # Log to debug level instead of warning to reduce console output
+                # Temporary debug - show first few failures
+                if processed_count < 3:
+                    print(f"\n⚠️  Empty scores - class_scores empty: {not class_scores}, quality_scores empty: {not quality_scores}")
                 self.log_debug(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
