@@ -552,6 +552,16 @@ class Retriever(BaseComponent):
                     response = requests.get(image_url, timeout=self.request_timeout)
                     image = Image.open(BytesIO(response.content)).convert('RGB')
 
+                # Debug first few downloads
+                if not hasattr(self, '_download_debug_count'):
+                    self._download_debug_count = 0
+                if self._download_debug_count < 3:
+                    print(f"\n📥 Download result #{self._download_debug_count + 1}:")
+                    print(f"   URL: {image_url[:80]}")
+                    print(f"   Image downloaded: {image is not None}")
+                    print(f"   Timeout: {self.request_timeout}s, Max retries: {self.max_retries}")
+                    self._download_debug_count += 1
+
                 if image is None:
                     return {}, {}
 
