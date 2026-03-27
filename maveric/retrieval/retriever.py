@@ -921,8 +921,6 @@ class Retriever(BaseComponent):
 
             if not class_scores or not quality_scores:
                 # Temporary debug - show first few failures
-                if processed_count < 3:
-                    print(f"\n⚠️  Empty scores - class_scores empty: {not class_scores}, quality_scores empty: {not quality_scores}")
                 self.log_debug(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
