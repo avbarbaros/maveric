@@ -627,14 +627,18 @@ class Retriever(BaseComponent):
             # Get target classes based on scoring mode
             if self.scoring_mode == "hu_moments":
                 if not self.reference_hu_vectors:
+                    print(f"\n❌ FAIL: No reference Hu vectors! self.reference_hu_vectors is empty")
                     self.log_debug("No reference Hu vectors available for class score computation")
                     return {}, {}
                 target_classes = list(self.reference_hu_vectors.keys())
+                print(f"\n✅ Hu mode: Found {len(target_classes)} target classes")
             else:
                 if not self.reference_embeddings:
+                    print(f"\n❌ FAIL: No reference embeddings! self.reference_embeddings is empty")
                     self.log_debug("No reference embeddings available for class score computation")
                     return {}, {}
                 target_classes = list(self.reference_embeddings.keys())
+                print(f"\n✅ CLIP mode: Found {len(target_classes)} target classes")
 
             # Compute EfficientNet-based scores if enabled and we have an image
             if self.enable_target_class_quality and image is not None:
