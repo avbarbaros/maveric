@@ -449,6 +449,14 @@ class Retriever(BaseComponent):
             # STEP 1: Check sample cache first (FAST PATH)
             cached = self.sample_cache.get_cached_sample(image_url) if self.sample_cache else None
 
+            # Debug first sample
+            if image_url.endswith(('001.jpg', '001.png', '/1', '/1.jpg')):
+                print(f"\n🔍 DEBUG first sample:")
+                print(f"   URL: {image_url[:80]}")
+                print(f"   Cache available: {self.sample_cache is not None}")
+                print(f"   Cached data: {cached is not None}")
+                print(f"   Scoring mode: {self.scoring_mode}")
+
             if cached and cached.get('text') == text:
                 # Cache hit! Use cached metrics and embeddings
                 self.log_debug(f"✅ Cache HIT: {image_url[:50]}...")
@@ -766,6 +774,17 @@ class Retriever(BaseComponent):
             return class_scores, quality_scores
 
         except Exception as e:
+            # Show first 3 exceptions for debugging
+            if not hasattr(self, '_exception_count'):
+                self._exception_count = 0
+            if self._exception_count < 3:
+                print(f"\n❌ EXCEPTION #{self._exception_count + 1} in compute_sample_scores:")
+                print(f"   URL: {image_url[:80]}")
+                print(f"   Error: {str(e)}")
+                import traceback
+                print(f"   Traceback:\n{traceback.format_exc()}")
+                self._exception_count += 1
+
             # Log to debug level instead of warning to reduce console output
             self.log_debug(f"Error processing sample {image_url[:50]}...: {str(e)}")
             import traceback
