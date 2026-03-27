@@ -449,14 +449,6 @@ class Retriever(BaseComponent):
             # STEP 1: Check sample cache first (FAST PATH)
             cached = self.sample_cache.get_cached_sample(image_url) if self.sample_cache else None
 
-            # Debug first sample
-            if image_url.endswith(('001.jpg', '001.png', '/1', '/1.jpg')):
-                print(f"\n🔍 DEBUG first sample:")
-                print(f"   URL: {image_url[:80]}")
-                print(f"   Cache available: {self.sample_cache is not None}")
-                print(f"   Cached data: {cached is not None}")
-                print(f"   Scoring mode: {self.scoring_mode}")
-
             if cached and cached.get('text') == text:
                 # Cache hit! Use cached metrics and embeddings
                 self.log_debug(f"✅ Cache HIT: {image_url[:50]}...")
@@ -552,16 +544,6 @@ class Retriever(BaseComponent):
                     response = requests.get(image_url, timeout=self.request_timeout)
                     image = Image.open(BytesIO(response.content)).convert('RGB')
 
-                # Debug first few downloads
-                if not hasattr(self, '_download_debug_count'):
-                    self._download_debug_count = 0
-                if self._download_debug_count < 3:
-                    print(f"\n📥 Download result #{self._download_debug_count + 1}:")
-                    print(f"   URL: {image_url[:80]}")
-                    print(f"   Image downloaded: {image is not None}")
-                    print(f"   Timeout: {self.request_timeout}s, Max retries: {self.max_retries}")
-                    self._download_debug_count += 1
-
                 if image is None:
                     return {}, {}
 
@@ -645,18 +627,14 @@ class Retriever(BaseComponent):
             # Get target classes based on scoring mode
             if self.scoring_mode == "hu_moments":
                 if not self.reference_hu_vectors:
-                    print(f"\n❌ FAIL: No reference Hu vectors! self.reference_hu_vectors is empty")
                     self.log_debug("No reference Hu vectors available for class score computation")
                     return {}, {}
                 target_classes = list(self.reference_hu_vectors.keys())
-                print(f"\n✅ Hu mode: Found {len(target_classes)} target classes")
             else:
                 if not self.reference_embeddings:
-                    print(f"\n❌ FAIL: No reference embeddings! self.reference_embeddings is empty")
                     self.log_debug("No reference embeddings available for class score computation")
                     return {}, {}
                 target_classes = list(self.reference_embeddings.keys())
-                print(f"\n✅ CLIP mode: Found {len(target_classes)} target classes")
 
             # Compute EfficientNet-based scores if enabled and we have an image
             if self.enable_target_class_quality and image is not None:
@@ -784,17 +762,6 @@ class Retriever(BaseComponent):
             return class_scores, quality_scores
 
         except Exception as e:
-            # Show first 3 exceptions for debugging
-            if not hasattr(self, '_exception_count'):
-                self._exception_count = 0
-            if self._exception_count < 3:
-                print(f"\n❌ EXCEPTION #{self._exception_count + 1} in compute_sample_scores:")
-                print(f"   URL: {image_url[:80]}")
-                print(f"   Error: {str(e)}")
-                import traceback
-                print(f"   Traceback:\n{traceback.format_exc()}")
-                self._exception_count += 1
-
             # Log to debug level instead of warning to reduce console output
             self.log_debug(f"Error processing sample {image_url[:50]}...: {str(e)}")
             import traceback
@@ -921,16 +888,10 @@ class Retriever(BaseComponent):
                 continue
             
             # Compute scores
-            try:
-                class_scores, quality_scores = self.compute_sample_scores(url, text)
-            except Exception as e:
-                print(f"\n❌ ERROR in compute_sample_scores: {e}")
-                import traceback
-                print(traceback.format_exc())
-                continue
+            class_scores, quality_scores = self.compute_sample_scores(url, text)
 
             if not class_scores or not quality_scores:
-                # Temporary debug - show first few failures
+                # Log to debug level instead of warning to reduce console output
                 self.log_debug(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
