@@ -205,13 +205,11 @@ class Retriever(BaseComponent):
 
                                 # In Hu moments mode, also need to load/compute Hu vectors
                                 if self.scoring_mode == "hu_moments":
-                                    print(f"[DEBUG] Hu moments mode - checking for cached Hu vectors...")
                                     # Try to load cached Hu vectors
                                     hu_cache_name = f"{target_dataset}_hu_reference"
                                     hu_cached = self.cache_manager.load_embeddings(hu_cache_name)
 
                                     if hu_cached:
-                                        print(f"[DEBUG] Found cached Hu vectors")
                                         # Extract Hu vectors from cache
                                         hu_vectors = {}
                                         for key, value in hu_cached.items():
@@ -222,11 +220,10 @@ class Retriever(BaseComponent):
                                         if hu_vectors:
                                             self.reference_hu_vectors = hu_vectors
                                             self.hu_metric.set_reference_vectors(hu_vectors)
-                                            print(f"[DEBUG] Loaded {len(hu_vectors)} Hu reference vectors from cache")
+                                            self.log_info(f"Loaded {len(hu_vectors)} Hu reference vectors from cache")
                                             return self.reference_embeddings, self.text_embeddings
 
-                                    print(f"[DEBUG] No cached Hu vectors - need to regenerate")
-                                    # Fall through to regenerate (need to compute Hu vectors from images)
+                                    # No cached Hu vectors - fall through to regenerate
                                 else:
                                     # CLIP mode - we have everything we need from cache
                                     return self.reference_embeddings, self.text_embeddings
@@ -475,23 +472,18 @@ class Retriever(BaseComponent):
 
                     # In Hu moments mode, we MUST load the image (Hu moments need pixel data)
                     if self.scoring_mode == "hu_moments":
-                        print(f"[DEBUG] Cache HIT with CLIP embeddings, but in Hu mode - loading image...")
                         if self.cache_manager:
                             image = self.cache_manager.get_cached_image(image_url)
-                            print(f"[DEBUG] get_cached_image returned: {image is not None}")
                         else:
                             # Fallback to direct download
-                            print(f"[DEBUG] No cache manager - direct download")
                             import requests
                             from io import BytesIO
                             response = requests.get(image_url, timeout=self.request_timeout)
                             image = Image.open(BytesIO(response.content)).convert('RGB')
 
                         if image is None:
-                            print(f"[DEBUG] Image load FAILED - returning empty")
                             self.log_debug(f"Failed to load image for Hu moments: {image_url[:50]}...")
                             return {}, {}
-                        print(f"[DEBUG] Image loaded successfully, proceeding...")
                     else:
                         image = None  # Don't need to load image in CLIP mode if we have embeddings
                 else:
@@ -634,13 +626,10 @@ class Retriever(BaseComponent):
 
             # Get target classes based on scoring mode
             if self.scoring_mode == "hu_moments":
-                print(f"[DEBUG] Checking reference_hu_vectors: {len(self.reference_hu_vectors)} classes")
                 if not self.reference_hu_vectors:
-                    print(f"[DEBUG] RETURNING EMPTY - No reference Hu vectors!")
                     self.log_debug("No reference Hu vectors available for class score computation")
                     return {}, {}
                 target_classes = list(self.reference_hu_vectors.keys())
-                print(f"[DEBUG] target_classes from reference_hu_vectors: {target_classes}")
             else:
                 if not self.reference_embeddings:
                     self.log_debug("No reference embeddings available for class score computation")
@@ -684,54 +673,34 @@ class Retriever(BaseComponent):
 
             # Branch based on scoring mode
             if self.scoring_mode == "hu_moments":
-                print(f"[DEBUG] Hu moments mode branch - image is None: {image is None}")
                 # HU MOMENTS MODE: Shape-based similarity only
                 # Need to load image if not already loaded
                 if image is None:
-                    print(f"[DEBUG] Image is None, attempting to load from cache...")
                     if self.cache_manager:
                         image = self.cache_manager.get_cached_image(image_url)
-                        print(f"[DEBUG] Cache manager returned image: {image is not None}")
                     else:
-                        print(f"[DEBUG] No cache manager, downloading directly...")
                         import requests
                         from io import BytesIO
                         response = requests.get(image_url, timeout=self.request_timeout)
                         image = Image.open(BytesIO(response.content)).convert('RGB')
 
                     if image is None:
-                        print(f"[DEBUG] Image still None after loading attempt - RETURNING EMPTY")
                         return {}, {}
-                else:
-                    print(f"[DEBUG] Image already loaded, proceeding with Hu computation")
 
                 # Compute Hu vector once for this image
                 from ..quality.metrics.hu_moments_metric import HuMomentsSimilarityMetric
                 hu_vector = HuMomentsSimilarityMetric.compute_hu_vector(image)
 
                 if hu_vector is None:
-                    print(f"[DEBUG] Hu vector computation FAILED - returning empty")
                     self.log_debug(f"Failed to compute Hu vector for {image_url[:50]}...")
                     return {}, {}
 
-                print(f"[DEBUG] Hu vector computed successfully: {hu_vector[:3]}...")
-                print(f"[DEBUG] hu_metric has {len(self.hu_metric._reference_hu_vectors)} reference classes")
-                print(f"[DEBUG] target_classes has {len(target_classes)} classes")
-
-                # Debug: Check hu_vector computation
-                self.log_debug(f"Computed Hu vector: {hu_vector[:3]}... (first 3 elements)")
-                self.log_debug(f"hu_metric has {len(self.hu_metric._reference_hu_vectors)} reference classes")
-
                 # Compute similarity to all classes
-                print(f"[DEBUG] Computing similarities for {len(target_classes)} target classes")
                 for class_name in target_classes:
                     similarity = self.hu_metric.compute_similarity(hu_vector, class_name)
-                    print(f"[DEBUG] Class '{class_name}' Hu similarity: {similarity}")
-                    self.log_debug(f"Class '{class_name}' Hu similarity: {similarity}")
                     class_scores[class_name] = {
                         'hu_similarity': similarity,
                     }
-                print(f"[DEBUG] class_scores populated with {len(class_scores)} classes")
 
             else:
                 # CLIP MODE: Multi-modal CLIP-based similarity (existing logic)
@@ -790,15 +759,12 @@ class Retriever(BaseComponent):
                 quality_scores['imagenet_predicted_class'] = global_imagenet_pred
                 quality_scores['imagenet_probability'] = round(float(global_imagenet_prob), 5)
 
-            print(f"[DEBUG] Returning class_scores: {len(class_scores)} classes, quality_scores: {len(quality_scores)} metrics")
             return class_scores, quality_scores
-            
+
         except Exception as e:
             # Log to debug level instead of warning to reduce console output
-            print(f"[DEBUG] EXCEPTION in compute_sample_scores: {str(e)}")
-            import traceback
-            print(f"[DEBUG] Traceback: {traceback.format_exc()}")
             self.log_debug(f"Error processing sample {image_url[:50]}...: {str(e)}")
+            import traceback
             self.log_debug(f"Full traceback: {traceback.format_exc()}")
             return {}, {}
     
@@ -926,7 +892,6 @@ class Retriever(BaseComponent):
 
             if not class_scores or not quality_scores:
                 # Log to debug level instead of warning to reduce console output
-                print(f"[DEBUG] Failed to compute scores - class_scores: {bool(class_scores)}, quality_scores: {bool(quality_scores)}")
                 self.log_debug(f"Failed to compute scores for sample {processed_count + 1}: url={url[:50]}...")
                 continue
             
