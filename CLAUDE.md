@@ -28,7 +28,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Hu Moments Mode Characteristics**:
 - **Metric**: `Class_{class_name}_hu_similarity` (shape-based, rotation/scale/translation invariant)
-- **Algorithm**: 7 Hu invariant moments → log transform → Euclidean distance → `1/(1+d)` similarity
+- **Algorithm**: First 2 Hu invariant moments (h1, h2) → log transform → Euclidean distance → `1/(1+d)` similarity
+  - h1: Area-related feature
+  - h2: Aspect ratio feature
+  - Higher moments (h3-h7) excluded for better stability and discriminability
 - **Consistency**: Always 1.0 (no cross-modal agreement in shape-only mode)
 - **Visual Metrics**: Still computed (resolution, sharpness, color) regardless of mode
 - **Reference**: 10 reference images per class (same as CLIP mode)
