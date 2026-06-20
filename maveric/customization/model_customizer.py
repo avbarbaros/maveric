@@ -1,5 +1,6 @@
 """Main model customization module."""
 
+from matplotlib import image
 import torch
 import torch.nn as nn
 from typing import Dict, List, Optional, Tuple, Any
@@ -447,28 +448,32 @@ class ModelCustomizer(BaseComponent):
                     try:
                         image, label = dataset[idx]
                         if isinstance(label, int) and label < len(dataset.classes):
-                            # Get folder name from ImageFolder's own class list
-                            folder_name = dataset.classes[label]
 
-                            # Look up the ELEVATER canonical class name for this folder
-                            # This handles case mismatches (e.g., folder 'Faces' matches ELEVATER 'Faces')
-                            test_class_name = folder_to_canonical.get(folder_name) or \
-                                              folder_to_canonical.get(folder_name.lower())
-
-                            if test_class_name is None:
-                                continue  # Skip if folder name doesn't match any known class
+                            if isinstance(label, int) and 0 <= label < len(class_names):
+                                test_class_name = class_names[label]          # robust to torchvision folder names
+                            else:
+                                # Get folder name from ImageFolder's own class list
+                                folder_name = dataset.classes[label]# file-based ImageFolder fallback
+                                
+                                # Look up the ELEVATER canonical class name for this folder
+                                # This handles case mismatches (e.g., folder 'Faces' matches ELEVATER 'Faces')
+                                test_class_name = folder_to_canonical.get(folder_name) or \
+                                                  folder_to_canonical.get(folder_name.lower())
+                                if test_class_name is None:
+                                    continue # Skip if folder name doesn't match any known class
 
                             # Check if this class exists in training data using normalized matching
                             normalized_test = self._normalize_class_name(test_class_name)
+                            
+                            if normalized_test not in normalized_training_map:
+                                continue
+                            
+                            # Use the canonical test dataset class name for the label
+                            # Note: Text field is not used during evaluation (templates are used in text classifier)
+                            test_samples.append({'image': image, 
+                                                 'label': test_class_name, 
+                                                 'text': ''})
 
-                            if normalized_test in normalized_training_map:
-                                # Use the canonical test dataset class name for the label
-                                # Note: Text field is not used during evaluation (templates are used in text classifier)
-                                test_samples.append({
-                                    'image': image,
-                                    'label': test_class_name,  # Use canonical class name (string, not list)
-                                    'text': ''  # Placeholder - not used during evaluation
-                                })
                     except Exception as e:
                         if idx < 10:  # Only log first few errors to avoid spam
                             self.log_warning(f"Error processing test sample {idx}: {e}")
