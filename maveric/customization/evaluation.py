@@ -74,8 +74,6 @@ class Evaluator(BaseComponent):
             print(f"  Example prompts for '{first_canonical}':")
             for tmpl in templates:
                 print(f"    - {tmpl.format(first_canonical)}")
-            print(f"\n  NOTE: If your standalone code uses different templates (e.g., just 'a photo of a {{}}'),")
-            print(f"        that could explain accuracy differences!")
             self._template_debug_printed = True
 
         for class_name in class_names:
