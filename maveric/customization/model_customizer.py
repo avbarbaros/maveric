@@ -209,12 +209,17 @@ class ModelCustomizer(BaseComponent):
                 templates=templates
             )
         
+
+
+
         # Create result
         result = CustomizationResult(
             model_name=f"customized_{self.base_model_name}",
             base_model_name=self.base_model_name,
             training_config=training_config.to_dict(),
             training_samples=len(train_loader.dataset),
+            validation_samples = len(val_loader.dataset) if val_loader is not None else 0
+            test_samples = len(test_loader.dataset),
             test_accuracy=final_accuracy,
             zero_shot_baseline=baseline_accuracy,
             class_accuracies=class_accuracies,

@@ -420,6 +420,8 @@ class CustomizationResult:
     # Training configuration and data
     training_config: Dict[str, Any]  # Training hyperparameters and settings
     training_samples: int            # Number of samples used for training
+    validation_samples: int   
+    test_samples: int       
     
     # Performance metrics
     test_accuracy: float        # Accuracy on test set after training
