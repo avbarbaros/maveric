@@ -151,15 +151,16 @@ class Trainer(BaseComponent):
                     history['val_loss'].append(val_loss)
                     history['val_acc'].append(val_acc)
 
-                # Evaluate on test set (mandatory)
-                test_loss, test_acc = self._validate_epoch(
-                    test_loader,
-                    class_text_features,
-                    criterion,
-                    desc="Testing"
-                )
-                history['test_loss'].append(test_loss)
-                history['test_acc'].append(test_acc)
+                # Test is evaluated ONCE at the end (in ModelCustomizer.customize).
+                # Per-epoch test eval is monitoring only and never drives selection.
+                if training_config.evaluate_test_each_epoch:
+                    test_loss, test_acc = self._validate_epoch(
+                        test_loader, class_text_features, criterion, desc="Testing"
+                    )
+                    history['test_loss'].append(test_loss)
+                    history['test_acc'].append(test_acc)
+                else:
+                    test_loss, test_acc = 0.0, 0.0  
 
                 # Log results (always includes test metrics)
                 if val_loader is not None:
@@ -171,8 +172,16 @@ class Trainer(BaseComponent):
                               f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.2f}% (no validation)")
                 self.log_info(log_msg)
 
-                # Check for improvement (always use test accuracy)
-                eval_acc = test_acc
+                # Select the best checkpoint on the VALIDATION fold (never test).
+                if training_config.checkpoint_selection_metric == "test_acc":
+                    eval_acc = test_acc  # legacy / ablation only
+                else:# default to validation accuracy for model selection
+                    if val_loader is None:
+                        raise ValueError(
+                            "Validation-based checkpoint selection requires a validation set. "
+                            "Set use_validation=True (validation_method='stratified_kfold')."
+                        )
+                    eval_acc = val_acc
                 if eval_acc > best_val_acc:
                     best_val_acc = eval_acc
                     best_epoch = epoch

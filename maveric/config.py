@@ -49,12 +49,11 @@ class MAVERICConfig:
     
     # Metric weights for composite scoring  
     metric_weights: Dict[str, float] = field(default_factory=lambda: {
-        'img2img': 0.40,
-        'txt2txt': 0.20,
-        'img2txt': 0.20,
-        'txt2img': 0.20
+        'img2img': 0.25,
+        'txt2txt': 0.25,
+        'img2txt': 0.25,
+        'txt2img': 0.25
     })
-    
     
     # Default quality thresholds - organized by metric category
     default_thresholds: Dict[str, float] = field(default_factory=lambda: {
@@ -300,7 +299,12 @@ class TrainingConfig:
     eval_frequency: int = 1  # Evaluate every N epochs
     save_best_model: bool = True
     skip_epoch_evaluation: bool = False  # Skip per-epoch evaluation (useful for unified training)
-    
+    # Checkpoint selection: choose the best epoch on the validation fold, NEVER on test.
+    # "val_acc" (default) = clean held-out selection. "test_acc" = legacy/ablation only.
+    checkpoint_selection_metric: str = "val_acc"
+    evaluate_test_each_epoch: bool = False  # monitoring only; never used for selection
+
+
     # Validation strategy
     use_validation: bool = True  # Whether to use validation during training
     validation_method: str = "stratified_kfold"  # "stratified_kfold" or "simple_split"
@@ -341,6 +345,13 @@ class TrainingConfig:
         if self.scheduler not in ["cosine", "linear", "constant"]:
             warnings.append(f"Unknown scheduler: {self.scheduler}")
         
+        if self.checkpoint_selection_metric not in ("val_acc", "test_acc"):
+            warnings.append(f"Unknown checkpoint_selection_metric: {self.checkpoint_selection_metric}")
+
+        if self.checkpoint_selection_metric == "val_acc" and not self.use_validation:
+            warnings.append("checkpoint_selection_metric='val_acc' requires use_validation=True")
+
+
         return warnings
 
 

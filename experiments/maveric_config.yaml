@@ -182,10 +182,12 @@ training:
   gradient_clip_value: 0.5
 
   # Validation settings
-  use_validation: false  # Set to false to disable validation and use all data for training
+  use_validation: true  # Set to false to disable validation and use all data for training
   validation_method: "stratified_kfold"  # "stratified_kfold" or "simple_split"
   validation_k_folds: 5  # Number of folds for stratified k-fold validation
   validation_split: 0.2  # Fraction for simple split validation (used if method is "simple_split")
+  checkpoint_selection_metric: val_acc
+  evaluate_test_each_epoch: false
 
   # Model checkpointing
   save_best_model: true

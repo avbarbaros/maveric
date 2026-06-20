@@ -530,15 +530,13 @@ class ModelCustomizer(BaseComponent):
         from torch.utils.data import DataLoader, Subset
         import numpy as np
         
-        # Get labels for stratification
-        labels = []
-        for i in range(len(dataset)):
-            _, _, label = dataset[i]
-            labels.append(label)
-        
-        labels = np.array(labels)
+        # Labels for stratification WITHOUT loading/augmenting images.
+        labels = np.array([
+            dataset.normalized_to_idx.get(dataset._normalize_label(s['label']), 0)
+            for s in dataset.valid_samples
+        ])
         indices = np.arange(len(dataset))
-        
+
         # Use stratified k-fold
         skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
         
@@ -549,18 +547,18 @@ class ModelCustomizer(BaseComponent):
         train_dataset = Subset(dataset, train_idx)
         val_dataset = Subset(dataset, val_idx)
         
-        # Disable augmentation for validation dataset
-        if hasattr(val_dataset, 'dataset') and hasattr(val_dataset.dataset, 'use_augmentation'):
-            # Create a copy of the dataset for validation without augmentation
-            val_dataset_copy = LAIONCustomDataset(
-                [dataset.valid_samples[i] for i in val_idx],
-                dataset.class_names,
-                dataset.processor,
-                use_augmentation=False,
-                cache_dir=dataset.cache_dir
-            )
-            val_dataset = val_dataset_copy
-        
+    
+        # Separate val dataset: augmentation OFF, same image folder, no re-validation.
+        from pathlib import Path as _Path
+        _val_samples = [dataset.valid_samples[i] for i in val_idx]
+        _val_img_root = str(_Path(dataset.image_cache_dir).parent)  # -> <dir>/images
+        val_dataset = LAIONCustomDataset(
+            _val_samples, dataset.class_names, dataset.processor,
+            use_augmentation=False, training_data_path=_val_img_root, skip_validation=True,
+        )
+        val_dataset.valid_samples = _val_samples  # already validated upstream
+
+
         # Create data loaders
         train_loader = DataLoader(
             train_dataset,
@@ -589,17 +587,21 @@ class ModelCustomizer(BaseComponent):
         # Split dataset
         val_size = int(len(dataset) * validation_split)
         train_size = len(dataset) - val_size
-        
-        train_dataset, val_dataset = random_split(
-            dataset,
-            [train_size, val_size],
-            generator=torch.Generator().manual_seed(42)
+
+        from torch.utils.data import Subset
+        from pathlib import Path as _Path
+        import numpy as _np
+        perm = _np.random.default_rng(42).permutation(len(dataset))
+        val_idx, train_idx = perm[:val_size], perm[val_size:]
+        train_dataset = Subset(dataset, train_idx)
+        _val_samples = [dataset.valid_samples[i] for i in val_idx]
+        _val_img_root = str(_Path(dataset.image_cache_dir).parent)
+        val_dataset = LAIONCustomDataset(
+            _val_samples, dataset.class_names, dataset.processor,
+            use_augmentation=False, training_data_path=_val_img_root, skip_validation=True,
         )
-        
-        # Disable augmentation for validation
-        if hasattr(val_dataset.dataset, 'use_augmentation'):
-            val_dataset.dataset.use_augmentation = False
-        
+        val_dataset.valid_samples = _val_samples
+
         # Create loaders
         train_loader = DataLoader(
             train_dataset,

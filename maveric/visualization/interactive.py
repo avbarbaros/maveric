@@ -83,10 +83,10 @@ class MAVERICInteractiveQualityControl:
         
         # Weights for calculating best class score
         self.class_weights = {
-            'img2img': 0.40,
-            'txt2txt': 0.20,
-            'img2txt': 0.20,
-            'txt2img': 0.20
+            'img2img': 0.25,
+            'txt2txt': 0.25,
+            'img2txt': 0.25,
+            'txt2img': 0.25
         }
 
         
