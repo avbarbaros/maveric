@@ -450,7 +450,7 @@ class ELEVATERDataset(BaseDataset):
         'eurosat': {
             'num_classes': 10,
             'task': 'classification',
-            'type': 'torchvision',
+            'type': 'file_based',
             'class_names': [
                 'annual crop land',
                 'forest',
