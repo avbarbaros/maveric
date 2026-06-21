@@ -71,37 +71,52 @@ class Trainer(BaseComponent):
         if test_loader is None:
             raise ValueError("Test data loader is required for training. Test evaluation is mandatory for reliable model selection.")
 
-        # Create text features for all classes
-        # Use template ensembling if available (REACT-style), otherwise single template
-        if templates is not None and evaluator is not None:
-            # REACT-style evaluation with template ensembling (consistent with final evaluation)
-            self.log_info(f"Using REACT-style template ensembling with {len(templates)} templates for evaluation")
-            with torch.no_grad():
-                class_text_features = evaluator._create_text_classifier_with_templates(
-                    self.model, class_names, templates
-                )
+        # Check text source mode
+        use_caption_mode = training_config.text_source == "captions"
+
+        if use_caption_mode:
+            # Caption-based mode: No pre-computed text features
+            # Text features will be computed per-batch from sample captions
+            self.log_info("🎯 Using caption-based training (per-sample text from 'text' field)")
+            class_text_features = None  # Signal to use captions in training loop
         else:
-            # Fast single-template evaluation (legacy behavior)
-            self.log_info("Using single-template evaluation (fast but less accurate)")
-            class_prompts = [f"a photo of a {name}." for name in class_names]
-            text_inputs = self.model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
-            with torch.no_grad():
-                text_features_output = self.model.clip_model.get_text_features(**text_inputs)
+            # Label-based mode (current default): Pre-compute text features for all classes
+            # Use template ensembling if available (REACT-style), otherwise single template
+            if templates is not None and evaluator is not None:
+                # REACT-style evaluation with template ensembling (consistent with final evaluation)
+                self.log_info(f"Using REACT-style template ensembling with {len(templates)} templates for evaluation")
+                with torch.no_grad():
+                    class_text_features = evaluator._create_text_classifier_with_templates(
+                        self.model, class_names, templates
+                    )
+            else:
+                # Fast single-template evaluation (legacy behavior)
+                self.log_info("Using single-template evaluation (fast but less accurate)")
+                class_prompts = [f"a photo of a {name}." for name in class_names]
+                text_inputs = self.model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+                with torch.no_grad():
+                    text_features_output = self.model.clip_model.get_text_features(**text_inputs)
 
-                # Handle both tensor and BaseModelOutputWithPooling formats
-                if isinstance(text_features_output, torch.Tensor):
-                    class_text_features = text_features_output
-                else:
-                    # Extract pooler_output from BaseModelOutputWithPooling
-                    class_text_features = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
+                    # Handle both tensor and BaseModelOutputWithPooling formats
+                    if isinstance(text_features_output, torch.Tensor):
+                        class_text_features = text_features_output
+                    else:
+                        # Extract pooler_output from BaseModelOutputWithPooling
+                        class_text_features = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
 
-                class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
-        
+                    class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+
         # Setup optimizer
         optimizer = self._create_optimizer(training_config)
-        
-        # Setup loss
-        criterion = nn.CrossEntropyLoss()
+
+        # Setup loss based on mode
+        if use_caption_mode:
+            from .losses import InfoNCELoss
+            criterion = InfoNCELoss(temperature=0.07)
+            self.log_info("   Loss function: InfoNCE (contrastive learning)")
+        else:
+            criterion = nn.CrossEntropyLoss()
+            self.log_info("   Loss function: CrossEntropy (classification)")
         
         # Training history
         history = {
@@ -235,52 +250,115 @@ class Trainer(BaseComponent):
     
     def _train_epoch(self,
                      train_loader: Any,
-                     class_text_features: torch.Tensor,
+                     class_text_features: Optional[torch.Tensor],
                      optimizer: optim.Optimizer,
                      criterion: nn.Module,
                      config: TrainingConfig) -> Tuple[float, float]:
-        """Train for one epoch."""
+        """
+        Train for one epoch.
+
+        Args:
+            class_text_features: Pre-computed text features for label-based mode,
+                                or None for caption-based mode
+        """
         self.model.train()
-        
+
+        # Determine if using caption mode
+        use_caption_mode = (class_text_features is None)
+
         total_loss = 0.0
         correct = 0
         total = 0
-        
+
         progress_bar = tqdm(train_loader, desc="Training")
-        
+
         for batch_idx, (images, texts, labels) in enumerate(progress_bar):
             labels = labels.to(self.device)
-            
-            # Forward pass
-            logits = self.model(images, class_text_features)
-            loss = criterion(logits, labels)
-            
+
+            # Forward pass - MODE DEPENDENT
+            if use_caption_mode:
+                # Caption-based: Encode per-sample captions and compute contrastive loss
+                image_embeds, text_embeds = self._forward_caption_mode(images, texts)
+                loss = criterion(image_embeds, text_embeds)
+
+                # For accuracy tracking, compute similarity and predict
+                with torch.no_grad():
+                    logits = 100.0 * torch.matmul(image_embeds, text_embeds.T)
+                    predictions = logits.argmax(dim=1)
+            else:
+                # Label-based: Use pre-computed class text features
+                logits = self.model(images, class_text_features)
+                loss = criterion(logits, labels)
+                predictions = logits.argmax(dim=1)
+
             reg_loss = self.model.get_regularization_loss()
             total_loss_value = loss + config.regularization_weight * reg_loss
 
             # Backward pass
             optimizer.zero_grad()
             total_loss_value.backward()
-            
+
             optimizer.step()
-            
+
             # Track metrics
             total_loss += loss.item()
-            predictions = logits.argmax(dim=1)
             correct += (predictions == labels).sum().item()
             total += labels.size(0)
-            
+
             # Update progress bar
             progress_bar.set_postfix({
                 'loss': f"{loss.item():.4f}",
                 'acc': f"{100 * correct / total:.2f}%"
             })
-        
+
         avg_loss = total_loss / len(train_loader)
         accuracy = 100 * correct / total
-        
+
         return avg_loss, accuracy
-    
+
+    def _forward_caption_mode(self,
+                             images: List,
+                             texts: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass for caption-based training mode.
+
+        Args:
+            images: List of PIL images
+            texts: List of caption strings (one per image)
+
+        Returns:
+            Tuple of (image_embeds, text_embeds) - both normalized
+        """
+        # Get image embeddings
+        inputs = self.model._safe_process_images(self.model.processor, images, self.device)
+        image_embeds_output = self.model.clip_model.get_image_features(**inputs)
+
+        # Handle BaseModelOutputWithPooling format
+        if isinstance(image_embeds_output, torch.Tensor):
+            image_embeds = image_embeds_output
+        else:
+            image_embeds = image_embeds_output.pooler_output if hasattr(image_embeds_output, 'pooler_output') else image_embeds_output[0]
+
+        # Normalize image embeddings
+        image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
+
+        # Get text embeddings from captions (with frozen text encoder)
+        text_inputs = self.model.processor(text=texts, return_tensors="pt", padding=True, truncation=True).to(self.device)
+
+        with torch.no_grad():
+            text_embeds_output = self.model.clip_model.get_text_features(**text_inputs)
+
+            # Handle BaseModelOutputWithPooling format
+            if isinstance(text_embeds_output, torch.Tensor):
+                text_embeds = text_embeds_output
+            else:
+                text_embeds = text_embeds_output.pooler_output if hasattr(text_embeds_output, 'pooler_output') else text_embeds_output[0]
+
+            # Normalize text embeddings
+            text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
+
+        return image_embeds, text_embeds
+
     def _validate_epoch(self,
                        val_loader: Any,
                        class_text_features: torch.Tensor,

@@ -200,6 +200,9 @@ training:
   mixed_precision: false
   gradient_accumulation_steps: 1
 
+  # Text source for training: "labels" or "captions"
+  text_source: "labels"
+
 # Logging and monitoring
 logging:
   level: "INFO"

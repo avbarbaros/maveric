@@ -556,7 +556,8 @@ def create_training_config(config: Dict, args) -> TrainingConfig:
         mixed_precision=training_cfg.get('mixed_precision', False),
         gradient_accumulation_steps=training_cfg.get('gradient_accumulation_steps', 1),
         checkpoint_selection_metric=training_cfg.get('checkpoint_selection_metric', 'val_acc'),
-        evaluate_test_each_epoch=training_cfg.get('evaluate_test_each_epoch', False)
+        evaluate_test_each_epoch=training_cfg.get('evaluate_test_each_epoch', False),
+        text_source=training_cfg.get('text_source', 'labels')
     )
 
 

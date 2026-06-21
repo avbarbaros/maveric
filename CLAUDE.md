@@ -4,6 +4,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### June 21, 2026 - Caption-Based Training Mode (NEW FEATURE)
+
+**Enhancement: Alternative Text Source for CLIP Fine-Tuning**:
+- **Purpose**: Allow switching between class labels and original image captions during model customization
+- **Configuration**: New `text_source` parameter in `TrainingConfig` with two modes:
+  - `"labels"` (default): Use class names converted to prompts (e.g., "a photo of a airplane")
+  - `"captions"`: Use original caption from `text` field (e.g., "a red airplane flying in the sky")
+- **Implementation**: Config-driven mode selection with InfoNCE contrastive loss for caption mode
+- **Key Benefits**:
+  - Zero breaking changes - default behavior unchanged
+  - Backward compatible - existing configs work without modification
+  - Richer semantic information in caption mode
+  - Single config parameter switches entire training pipeline
+- **Files Added**:
+  - [losses.py](maveric/customization/losses.py) - InfoNCELoss for contrastive learning
+- **Files Modified**:
+  - [config.py](maveric/config.py#L323) - Added `text_source` parameter to TrainingConfig
+  - [maveric_config.yaml](experiments/maveric_config.yaml#L203-L204) - Added text_source configuration option
+  - [03_model_customization.py](experiments/03_model_customization.py#L561) - Extract text_source from config
+  - [model_customizer.py](maveric/customization/model_customizer.py#L1067) - text_source parameter in LAIONCustomDataset
+  - [model_customizer.py](maveric/customization/model_customizer.py#L270) - Wire text_source through _prepare_data
+  - [training.py](maveric/customization/training.py#L76-L115) - Caption mode detection and InfoNCE loss
+  - [training.py](maveric/customization/training.py#L251-L315) - Modified _train_epoch for both modes
+  - [training.py](maveric/customization/training.py#L318-L366) - Added _forward_caption_mode method
+
+**Training Mode Characteristics**:
+- **Label Mode** (default, `text_source: "labels"`):
+  - Pre-computes text features for all classes using templates
+  - Uses CrossEntropyLoss for classification
+  - Text encoder remains frozen (locked-text tuning)
+  - Consistent with zero-shot CLIP evaluation
+  - Best for classification tasks with clean class names
+
+- **Caption Mode** (`text_source: "captions"`):
+  - Computes text features per-batch from sample captions
+  - Uses InfoNCELoss for contrastive learning (CLIP-style)
+  - Text encoder remains frozen (locked-text tuning)
+  - Learns from natural language descriptions
+  - Best for fine-grained visual understanding
+  - Expected ~20-30% slower due to per-batch text encoding
+
+**Usage**:
+```yaml
+# maveric_config.yaml
+training:
+  text_source: "labels"    # Default: label-based prompts
+  # OR
+  text_source: "captions"  # Alternative: caption-based contrastive learning
+```
+
+**Important Notes**:
+- Validation and test evaluation always use label-based evaluation for consistency
+- Text encoder remains frozen in both modes (only vision encoder is fine-tuned)
+- Caption mode uses symmetric InfoNCE loss (image-to-text + text-to-image)
+- Training data must have valid `text` field for caption mode
+- No changes needed to existing datasets or workflows
+
 ### March 26, 2026 - Hu Moments Alternative Scoring Mode (NEW FEATURE)
 
 **Enhancement: Shape-Based Similarity Scoring via Hu Invariant Moments**:

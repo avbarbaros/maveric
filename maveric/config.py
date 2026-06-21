@@ -319,7 +319,10 @@ class TrainingConfig:
     # Advanced options
     mixed_precision: bool = False
     gradient_accumulation_steps: int = 1
-    
+
+    # Text source for training
+    text_source: str = "labels"  # "labels" or "captions"
+
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         return asdict(self)
@@ -351,6 +354,8 @@ class TrainingConfig:
         if self.checkpoint_selection_metric == "val_acc" and not self.use_validation:
             warnings.append("checkpoint_selection_metric='val_acc' requires use_validation=True")
 
+        if self.text_source not in ["labels", "captions"]:
+            warnings.append(f"Unknown text_source: {self.text_source}. Must be 'labels' or 'captions'")
 
         return warnings
 

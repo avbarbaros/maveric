@@ -265,7 +265,8 @@ class ModelCustomizer(BaseComponent):
                 'downsample_scale': training_config.domain_downsample_scale_range
             },
             cache_dir=self.cache_base_dir,
-            training_data_path=quality_result.source_path  # Use dataset-specific images folder
+            training_data_path=quality_result.source_path,  # Use dataset-specific images folder
+            text_source=training_config.text_source
         )
 
         # Log augmentation and domain adaptation settings
@@ -1063,7 +1064,8 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
                  domain_adaptation_config: Optional[Dict] = None,
                  cache_dir: Optional[str] = None,
                  training_data_path: Optional[str] = None,
-                 skip_validation: bool = False):
+                 skip_validation: bool = False,
+                 text_source: str = "labels"):
         """
         Initialize dataset.
 
@@ -1078,6 +1080,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
             cache_dir: Directory for caching images (global cache)
             training_data_path: Path to training data JSON (for dataset-specific cache)
             skip_validation: Skip automatic validation (caller will validate manually)
+            text_source: "labels" (use class labels as prompts) or "captions" (use 'text' field)
         """
         self.samples = samples
         self.class_names = class_names
@@ -1087,6 +1090,7 @@ class LAIONCustomDataset(torch.utils.data.Dataset):
         self.class_to_idx = {(name[0] if isinstance(name, list) else name): i for i, name in enumerate(class_names)}
         self.normalized_to_idx = {self._normalize_label(name): i for i, name in enumerate(class_names)}
         self.processor = processor
+        self.text_source = text_source
 
         # Setup augmentation configuration
         self.use_augmentation = use_augmentation
