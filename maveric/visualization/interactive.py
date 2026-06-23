@@ -1382,9 +1382,9 @@ class MAVERICInteractiveQualityControl:
         if not hasattr(self, 'class_based_filtered_data'):
             self.class_based_filtered_data = {}  # Store filtered data per class
 
-        # Method selector (Mahalanobis or Euclidean)
+        # Method selector (Mahalanobis, Euclidean, or Random)
         method_selector = widgets.Dropdown(
-            options=['Mahalanobis', 'Euclidean'],
+            options=['Mahalanobis', 'Euclidean', 'Random'],
             value='Mahalanobis',
             description='Method:',
             layout=widgets.Layout(width='250px'),
@@ -1586,8 +1586,29 @@ class MAVERICInteractiveQualityControl:
                 count = int(total_samples * keep_percentile_text.value / 100.0)
                 keep_count_text.value = max(1, count)
 
+        # Update UI when method changes
+        def on_method_change(change):
+            method = change['new']
+            if method == 'Random':
+                # Hide percentile controls for Random method
+                weighted_percentile_text.layout.visibility = 'hidden'
+                consistency_percentile_text.layout.visibility = 'hidden'
+                keep_percentile_text.layout.visibility = 'hidden'
+                # Keep count is still needed for Random
+                keep_count_text.layout.visibility = 'visible'
+                # Update status message
+                status_display.value = "<p style='color:#666; font-style:italic;'>Set sample count and click Apply for random sampling</p>"
+            else:
+                # Show percentile controls for Mahalanobis and Euclidean methods
+                weighted_percentile_text.layout.visibility = 'visible'
+                consistency_percentile_text.layout.visibility = 'visible'
+                keep_percentile_text.layout.visibility = 'visible'
+                keep_count_text.layout.visibility = 'visible'
+                status_display.value = "<p style='color:#666; font-style:italic;'>Configure percentiles and click Apply to filter data</p>"
+
         mode_selector.observe(on_mode_change, names='value')
         class_selector.observe(on_class_change, names='value')
+        method_selector.observe(on_method_change, names='value')
 
         # Callback for apply button
         def on_apply_clicked(b):
@@ -1633,7 +1654,9 @@ class MAVERICInteractiveQualityControl:
                             return
 
                         new_count = len(self.filtered_data)
-                        self._plot_mahalanobis_analysis()
+                        # Only plot for distance-based methods (not Random)
+                        if method != 'Random':
+                            self._plot_mahalanobis_analysis()
                         print("\n")
                         self._show_mahalanobis_statistics(original_count, new_count, keep_percentage)
 
@@ -1758,8 +1781,9 @@ class MAVERICInteractiveQualityControl:
                                 status_display.value = "<p style='color:red;'>❌ Filter failed. Check error messages above.</p>"
                                 return
 
-                            # Plot class-specific analysis
-                            self._plot_mahalanobis_analysis_class_based(selected_class)
+                            # Plot class-specific analysis (only for distance-based methods)
+                            if method != 'Random':
+                                self._plot_mahalanobis_analysis_class_based(selected_class)
 
                             status_display.value = (
                                 f"<p style='color:green;'>✅ Filter applied for class '{selected_class}'<br>"
@@ -2036,15 +2060,15 @@ class MAVERICInteractiveQualityControl:
 
     def _apply_mahalanobis_filter(self, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95, per_class=False, method='Mahalanobis'):
         """
-        Apply distance-based filtering to select samples closest to ideal point.
+        Apply distance-based filtering to select samples closest to ideal point, or random sampling.
 
         Args:
-            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified.
+            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified or if method is 'Random'.
             keep_count: Exact number of samples to keep (e.g., 350 for exactly 350 samples). Takes priority over keep_percentile.
-            weighted_percentile: Percentile for weighted_class_score ideal point (default: 95)
-            consistency_percentile: Percentile for consistency ideal point (default: 95)
+            weighted_percentile: Percentile for weighted_class_score ideal point (default: 95). Ignored for 'Random' method.
+            consistency_percentile: Percentile for consistency ideal point (default: 95). Ignored for 'Random' method.
             per_class: If True, apply filtering separately for each class
-            method: Distance metric to use - 'Mahalanobis' or 'Euclidean' (default: 'Mahalanobis')
+            method: Filtering method - 'Mahalanobis', 'Euclidean', or 'Random' (default: 'Mahalanobis')
 
         Returns:
             Dictionary with filter statistics, or None on error
@@ -2053,29 +2077,100 @@ class MAVERICInteractiveQualityControl:
             print("❌ No data available for filtering")
             return None
 
-        # Check required columns
-        if 'weighted_class_score' not in self.filtered_data.columns:
-            print("❌ 'weighted_class_score' column not found")
-            print("💡 This column is created when you apply quality thresholds.")
-            print("   Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
-            return None
-        if 'consistency' not in self.filtered_data.columns:
-            print("❌ 'consistency' column not found")
-            print("💡 This column is created when you calculate best class scores.")
-            print("   Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
-            return None
+        # For Random method, we don't need quality score columns
+        if method != 'Random':
+            # Check required columns
+            if 'weighted_class_score' not in self.filtered_data.columns:
+                print("❌ 'weighted_class_score' column not found")
+                print("💡 This column is created when you apply quality thresholds.")
+                print("   Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
+                return None
+            if 'consistency' not in self.filtered_data.columns:
+                print("❌ 'consistency' column not found")
+                print("💡 This column is created when you calculate best class scores.")
+                print("   Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
+                return None
 
         # Store backup
         self.data_before_mahalanobis = self.filtered_data.copy()
 
         # Extract metrics
         df = self.filtered_data.copy()
-        weighted = df['weighted_class_score'].values
-        consistency = df['consistency'].values
 
         # Require minimum samples
         if len(df) < 100:
             print(f"⚠️ Warning: Only {len(df)} samples available. Results may be unstable.")
+
+        # Handle Random sampling method
+        if method == 'Random':
+            print(f"🎲 Using Random sampling method")
+
+            # Apply filtering
+            if per_class and 'label' in df.columns:
+                # Per-class random sampling
+                print(f"📊 Applying per-class random sampling...")
+                filtered_dfs = []
+
+                for class_name in df['label'].unique():
+                    class_df = df[df['label'] == class_name].copy()
+
+                    # Calculate how many to keep
+                    if keep_count is not None and keep_count > 0:
+                        n_keep = min(keep_count, len(class_df))
+                    else:
+                        n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+
+                    # Random sample
+                    if n_keep < len(class_df):
+                        filtered_class = class_df.sample(n=n_keep, random_state=42)
+                    else:
+                        filtered_class = class_df
+
+                    filtered_dfs.append(filtered_class)
+
+                filtered_df = pd.concat(filtered_dfs, ignore_index=True)
+            else:
+                # Global random sampling
+                if keep_count is not None and keep_count > 0:
+                    print(f"📊 Applying global random sampling (keeping {keep_count:,} samples)...")
+                    n_keep = min(keep_count, len(df))
+                else:
+                    print(f"📊 Applying global random sampling...")
+                    n_keep = max(1, int(len(df) * keep_percentile / 100))
+
+                # Random sample
+                if n_keep < len(df):
+                    filtered_df = df.sample(n=n_keep, random_state=42)
+                else:
+                    filtered_df = df
+
+            # Update filtered data
+            self.filtered_data = filtered_df
+
+            # Store filter info (minimal for random - no distances, ideal points, etc.)
+            self.mahalanobis_filter_info = {
+                'ideal_point': None,
+                'covariance': None,
+                'covariance_inv': None,
+                'threshold': None,
+                'correlation': None,
+                'all_samples': None,
+                'selected_mask': None,
+                'keep_percentile': keep_percentile if keep_count is None or keep_count <= 0 else (len(filtered_df) / len(df) * 100),
+                'keep_count': keep_count,
+                'per_class': per_class,
+                'method': method
+            }
+
+            return {
+                'samples_before': len(df),
+                'samples_after': len(filtered_df),
+                'threshold': None
+            }
+
+        # For distance-based methods (Mahalanobis, Euclidean)
+        weighted = df['weighted_class_score'].values
+        consistency = df['consistency'].values
 
         # Calculate ideal point using user-specified percentiles
         ideal_point = np.array([
@@ -2219,6 +2314,12 @@ class MAVERICInteractiveQualityControl:
             method = info.get('method', 'Mahalanobis')
             title = f'Class: {class_name} - {method} Selection'
 
+        # Check if this is Random method (no plotting data available)
+        method = info.get('method', 'Mahalanobis')
+        if method == 'Random':
+            print("ℹ️  Random sampling does not generate plots (no distance-based selection)")
+            return None
+
         # Extract data from info
         ideal_point = info['ideal_point']
         covariance = info['covariance']
@@ -2341,15 +2442,15 @@ class MAVERICInteractiveQualityControl:
 
     def _apply_mahalanobis_filter_class_based(self, class_name, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95, method='Mahalanobis'):
         """
-        Apply distance-based filtering to a specific class only.
+        Apply distance-based filtering or random sampling to a specific class only.
 
         Args:
             class_name: Name of the class to filter
-            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified.
+            keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified or if method is 'Random'.
             keep_count: Exact number of samples to keep (e.g., 350 for exactly 350 samples). Takes priority over keep_percentile.
-            weighted_percentile: Percentile for weighted_class_score ideal point
-            consistency_percentile: Percentile for consistency ideal point
-            method: Distance metric to use - 'Mahalanobis' or 'Euclidean' (default: 'Mahalanobis')
+            weighted_percentile: Percentile for weighted_class_score ideal point. Ignored for 'Random' method.
+            consistency_percentile: Percentile for consistency ideal point. Ignored for 'Random' method.
+            method: Filtering method - 'Mahalanobis', 'Euclidean', or 'Random' (default: 'Mahalanobis')
 
         Returns:
             Dictionary with filter statistics, or None on error
@@ -2358,15 +2459,18 @@ class MAVERICInteractiveQualityControl:
             print("❌ No data available for filtering")
             return None
 
-        # Check required columns
-        if 'weighted_class_score' not in self.filtered_data.columns:
-            print("❌ 'weighted_class_score' column not found")
-            print("💡 Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
-            return None
-        if 'consistency' not in self.filtered_data.columns:
-            print("❌ 'consistency' column not found")
-            print("💡 Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
-            return None
+        # For Random method, we don't need quality score columns
+        if method != 'Random':
+            # Check required columns
+            if 'weighted_class_score' not in self.filtered_data.columns:
+                print("❌ 'weighted_class_score' column not found")
+                print("💡 Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
+                return None
+            if 'consistency' not in self.filtered_data.columns:
+                print("❌ 'consistency' column not found")
+                print("💡 Please go to Tab 1 (Quality Thresholds) and click 'Apply Settings' first.")
+                return None
+
         if 'label' not in self.filtered_data.columns:
             print("❌ 'label' column not found")
             return None
@@ -2385,6 +2489,52 @@ class MAVERICInteractiveQualityControl:
             print(f"❌ No samples found for class '{class_name}'")
             return None
 
+        # Handle Random sampling method
+        if method == 'Random':
+            print(f"📊 Filtering class '{class_name}' ({len(class_df):,} samples) using Random sampling")
+
+            # Calculate how many to keep
+            if keep_count is not None and keep_count > 0:
+                n_keep = min(keep_count, len(class_df))
+                print(f"🎯 Keeping exactly {n_keep:,} samples (requested: {keep_count:,})")
+            else:
+                n_keep = max(1, int(len(class_df) * keep_percentile / 100))
+                print(f"🎯 Keeping top {keep_percentile}% ({n_keep:,} samples)")
+
+            # Random sample
+            if n_keep < len(class_df):
+                filtered_class_df = class_df.sample(n=n_keep, random_state=42)
+            else:
+                filtered_class_df = class_df
+
+            # Store filtered data for this class
+            self.class_based_filtered_data[class_name] = filtered_class_df
+
+            # Store filter info for plotting (minimal for random)
+            self.mahalanobis_filter_info_class = {
+                'class_name': class_name,
+                'ideal_point': None,
+                'covariance': None,
+                'covariance_inv': None,
+                'threshold': None,
+                'correlation': None,
+                'all_samples': None,
+                'selected_mask': None,
+                'keep_percentile': keep_percentile if keep_count is None or keep_count <= 0 else (len(filtered_class_df) / len(class_df) * 100),
+                'keep_count': keep_count,
+                'weighted_percentile': weighted_percentile,
+                'consistency_percentile': consistency_percentile,
+                'method': method
+            }
+
+            print(f"✅ Kept {len(filtered_class_df):,} / {len(class_df):,} samples for class '{class_name}'")
+
+            return {
+                'samples_before': len(class_df),
+                'samples_after': len(filtered_class_df)
+            }
+
+        # For distance-based methods (Mahalanobis, Euclidean)
         print(f"📊 Filtering class '{class_name}' ({len(class_df):,} samples) using {method} distance")
 
         # Extract metrics
