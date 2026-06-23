@@ -1377,10 +1377,19 @@ class MAVERICInteractiveQualityControl:
         return tab_content
 
     def _create_mahalanobis_tab(self):
-        """Create Mahalanobis distance filtering tab with Global and Class-Based modes"""
+        """Create quality distance filtering tab with Global and Class-Based modes"""
         # Initialize class-based filtered data storage
         if not hasattr(self, 'class_based_filtered_data'):
             self.class_based_filtered_data = {}  # Store filtered data per class
+
+        # Method selector (Mahalanobis or Euclidean)
+        method_selector = widgets.Dropdown(
+            options=['Mahalanobis', 'Euclidean'],
+            value='Mahalanobis',
+            description='Method:',
+            layout=widgets.Layout(width='250px'),
+            style={'description_width': '60px'}
+        )
 
         # Mode selector
         mode_selector = widgets.RadioButtons(
@@ -1586,6 +1595,7 @@ class MAVERICInteractiveQualityControl:
                 clear_output(wait=True)
                 try:
                     mode = mode_selector.value
+                    method = method_selector.value
                     keep_percentage = keep_percentile_text.value
                     keep_count = keep_count_text.value
                     weighted_pct = weighted_percentile_text.value
@@ -1598,23 +1608,24 @@ class MAVERICInteractiveQualityControl:
                     if mode == 'Global':
                         # Global mode - filter all data
                         if self.data_before_mahalanobis is not None:
-                            print("🔄 Resetting to data before previous Mahalanobis filter...")
+                            print(f"🔄 Resetting to data before previous {method} filter...")
                             self.filtered_data = self.data_before_mahalanobis.copy()
 
                         original_count = len(self.filtered_data)
 
                         # Determine display message based on keep_count
                         if keep_count > 0:
-                            status_display.value = f"<p style='color:blue;'>⏳ Applying global Mahalanobis filter (keeping {keep_count:,} samples)...</p>"
+                            status_display.value = f"<p style='color:blue;'>⏳ Applying global {method} filter (keeping {keep_count:,} samples)...</p>"
                         else:
-                            status_display.value = f"<p style='color:blue;'>⏳ Applying global Mahalanobis filter ({keep_percentage}%)...</p>"
+                            status_display.value = f"<p style='color:blue;'>⏳ Applying global {method} filter ({keep_percentage}%)...</p>"
 
                         result = self._apply_mahalanobis_filter(
                             keep_percentile=keep_percentage,
                             keep_count=keep_count,
                             weighted_percentile=weighted_pct,
                             consistency_percentile=consistency_pct,
-                            per_class=False
+                            per_class=False,
+                            method=method
                         )
 
                         if result is None:
@@ -1677,7 +1688,8 @@ class MAVERICInteractiveQualityControl:
                                         keep_percentile=keep_percentage,
                                         keep_count=keep_count,
                                         weighted_percentile=weighted_pct,
-                                        consistency_percentile=consistency_pct
+                                        consistency_percentile=consistency_pct,
+                                        method=method
                                     )
 
                                     if result is not None:
@@ -1728,9 +1740,9 @@ class MAVERICInteractiveQualityControl:
                             # Single class mode (existing logic)
                             # Determine display message based on keep_count
                             if keep_count > 0:
-                                status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}' (keeping {keep_count:,} samples)...</p>"
+                                status_display.value = f"<p style='color:blue;'>⏳ Applying {method} filter for class '{selected_class}' (keeping {keep_count:,} samples)...</p>"
                             else:
-                                status_display.value = f"<p style='color:blue;'>⏳ Applying Mahalanobis filter for class '{selected_class}'...</p>"
+                                status_display.value = f"<p style='color:blue;'>⏳ Applying {method} filter for class '{selected_class}'...</p>"
 
                             # Filter for selected class only
                             result = self._apply_mahalanobis_filter_class_based(
@@ -1738,7 +1750,8 @@ class MAVERICInteractiveQualityControl:
                                 keep_percentile=keep_percentage,
                                 keep_count=keep_count,
                                 weighted_percentile=weighted_pct,
-                                consistency_percentile=consistency_pct
+                                consistency_percentile=consistency_pct,
+                                method=method
                             )
 
                             if result is None:
@@ -1994,7 +2007,7 @@ class MAVERICInteractiveQualityControl:
 
         # Layout
         tab_content = widgets.VBox([
-            widgets.HBox([mode_selector, class_selector], layout=widgets.Layout(margin='5px 0')),
+            widgets.HBox([method_selector, mode_selector, class_selector], layout=widgets.Layout(margin='5px 0')),
             widgets.HBox([
                 weighted_percentile_text,
                 consistency_percentile_text
@@ -2021,9 +2034,9 @@ class MAVERICInteractiveQualityControl:
 
         return tab_content
 
-    def _apply_mahalanobis_filter(self, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95, per_class=False):
+    def _apply_mahalanobis_filter(self, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95, per_class=False, method='Mahalanobis'):
         """
-        Apply Mahalanobis distance filtering to select samples closest to ideal point.
+        Apply distance-based filtering to select samples closest to ideal point.
 
         Args:
             keep_percentile: Percentage of samples to keep (e.g., 30 for top 30%). Ignored if keep_count is specified.
@@ -2031,6 +2044,7 @@ class MAVERICInteractiveQualityControl:
             weighted_percentile: Percentile for weighted_class_score ideal point (default: 95)
             consistency_percentile: Percentile for consistency ideal point (default: 95)
             per_class: If True, apply filtering separately for each class
+            method: Distance metric to use - 'Mahalanobis' or 'Euclidean' (default: 'Mahalanobis')
 
         Returns:
             Dictionary with filter statistics, or None on error
@@ -2071,24 +2085,36 @@ class MAVERICInteractiveQualityControl:
 
         print(f"📍 Ideal point: weighted={ideal_point[0]:.3f} ({weighted_percentile}th %ile), consistency={ideal_point[1]:.3f} ({consistency_percentile}th %ile)")
 
-        # Compute covariance matrix
+        # Compute data matrix
         data_matrix = np.column_stack([weighted, consistency])
-        covariance = np.cov(data_matrix.T)
 
-        # Handle singular covariance with regularization
-        try:
-            covariance_inv = np.linalg.inv(covariance)
-        except np.linalg.LinAlgError:
-            print("⚠️ Singular covariance matrix detected. Adding regularization...")
-            reg = 1e-6 * np.eye(2)
-            covariance_inv = np.linalg.inv(covariance + reg)
-            covariance = covariance + reg
+        # Calculate distances based on selected method
+        if method == 'Euclidean':
+            # Euclidean distance from ideal point
+            distances = np.sqrt(np.sum((data_matrix - ideal_point) ** 2, axis=1))
+            covariance = None
+            covariance_inv = None
+            print(f"📏 Using Euclidean distance metric")
+        else:
+            # Mahalanobis distance (default)
+            # Compute covariance matrix
+            covariance = np.cov(data_matrix.T)
 
-        # Calculate Mahalanobis distances
-        distances = np.array([
-            mahalanobis(x, ideal_point, covariance_inv)
-            for x in data_matrix
-        ])
+            # Handle singular covariance with regularization
+            try:
+                covariance_inv = np.linalg.inv(covariance)
+            except np.linalg.LinAlgError:
+                print("⚠️ Singular covariance matrix detected. Adding regularization...")
+                reg = 1e-6 * np.eye(2)
+                covariance_inv = np.linalg.inv(covariance + reg)
+                covariance = covariance + reg
+
+            # Calculate Mahalanobis distances
+            distances = np.array([
+                mahalanobis(x, ideal_point, covariance_inv)
+                for x in data_matrix
+            ])
+            print(f"📏 Using Mahalanobis distance metric")
 
         # Store all samples with their distances (for plotting)
         all_samples_info = {
@@ -2128,10 +2154,10 @@ class MAVERICInteractiveQualityControl:
             # Global filtering
             # Use keep_count if specified, otherwise use keep_percentile
             if keep_count is not None and keep_count > 0:
-                print(f"📊 Applying global Mahalanobis filtering (keeping {keep_count:,} samples)...")
+                print(f"📊 Applying global {method} filtering (keeping {keep_count:,} samples)...")
                 n_keep = min(keep_count, len(df))
             else:
-                print(f"📊 Applying global Mahalanobis filtering...")
+                print(f"📊 Applying global {method} filtering...")
                 n_keep = max(1, int(len(df) * keep_percentile / 100))
 
             threshold = np.partition(distances, n_keep-1)[n_keep-1] if n_keep < len(distances) else distances.max()
@@ -2156,7 +2182,8 @@ class MAVERICInteractiveQualityControl:
             'selected_mask': mask if not per_class else None,
             'keep_percentile': keep_percentile if keep_count is None or keep_count <= 0 else (len(filtered_df) / len(df) * 100),
             'keep_count': keep_count,
-            'per_class': per_class
+            'per_class': per_class,
+            'method': method
         }
 
         return {
@@ -2167,7 +2194,7 @@ class MAVERICInteractiveQualityControl:
 
     def _create_mahalanobis_figure(self, mode='Global', class_name=None):
         """
-        Create Mahalanobis plot figure without displaying it.
+        Create quality filter plot figure without displaying it.
 
         Args:
             mode: 'Global' or 'Class-Based'
@@ -2181,14 +2208,16 @@ class MAVERICInteractiveQualityControl:
             if not hasattr(self, 'mahalanobis_filter_info') or not self.mahalanobis_filter_info:
                 return None
             info = self.mahalanobis_filter_info
-            title = 'Joint Distribution with Mahalanobis Selection Boundary'
+            method = info.get('method', 'Mahalanobis')
+            title = f'Joint Distribution with {method} Selection Boundary'
         else:  # Class-Based
             if not hasattr(self, 'mahalanobis_filter_info_class') or not self.mahalanobis_filter_info_class:
                 return None
             info = self.mahalanobis_filter_info_class
             if info['class_name'] != class_name:
                 return None
-            title = f'Class: {class_name} - Mahalanobis Selection'
+            method = info.get('method', 'Mahalanobis')
+            title = f'Class: {class_name} - {method} Selection'
 
         # Extract data from info
         ideal_point = info['ideal_point']
@@ -2226,27 +2255,42 @@ class MAVERICInteractiveQualityControl:
                        c='red', marker='*', s=300, label='Ideal Point',
                        edgecolors='darkred', linewidth=1.5, zorder=10)
 
-        # Plot Mahalanobis ellipse
-        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
-        order = eigenvalues.argsort()[::-1]
-        eigenvalues = eigenvalues[order]
-        eigenvectors = eigenvectors[:, order]
+        # Plot selection boundary based on method
+        method = info.get('method', 'Mahalanobis')
+        if method == 'Euclidean':
+            # For Euclidean distance, plot a circle
+            if info['threshold'] is not None:
+                radius = info['threshold']
+            else:
+                radius = np.median(all_distances[selected_mask])
 
-        angle = np.degrees(np.arctan2(*eigenvectors[:, 0][::-1]))
-
-        # Use the threshold distance for ellipse size
-        if info['threshold'] is not None:
-            n_std = info['threshold']
+            circle = plt.Circle(ideal_point, radius,
+                              edgecolor='red', facecolor='none',
+                              linewidth=2, linestyle='--', label='Selection Boundary')
+            ax_main.add_patch(circle)
         else:
-            n_std = np.median(all_distances[selected_mask])
+            # For Mahalanobis distance, plot an ellipse
+            if covariance is not None:
+                eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+                order = eigenvalues.argsort()[::-1]
+                eigenvalues = eigenvalues[order]
+                eigenvectors = eigenvectors[:, order]
 
-        width = 2 * n_std * np.sqrt(eigenvalues[0])
-        height = 2 * n_std * np.sqrt(eigenvalues[1])
+                angle = np.degrees(np.arctan2(*eigenvectors[:, 0][::-1]))
 
-        ellipse = Ellipse(xy=ideal_point, width=width, height=height,
-                         angle=angle, edgecolor='red', facecolor='none',
-                         linewidth=2, linestyle='--', label='Selection Boundary')
-        ax_main.add_patch(ellipse)
+                # Use the threshold distance for ellipse size
+                if info['threshold'] is not None:
+                    n_std = info['threshold']
+                else:
+                    n_std = np.median(all_distances[selected_mask])
+
+                width = 2 * n_std * np.sqrt(eigenvalues[0])
+                height = 2 * n_std * np.sqrt(eigenvalues[1])
+
+                ellipse = Ellipse(xy=ideal_point, width=width, height=height,
+                                 angle=angle, edgecolor='red', facecolor='none',
+                                 linewidth=2, linestyle='--', label='Selection Boundary')
+                ax_main.add_patch(ellipse)
 
         # Main plot formatting
         ax_main.set_xlabel('Weighted Class Score', fontsize=11)
@@ -2295,9 +2339,9 @@ class MAVERICInteractiveQualityControl:
         else:
             print("📋 Class Distribution: No label column available")
 
-    def _apply_mahalanobis_filter_class_based(self, class_name, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95):
+    def _apply_mahalanobis_filter_class_based(self, class_name, keep_percentile=None, keep_count=None, weighted_percentile=95, consistency_percentile=95, method='Mahalanobis'):
         """
-        Apply Mahalanobis distance filtering to a specific class only.
+        Apply distance-based filtering to a specific class only.
 
         Args:
             class_name: Name of the class to filter
@@ -2305,6 +2349,7 @@ class MAVERICInteractiveQualityControl:
             keep_count: Exact number of samples to keep (e.g., 350 for exactly 350 samples). Takes priority over keep_percentile.
             weighted_percentile: Percentile for weighted_class_score ideal point
             consistency_percentile: Percentile for consistency ideal point
+            method: Distance metric to use - 'Mahalanobis' or 'Euclidean' (default: 'Mahalanobis')
 
         Returns:
             Dictionary with filter statistics, or None on error
@@ -2340,7 +2385,7 @@ class MAVERICInteractiveQualityControl:
             print(f"❌ No samples found for class '{class_name}'")
             return None
 
-        print(f"📊 Filtering class '{class_name}' ({len(class_df):,} samples)")
+        print(f"📊 Filtering class '{class_name}' ({len(class_df):,} samples) using {method} distance")
 
         # Extract metrics
         weighted = class_df['weighted_class_score'].values
@@ -2355,24 +2400,34 @@ class MAVERICInteractiveQualityControl:
         print(f"📍 Ideal point: weighted={ideal_point[0]:.3f} ({weighted_percentile}th %ile), "
               f"consistency={ideal_point[1]:.3f} ({consistency_percentile}th %ile)")
 
-        # Compute covariance matrix
+        # Compute data matrix
         data_matrix = np.column_stack([weighted, consistency])
-        covariance = np.cov(data_matrix.T)
 
-        # Handle singular covariance with regularization
-        try:
-            covariance_inv = np.linalg.inv(covariance)
-        except np.linalg.LinAlgError:
-            print("⚠️ Singular covariance matrix detected. Adding regularization...")
-            reg = 1e-6 * np.eye(2)
-            covariance_inv = np.linalg.inv(covariance + reg)
-            covariance = covariance + reg
+        # Calculate distances based on selected method
+        if method == 'Euclidean':
+            # Euclidean distance from ideal point
+            distances = np.sqrt(np.sum((data_matrix - ideal_point) ** 2, axis=1))
+            covariance = None
+            covariance_inv = None
+        else:
+            # Mahalanobis distance (default)
+            # Compute covariance matrix
+            covariance = np.cov(data_matrix.T)
 
-        # Calculate Mahalanobis distances
-        distances = np.array([
-            mahalanobis(x, ideal_point, covariance_inv)
-            for x in data_matrix
-        ])
+            # Handle singular covariance with regularization
+            try:
+                covariance_inv = np.linalg.inv(covariance)
+            except np.linalg.LinAlgError:
+                print("⚠️ Singular covariance matrix detected. Adding regularization...")
+                reg = 1e-6 * np.eye(2)
+                covariance_inv = np.linalg.inv(covariance + reg)
+                covariance = covariance + reg
+
+            # Calculate Mahalanobis distances
+            distances = np.array([
+                mahalanobis(x, ideal_point, covariance_inv)
+                for x in data_matrix
+            ])
 
         # Store all samples with their distances (for plotting)
         all_samples_info = {
@@ -2414,7 +2469,8 @@ class MAVERICInteractiveQualityControl:
             'keep_percentile': keep_percentile if keep_count is None or keep_count <= 0 else (len(filtered_class_df) / len(class_df) * 100),
             'keep_count': keep_count,
             'weighted_percentile': weighted_percentile,
-            'consistency_percentile': consistency_percentile
+            'consistency_percentile': consistency_percentile,
+            'method': method
         }
 
         print(f"✅ Kept {len(filtered_class_df):,} / {len(class_df):,} samples for class '{class_name}'")
@@ -3011,21 +3067,21 @@ class MAVERICInteractiveQualityControl:
         # Create EfficientNet Prediction tab content
         efficientnet_tab_content = self._create_efficientnet_tab()
 
-        # Create Mahalanobis Filter tab content
-        mahalanobis_tab_content = self._create_mahalanobis_tab()
+        # Create Quality Filter tab content
+        quality_filter_tab_content = self._create_mahalanobis_tab()
 
         # Create tabs
         tab = widgets.Tab()
         tab.children = [
             widgets.VBox(list(weight_widgets.values())),
             widgets.VBox(list(threshold_containers.values())),
-            mahalanobis_tab_content,
+            quality_filter_tab_content,
             efficientnet_tab_content,
             balance_tab_content
         ]
         tab.set_title(0, 'Metric Weights')
         tab.set_title(1, 'Quality Thresholds')
-        tab.set_title(2, 'Mahalanobis Filter')
+        tab.set_title(2, 'Quality Filter')
         tab.set_title(3, 'EfficientNet Prediction')
         tab.set_title(4, 'Balance Settings')
         
