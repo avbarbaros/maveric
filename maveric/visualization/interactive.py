@@ -106,6 +106,9 @@ class MAVERICInteractiveQualityControl:
             'balance_enable_oversampling': False
         }
 
+        # Grid visualization setting (disabled by default for performance)
+        self.save_grid_visualization = False
+
         # Mahalanobis filter state
         self.mahalanobis_filter_info = {}  # Store filter parameters for plotting
         self.data_before_mahalanobis = None  # Backup for reference
@@ -190,6 +193,11 @@ class MAVERICInteractiveQualityControl:
                 self.balance_settings['balance_min_samples'] = config['balance_min_samples']
             if 'balance_enable_oversampling' in config:
                 self.balance_settings['balance_enable_oversampling'] = config['balance_enable_oversampling']
+
+            # Load grid visualization setting
+            if 'save_grid_visualization' in config:
+                self.save_grid_visualization = config['save_grid_visualization']
+                print(f"📊 Grid visualization on save: {'Enabled' if self.save_grid_visualization else 'Disabled (default)'}")
 
             # Load metric weights from config
             metric_weights = config.get('metric_weights', {})
@@ -3342,15 +3350,19 @@ class MAVERICInteractiveQualityControl:
 
                 save_path = self.save_filtered_data()
 
-                # Generate visual grid outputs
-                progress.value = 50
-                status_label.value = "<b>Generating visual grids...</b>"
-
                 grid_path = None
                 if save_path:
                     print(f"✅ Data saved successfully to: {save_path}")
                     print()
-                    grid_path = self.save_sample_grids()
+
+                    # Generate visual grid outputs (if enabled)
+                    if self.save_grid_visualization:
+                        progress.value = 50
+                        status_label.value = "<b>Generating visual grids...</b>"
+                        grid_path = self.save_sample_grids()
+                    else:
+                        print("ℹ️  Grid visualization skipped (disabled in config)")
+                        print("   To enable, set 'save_grid_visualization: true' in maveric_config.yaml")
 
                 progress.value = 100
                 progress_box.close()

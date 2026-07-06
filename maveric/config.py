@@ -97,6 +97,7 @@ class MAVERICConfig:
     viz_style: str = "default"
     viz_dpi: int = 100
     viz_save_figures: bool = False
+    save_grid_visualization: bool = False  # Save 10x10 image grids when curating data (disabled by default for performance)
     
     def __post_init__(self):
         """Validate and process configuration after initialization."""

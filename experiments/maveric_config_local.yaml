@@ -1,10 +1,10 @@
 # MAVERIC Configuration for Google Colab T4 GPU Environment
 # Optimized for ELEVATER datasets experiments
 
-# Base configuration
+# Base local drive configuration
 maveric_base_dir: "/content/drive/MyDrive/MAVERIC"
-cache_base_dir: "/content/drive/MyDrive/MAVERIC/maveric_cache"
-results_dir: "/content/drive/MyDrive/MAVERIC/maveric_experiments"
+cache_base_dir: "/content/local/cache"
+results_dir: "/content/local/exp/maveric_experiments"
 
 # Model settings optimized for T4 GPU (16GB VRAM)
 clip_model: "ViT-B/32"  # Fastest and most memory efficient
@@ -74,7 +74,7 @@ processing:
   
 # Training configuration (for model customization)
 training:
-  epochs: 50
+  epochs: 30
   learning_rate: 0.0000001
   weight_decay: 0.05
   warmup_steps: 200
@@ -92,7 +92,7 @@ training:
   # Applied AFTER RandAugment to ensure domain match
 
   # Global defaults (used as fallback when dataset not specified below)
-  use_domain_adaptation: false  # Default: disabled (override per-dataset)
+  use_domain_adaptation: true  # Default: disabled (override per-dataset)
 
   # Gaussian Blur (simulates low quality/pixelation)
   domain_blur_probability: 0.5
@@ -106,7 +106,7 @@ training:
   domain_downsample_probability: 0.7
 
   # Target size mode: Use fixed size for CIFAR-10/MNIST, or null for scale range
-  domain_target_size: null  # Default: use scale_range (override per-dataset)
+  domain_target_size: 32  # Default: use scale_range (override per-dataset)
 
   # Scale range fallback (used when domain_target_size is null)
   domain_downsample_scale_range: [0.5, 0.9]
@@ -186,7 +186,7 @@ training:
   validation_method: "stratified_kfold"  # "stratified_kfold" or "simple_split"
   validation_k_folds: 5  # Number of folds for stratified k-fold validation
   validation_split: 0.2  # Fraction for simple split validation (used if method is "simple_split")
-  checkpoint_selection_metric: val_acc
+  checkpoint_selection_metric: "val_acc"
   evaluate_test_each_epoch: false
 
   # Model checkpointing
@@ -201,8 +201,9 @@ training:
   gradient_accumulation_steps: 1
 
   # Text source for training: "labels" or "captions"
+  #text_source: "captions"
   text_source: "labels"
-
+  
 # Logging and monitoring
 logging:
   level: "INFO"

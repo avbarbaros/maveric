@@ -4,6 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### July 6, 2026 - Grid Visualization Performance Optimization (NEW)
+
+**Enhancement: Optional Grid Visualization for Better Performance**:
+- **Purpose**: Make 10×10 image grid generation optional to speed up data curation
+- **Problem**: Grid visualization takes significant time for large datasets (e.g., Food101)
+- **Solution**: New `save_grid_visualization` config parameter (disabled by default)
+- **Configuration**:
+  ```yaml
+  # maveric_config.yaml (top-level, after visualization section)
+  save_grid_visualization: false  # Default: disabled for performance
+  ```
+- **Files Modified**:
+  - [config.py](maveric/config.py#L100) - Added `save_grid_visualization` parameter
+  - [interactive.py](maveric/visualization/interactive.py#L109) - Instance variable initialization
+  - [interactive.py](maveric/visualization/interactive.py#L195-L198) - Config loading
+  - [interactive.py](maveric/visualization/interactive.py#L3356-L3366) - Conditional grid generation
+  - [maveric_config.yaml](experiments/maveric_config.yaml#L285-L287) - Config documentation
+- **Behavior**:
+  - **Default (false)**: Clicking "Save Data" skips grid generation, shows info message
+  - **Enabled (true)**: Generates 10×10 grids as before (December 2025 feature)
+  - User informed when grids are skipped with instructions to enable
+- **Benefits**:
+  - **Faster curation**: No grid generation overhead by default
+  - **User control**: Enable only when visual inspection needed
+  - **Backward compatible**: Feature still available, just opt-in
+
 ### June 21, 2026 - Caption-Based Training Mode (NEW FEATURE)
 
 **Enhancement: Alternative Text Source for CLIP Fine-Tuning**:
@@ -746,8 +772,9 @@ scoring_mode: "hu_moments" # Alternative - shape-based Hu moments
 - **Implementation**: Added `save_sample_grids()` method to interactive GUI
   - **Location**: [interactive.py:852-995](maveric/visualization/interactive.py#L852-L995)
   - **Integration**: [interactive.py:1706-1714](maveric/visualization/interactive.py#L1706-L1714)
+- **Note**: As of July 6, 2026, this feature is **disabled by default** for performance. Enable with `save_grid_visualization: true` in config.
 - **Functionality**:
-  - Automatically generates 10×10 image grids when "Save Data" button is clicked
+  - Generates 10×10 image grids when "Save Data" button is clicked (if enabled)
   - **Organized by class**: Images sorted by label for easy class-by-class inspection
   - Each grid contains 100 images with labels and quality scores
   - Saves to `curationResults/` folder alongside training JSON files
