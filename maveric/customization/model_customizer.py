@@ -453,32 +453,40 @@ class ModelCustomizer(BaseComponent):
                 for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
                     try:
                         image, label = dataset[idx]
-                        if isinstance(label, int) and label < len(dataset.classes):
+                        if not isinstance(label, int):
+                            continue
 
-                            if isinstance(label, int) and 0 <= label < len(class_names):
-                                test_class_name = class_names[label]          # robust to torchvision folder names
-                            else:
-                                # Get folder name from ImageFolder's own class list
-                                folder_name = dataset.classes[label]# file-based ImageFolder fallback
-                                
-                                # Look up the ELEVATER canonical class name for this folder
-                                # This handles case mismatches (e.g., folder 'Faces' matches ELEVATER 'Faces')
-                                test_class_name = folder_to_canonical.get(folder_name) or \
-                                                  folder_to_canonical.get(folder_name.lower())
-                                if test_class_name is None:
-                                    continue # Skip if folder name doesn't match any known class
+                        test_class_name = None
 
-                            # Check if this class exists in training data using normalized matching
-                            normalized_test = self._normalize_class_name(test_class_name)
-                            
-                            if normalized_test not in normalized_training_map:
-                                continue
-                            
-                            # Use the canonical test dataset class name for the label
-                            # Note: Text field is not used during evaluation (templates are used in text classifier)
-                            test_samples.append({'image': image, 
-                                                 'label': test_class_name, 
-                                                 'text': ''})
+                        # Prefer name-based lookup via the dataset's own class list.
+                        # This is robust regardless of whether the dataset's label
+                        # order matches ELEVATER's class_names order (e.g. ImageFolder
+                        # sorts folders alphabetically, which may differ from the
+                        # order classes are listed in ELEVATER_DATASETS).
+                        if hasattr(dataset, 'classes') and 0 <= label < len(dataset.classes):
+                            folder_name = dataset.classes[label]
+                            test_class_name = folder_to_canonical.get(folder_name) or \
+                                              folder_to_canonical.get(folder_name.lower())
+
+                        # Fall back to positional indexing only for datasets that expose
+                        # no class list at all (e.g. GTSRB, Flowers102 - numeric labels only).
+                        if test_class_name is None and 0 <= label < len(class_names):
+                            test_class_name = class_names[label]
+
+                        if test_class_name is None:
+                            continue  # Skip if the label can't be resolved to a known class
+
+                        # Check if this class exists in training data using normalized matching
+                        normalized_test = self._normalize_class_name(test_class_name)
+
+                        if normalized_test not in normalized_training_map:
+                            continue
+
+                        # Use the canonical test dataset class name for the label
+                        # Note: Text field is not used during evaluation (templates are used in text classifier)
+                        test_samples.append({'image': image,
+                                             'label': test_class_name,
+                                             'text': ''})
 
                     except Exception as e:
                         if idx < 10:  # Only log first few errors to avoid spam
