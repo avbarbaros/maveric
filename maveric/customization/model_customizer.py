@@ -442,13 +442,18 @@ class ModelCustomizer(BaseComponent):
 
                 # Build lookup from folder name -> ELEVATER canonical class name
                 # This handles mixed-case folder names (e.g., 'Faces' vs 'faces')
-                # where ImageFolder's alphabetical sort order differs from ELEVATER's order
+                # where ImageFolder's alphabetical sort order differs from ELEVATER's order,
+                # as well as folder names that only match a listed synonym rather than the
+                # canonical name (e.g. FER2013 folders 'disgust'/'fear'/'surprise' vs
+                # canonical 'disgusted'/'fearful'/'surprised').
                 folder_to_canonical = {}
-                for canonical in canonical_class_names:
-                    normalized = self._normalize_class_name(canonical)
-                    folder_to_canonical[canonical] = canonical          # exact match
-                    folder_to_canonical[normalized] = canonical         # lowercase match
-                    folder_to_canonical[canonical.lower()] = canonical  # lowercase match
+                for raw_name, canonical in zip(class_names, canonical_class_names):
+                    synonyms = raw_name if isinstance(raw_name, list) else [raw_name]
+                    for syn in synonyms:
+                        normalized = self._normalize_class_name(syn)
+                        folder_to_canonical[syn] = canonical          # exact match
+                        folder_to_canonical[normalized] = canonical   # normalized match
+                        folder_to_canonical[syn.lower()] = canonical  # lowercase match
 
                 for idx in tqdm(range(len(dataset)), desc=f"Loading {target_dataset_name} test data"):
                     try:
@@ -469,9 +474,14 @@ class ModelCustomizer(BaseComponent):
                                               folder_to_canonical.get(folder_name.lower())
 
                         # Fall back to positional indexing only for datasets that expose
-                        # no class list at all (e.g. GTSRB, Flowers102 - numeric labels only).
-                        if test_class_name is None and 0 <= label < len(class_names):
-                            test_class_name = class_names[label]
+                        # no class list at all (e.g. GTSRB, Flowers102 - numeric labels only),
+                        # or whose folder name doesn't match any registered synonym (e.g.
+                        # FER2013's 'fear'/'disgust'/'surprise' folders vs canonical
+                        # 'fearful'/'disgusted'/'surprised'). Use the de-listed canonical
+                        # name here, not the raw class_names entry, since raw entries can be
+                        # lists (FER2013) which are unhashable when later used as dict keys.
+                        if test_class_name is None and 0 <= label < len(canonical_class_names):
+                            test_class_name = canonical_class_names[label]
 
                         if test_class_name is None:
                             continue  # Skip if the label can't be resolved to a known class

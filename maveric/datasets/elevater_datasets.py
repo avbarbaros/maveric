@@ -470,12 +470,12 @@ class ELEVATERDataset(BaseDataset):
             'type': 'file_based',
             'class_names': [
                 ['angry'],
-                ['disgusted'],
-                ['fearful'],
+                ['disgusted', 'disgust'],
+                ['fearful', 'fear'],
                 ['happy', 'smiling'],
                 ['neutral', 'bored'],
                 ['sad', 'depressed'],
-                ['surprised', 'shocked', 'spooked']
+                ['surprised', 'shocked', 'spooked', 'surprise']
             ]
         },
         'fgvc_aircraft': {
