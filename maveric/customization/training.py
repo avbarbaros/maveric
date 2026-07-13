@@ -43,7 +43,9 @@ class Trainer(BaseComponent):
               training_config: TrainingConfig,
               class_names: List[str],
               templates: Optional[List[str]] = None,
-              evaluator: Optional[Any] = None) -> Dict[str, List[float]]:
+              evaluator: Optional[Any] = None,
+              dataset_name: Optional[str] = None,
+              evaluation_metric: str = "accuracy") -> Dict[str, List[float]]:
         """
         Train the model.
 
@@ -55,6 +57,8 @@ class Trainer(BaseComponent):
             class_names: List of class names
             templates: Optional list of text templates for REACT-style evaluation
             evaluator: Optional evaluator instance for template ensembling
+            dataset_name: Optional dataset name (for logging)
+            evaluation_metric: Evaluation metric type (accuracy, mean_per_class, roc_auc, voc11_map)
 
         Returns:
             Training history dictionary
@@ -66,6 +70,10 @@ class Trainer(BaseComponent):
             checkpoints are saved without evaluation overhead.
             If templates and evaluator are provided, uses REACT-style template ensembling
             for consistent evaluation between training and final evaluation.
+
+            The evaluation_metric parameter is for logging purposes. The training loop uses
+            standard accuracy for monitoring, while final evaluation uses the dataset-specific
+            metric specified in the config.
         """
         # Validate test loader is provided
         if test_loader is None:
