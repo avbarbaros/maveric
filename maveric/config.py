@@ -35,7 +35,22 @@ class MAVERICConfig:
     request_timeout: int = 5
 
     # Scoring mode configuration
-    scoring_mode: str = "clip"  # "clip" (default, CLIP-based multi-modal) or "hu_moments" (shape-based) 
+    scoring_mode: str = "clip"  # "clip" (default, CLIP-based multi-modal) or "hu_moments" (shape-based)
+
+    # Per-dataset evaluation metrics (following ELEVATER Table 5)
+    # Maps dataset name to evaluation metric type
+    evaluation_metrics: Dict[str, str] = field(default_factory=lambda: {
+        # Datasets using mean-per-class (balanced accuracy)
+        'caltech101': 'mean_per_class',
+        'oxford_pets': 'mean_per_class',
+        'fgvc_aircraft': 'mean_per_class',
+        'flowers102': 'mean_per_class',
+        # Binary classification with ROC AUC
+        'hateful_memes': 'roc_auc',
+        # Multi-label classification with 11-point mAP
+        'voc2007': 'voc11_map'
+        # Other datasets default to standard 'accuracy'
+    })
 
     # Quality metrics configuration - organized by category
     quality_metrics: List[str] = field(default_factory=lambda: [

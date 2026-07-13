@@ -2,10 +2,10 @@
 
 import torch
 import torch.nn as nn
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 import numpy as np
 import pandas as pd
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import confusion_matrix, classification_report, balanced_accuracy_score, roc_auc_score
 from tqdm import tqdm
 
 from ..core.base import BaseComponent
@@ -370,5 +370,183 @@ class Evaluator(BaseComponent):
                     result[f'{canonical_name} F1'] = f1
             
             results.append(result)
-        
+
         return pd.DataFrame(results).round(2)
+
+    def _compute_voc11_map(self,
+                           scores: np.ndarray,
+                           labels: np.ndarray,
+                           num_classes: int) -> float:
+        """
+        Compute VOC 11-point interpolated mean Average Precision.
+
+        Args:
+            scores: Prediction scores (N, num_classes) - continuous similarity scores
+            labels: Ground truth multi-label binary matrix (N, num_classes)
+            num_classes: Number of classes
+
+        Returns:
+            Mean Average Precision across all classes
+        """
+        aps = []
+
+        for class_idx in range(num_classes):
+            # Get scores and labels for this class
+            class_scores = scores[:, class_idx]
+            class_labels = labels[:, class_idx]
+
+            # Skip if no positive samples
+            if class_labels.sum() == 0:
+                continue
+
+            # Sort by scores (descending)
+            sorted_indices = np.argsort(-class_scores)
+            sorted_labels = class_labels[sorted_indices]
+
+            # Compute precision and recall at each position
+            tp = np.cumsum(sorted_labels)
+            fp = np.cumsum(1 - sorted_labels)
+
+            recall = tp / max(class_labels.sum(), 1)
+            precision = tp / np.maximum(tp + fp, 1e-10)
+
+            # 11-point interpolated AP
+            ap = 0.0
+            for t in np.linspace(0, 1, 11):
+                # Find precision at recall >= t
+                if np.any(recall >= t):
+                    p = np.max(precision[recall >= t])
+                else:
+                    p = 0.0
+                ap += p / 11.0
+
+            aps.append(ap)
+
+        # Return mean AP across classes
+        return np.mean(aps) if aps else 0.0
+
+    def evaluate_with_dataset_metric(self,
+                                     model: nn.Module,
+                                     data_loader: Any,
+                                     class_names: List[str],
+                                     dataset_name: str,
+                                     metric_type: str = "accuracy",
+                                     templates: List[str] = None,
+                                     use_ensemble: bool = True) -> Dict[str, float]:
+        """
+        Evaluate model using dataset-specific metric (ELEVATER Table 5).
+
+        Args:
+            model: Model to evaluate
+            data_loader: Data loader
+            class_names: List of class names
+            dataset_name: Name of dataset (for logging)
+            metric_type: Type of metric to use:
+                - "accuracy": Standard top-1 accuracy (default)
+                - "mean_per_class": Balanced accuracy / mean-per-class accuracy
+                - "roc_auc": ROC AUC score (binary classification)
+                - "voc11_map": VOC 11-point interpolated mAP (multi-label)
+            templates: List of prompt templates (if None, uses single default template)
+            use_ensemble: Whether to use template ensembling (default: True)
+
+        Returns:
+            Dictionary with metric results
+        """
+        model.eval()
+
+        # Create text features with template ensembling if enabled
+        if use_ensemble and templates is not None:
+            class_text_features = self._create_text_classifier_with_templates(model, class_names, templates)
+        else:
+            canonical_names = [self._get_canonical_name(name) for name in class_names]
+            class_prompts = [f"a photo of a {name}." for name in canonical_names]
+            text_inputs = model.processor(text=class_prompts, return_tensors="pt", padding=True).to(self.device)
+
+            with torch.no_grad():
+                text_features_output = model.clip_model.get_text_features(**text_inputs)
+
+                if isinstance(text_features_output, torch.Tensor):
+                    class_text_features = text_features_output
+                else:
+                    class_text_features = text_features_output.pooler_output if hasattr(text_features_output, 'pooler_output') else text_features_output[0]
+
+                class_text_features = class_text_features / class_text_features.norm(dim=-1, keepdim=True)
+
+        all_predictions = []
+        all_labels = []
+        all_scores = []  # Continuous scores for ROC AUC and VOC mAP
+
+        with torch.no_grad():
+            for batch in tqdm(data_loader, desc=f"Evaluating ({metric_type})"):
+                images, texts, labels = batch
+                labels = labels.to(self.device)
+
+                # Get logits/scores
+                logits = model(images, class_text_features)
+                predictions = logits.argmax(dim=1)
+
+                all_predictions.extend(predictions.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+                all_scores.append(logits.cpu())
+
+        # Convert to numpy
+        all_predictions = np.array(all_predictions)
+        all_labels = np.array(all_labels)
+        all_scores = torch.cat(all_scores, dim=0).numpy()
+
+        # Compute metric based on type
+        results = {'dataset': dataset_name, 'metric_type': metric_type}
+
+        if metric_type == "mean_per_class":
+            # Balanced accuracy (mean-per-class accuracy)
+            score = balanced_accuracy_score(all_labels, all_predictions)
+            results['mean_per_class_accuracy'] = score * 100
+            results['accuracy'] = score * 100  # Primary metric
+
+            print(f"📊 {dataset_name} - Mean-per-class Accuracy: {score * 100:.2f}%")
+
+        elif metric_type == "roc_auc":
+            # ROC AUC for binary classification
+            # Assumes positive class is index 1 (hateful)
+            if len(class_names) == 2:
+                # Use probability/score of positive class
+                positive_scores = torch.softmax(torch.from_numpy(all_scores), dim=1)[:, 1].numpy()
+                score = roc_auc_score(all_labels, positive_scores)
+                results['roc_auc'] = score * 100
+                results['accuracy'] = score * 100  # Primary metric
+
+                print(f"📊 {dataset_name} - ROC AUC: {score * 100:.2f}%")
+            else:
+                raise ValueError(f"ROC AUC requires binary classification, but got {len(class_names)} classes")
+
+        elif metric_type == "voc11_map":
+            # VOC 11-point interpolated mAP (multi-label)
+            # Convert single-label to multi-label format for compatibility
+            num_samples = len(all_labels)
+            num_classes = len(class_names)
+
+            # Create multi-label binary matrix
+            labels_binary = np.zeros((num_samples, num_classes))
+            labels_binary[np.arange(num_samples), all_labels] = 1
+
+            # Use raw scores (not softmax) for ranking
+            map_score = self._compute_voc11_map(all_scores, labels_binary, num_classes)
+            results['voc11_map'] = map_score * 100
+            results['accuracy'] = map_score * 100  # Primary metric
+
+            print(f"📊 {dataset_name} - VOC 11-point mAP: {map_score * 100:.2f}%")
+
+        else:  # "accuracy" (default)
+            # Standard top-1 accuracy
+            score = (all_predictions == all_labels).mean()
+            results['top1_accuracy'] = score * 100
+            results['accuracy'] = score * 100  # Primary metric
+
+            print(f"📊 {dataset_name} - Top-1 Accuracy: {score * 100:.2f}%")
+
+        # Always compute standard accuracy for comparison
+        if metric_type != "accuracy":
+            standard_acc = (all_predictions == all_labels).mean()
+            results['top1_accuracy'] = standard_acc * 100
+
+        return results

@@ -94,6 +94,7 @@ class ModelCustomizer(BaseComponent):
                   training_config: TrainingConfig,
                   target_dataset_name: str,
                   class_names: List[str],
+                  evaluation_metric: str = "accuracy",
                   validation_split: float = 0.2,
                   save_augmented_grids: bool = False) -> CustomizationResult:
         """
@@ -104,6 +105,7 @@ class ModelCustomizer(BaseComponent):
             training_config: Training configuration
             target_dataset_name: Name of target dataset
             class_names: List of class names
+            evaluation_metric: Evaluation metric type (accuracy, mean_per_class, roc_auc, voc11_map)
             validation_split: Fraction of data for validation
             save_augmented_grids: If True, save 10x10 grid visualizations of augmented/domain-adapted samples
 
@@ -148,11 +150,18 @@ class ModelCustomizer(BaseComponent):
         templates = self._get_dataset_templates(target_dataset_name)
 
         # Get baseline performance (always use test data)
-        self.log_info("Evaluating baseline model")
+        self.log_info(f"Evaluating baseline model using {evaluation_metric} metric")
         if not test_loader:
             raise ValueError(f"Test data is required for evaluation but could not load test set for {target_dataset_name}")
-        baseline_accuracy, baseline_class_accuracies = self._evaluate_baseline(test_loader, class_names, templates=templates)
-        
+        baseline_result = self._evaluate_baseline(
+            test_loader,
+            class_names,
+            target_dataset_name,
+            evaluation_metric,
+            templates=templates
+        )
+        baseline_accuracy = baseline_result['accuracy']
+
         # Train model (test data is mandatory)
         self.log_info("Training customized model")
         training_history = self.trainer.train(
@@ -162,7 +171,9 @@ class ModelCustomizer(BaseComponent):
             training_config=training_config,
             class_names=class_names,
             templates=templates,
-            evaluator=self.evaluator
+            evaluator=self.evaluator,
+            dataset_name=target_dataset_name,
+            evaluation_metric=evaluation_metric
         )
         
         # Load and evaluate the best model from training
@@ -175,21 +186,29 @@ class ModelCustomizer(BaseComponent):
                 best_model = self.load_checkpoint(str(best_checkpoint))
                 # Final evaluation using the best model
                 self.log_info("Evaluating best customized model on test set")
-                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                final_result = self.evaluator.evaluate_with_dataset_metric(
                     best_model,
                     test_loader,
                     class_names,
+                    target_dataset_name,
+                    metric_type=evaluation_metric,
                     templates=templates
                 )
+                final_accuracy = final_result['accuracy']
+                class_accuracies = {}
             else:
                 # Fallback: evaluate current model and save it
                 self.log_info("No best checkpoint found, evaluating current model")
-                final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+                final_result = self.evaluator.evaluate_with_dataset_metric(
                     customized_model,
                     test_loader,
                     class_names,
+                    target_dataset_name,
+                    metric_type=evaluation_metric,
                     templates=templates
                 )
+                final_accuracy = final_result['accuracy']
+                class_accuracies = {}
                 best_checkpoint = self.trainer.save_checkpoint(
                     customized_model,
                     f"best_model_{target_dataset_name}",
@@ -201,13 +220,17 @@ class ModelCustomizer(BaseComponent):
                 )
         else:
             # No checkpointing enabled, evaluate current model
-            self.log_info("Evaluating current customized model on test set")
-            final_accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+            self.log_info(f"Evaluating current customized model on test set ({evaluation_metric})")
+            final_result = self.evaluator.evaluate_with_dataset_metric(
                 customized_model,
                 test_loader,
                 class_names,
+                target_dataset_name,
+                metric_type=evaluation_metric,
                 templates=templates
             )
+            final_accuracy = final_result['accuracy']
+            class_accuracies = {}
         
 
 
@@ -223,7 +246,7 @@ class ModelCustomizer(BaseComponent):
             test_accuracy=final_accuracy,
             zero_shot_baseline=baseline_accuracy,
             class_accuracies=class_accuracies,
-            zero_shot_class_accuracies=baseline_class_accuracies,
+            zero_shot_class_accuracies={},  # Per-class metrics not available for all evaluation types
             training_history=training_history,
             checkpoint_path=str(best_checkpoint) if best_checkpoint else None
         )
@@ -676,23 +699,30 @@ class ModelCustomizer(BaseComponent):
         # Fallback to default template
         return None
 
-    def _evaluate_baseline(self, val_loader: Any, class_names: List[str], templates: List[str] = None) -> Tuple[float, Dict[str, float]]:
-        """Evaluate baseline model performance."""
+    def _evaluate_baseline(self,
+                          val_loader: Any,
+                          class_names: List[str],
+                          dataset_name: str,
+                          evaluation_metric: str = "accuracy",
+                          templates: List[str] = None) -> Dict[str, float]:
+        """Evaluate baseline model performance using dataset-specific metric."""
         baseline_model = CustomizedCLIP(
             self.model,
             self.processor,
             regularize=False
         ).to(self.device)
 
-        accuracy, class_accuracies = self.evaluator.evaluate_detailed(
+        result = self.evaluator.evaluate_with_dataset_metric(
             baseline_model,
             val_loader,
             class_names,
+            dataset_name,
+            metric_type=evaluation_metric,
             templates=templates
         )
 
-        self.log_info(f"Baseline model accuracy: {accuracy:.2f}%")
-        return accuracy, class_accuracies
+        self.log_info(f"Baseline model {result['metric_type']}: {result['accuracy']:.2f}%")
+        return result
     
     def load_checkpoint(self, checkpoint_path: str) -> 'CustomizedCLIP':
         """

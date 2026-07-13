@@ -42,6 +42,29 @@ metric_weights:
   img2txt: 0.25    # Image-to-text consistency weight
   txt2img: 0.25    # Text-to-image consistency weight
 
+# Per-dataset evaluation metrics (following ELEVATER Table 5)
+# Available metrics:
+#   - accuracy: Standard top-1 accuracy (default for most datasets)
+#   - mean_per_class: Balanced accuracy / mean-per-class accuracy
+#   - roc_auc: ROC AUC score (requires binary classification)
+#   - voc11_map: VOC 11-point interpolated mean Average Precision (multi-label)
+evaluation_metrics:
+  # Datasets using mean-per-class (balanced accuracy)
+  caltech101: "mean_per_class"
+  oxford_pets: "mean_per_class"
+  fgvc_aircraft: "mean_per_class"
+  flowers102: "mean_per_class"
+
+  # Binary classification with ROC AUC
+  hateful_memes: "roc_auc"
+
+  # Multi-label classification with 11-point mAP
+  voc2007: "voc11_map"
+
+  # All other datasets use standard accuracy (implicit default)
+  # cifar10, cifar100, mnist, fashion_mnist, svhn, stl10, dtd, eurosat,
+  # fer2013, food101, gtsrb, kitti_distance, country211, patchcamelyon,
+  # renderedsst2, resisc45, stanfordcars
 
 # Quality thresholds for ELEVATER experiments - organized by category
 # These can be adjusted based on your requirements

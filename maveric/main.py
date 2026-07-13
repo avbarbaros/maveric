@@ -342,15 +342,22 @@ class MAVERIC(BaseComponent):
                 "exact REACT class names are used in text prompts."
             )
         
+        # Get evaluation metric for this dataset
+        evaluation_metric = self.config.evaluation_metrics.get(
+            target_dataset.lower() if target_dataset else "custom",
+            "accuracy"  # Default to standard accuracy
+        )
+
         # Perform customization
         result = self.customizer.customize(
             quality_result=quality_result,
             training_config=training_config,
             target_dataset_name=target_dataset or "custom",
             class_names=class_names,
+            evaluation_metric=evaluation_metric,
             save_augmented_grids=save_augmented_grids
         )
-        
+
         return result
     
     def visualize_retrieval(self,
