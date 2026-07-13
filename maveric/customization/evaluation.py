@@ -395,27 +395,34 @@ class Evaluator(BaseComponent):
             class_scores = scores[:, class_idx]
             class_labels = labels[:, class_idx]
 
+            # Count total positive samples for this class
+            total_positives = np.sum(class_labels)
+
             # Skip if no positive samples
-            if class_labels.sum() == 0:
+            if total_positives == 0:
                 continue
 
-            # Sort by scores (descending)
+            # Sort indices by score descending
             sorted_indices = np.argsort(-class_scores)
             sorted_labels = class_labels[sorted_indices]
 
-            # Compute precision and recall at each position
-            tp = np.cumsum(sorted_labels)
-            fp = np.cumsum(1 - sorted_labels)
+            # TP is when we predicted it (it's in our sorted list) AND it is truly positive
+            tp = np.cumsum(sorted_labels == 1)
 
-            recall = tp / max(class_labels.sum(), 1)
-            precision = tp / np.maximum(tp + fp, 1e-10)
+            # FP is when we predicted it (it's in our sorted list) BUT it is actually negative
+            fp = np.cumsum(sorted_labels == 0)
 
-            # 11-point interpolated AP
+            # Calculate recall and precision curve
+            recall = tp / total_positives
+            precision = tp / (tp + fp)
+
+            # 11-point interpolated AP calculation
             ap = 0.0
             for t in np.linspace(0, 1, 11):
-                # Find precision at recall >= t
-                if np.any(recall >= t):
-                    p = np.max(precision[recall >= t])
+                # Find the maximum precision where recall is greater than or equal to t
+                higher_recall_mask = recall >= t
+                if np.any(higher_recall_mask):
+                    p = np.max(precision[higher_recall_mask])
                 else:
                     p = 0.0
                 ap += p / 11.0
@@ -423,7 +430,7 @@ class Evaluator(BaseComponent):
             aps.append(ap)
 
         # Return mean AP across classes
-        return np.mean(aps) if aps else 0.0
+        return float(np.mean(aps)) if aps else 0.0
 
     def evaluate_with_dataset_metric(self,
                                      model: nn.Module,
