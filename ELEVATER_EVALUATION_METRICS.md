@@ -17,7 +17,7 @@ This document describes the implementation of dataset-specific evaluation metric
   - Caltech101
   - Oxford Pets (oxford_pets)
   - FGVC Aircraft (fgvc_aircraft)
-  - Oxford Flowers102 (flowers102)
+  - Oxford Flowers102 (oxford_flowers102)
 - **Implementation**: `sklearn.metrics.balanced_accuracy_score`
 - **Why**: These datasets may have class imbalance, so balanced accuracy provides a fairer measure
 
@@ -51,7 +51,7 @@ evaluation_metrics:
   caltech101: "mean_per_class"
   oxford_pets: "mean_per_class"
   fgvc_aircraft: "mean_per_class"
-  flowers102: "mean_per_class"
+  oxford_flowers102: "mean_per_class"
 
   # Binary classification with ROC AUC
   hateful_memes: "roc_auc"
@@ -69,7 +69,7 @@ evaluation_metrics: Dict[str, str] = field(default_factory=lambda: {
     'caltech101': 'mean_per_class',
     'oxford_pets': 'mean_per_class',
     'fgvc_aircraft': 'mean_per_class',
-    'flowers102': 'mean_per_class',
+    'oxford_flowers102': 'mean_per_class',
     'hateful_memes': 'roc_auc',
     'voc2007': 'voc11_map'
 })
@@ -254,7 +254,7 @@ To test the implementation:
 # Test with different datasets
 python experiments/03_model_customization.py --dataset caltech101
 python experiments/03_model_customization.py --dataset oxford_pets
-python experiments/03_model_customization.py --dataset flowers102
+python experiments/03_model_customization.py --dataset oxford_flowers102
 
 # Check evaluation metric used
 # Should see: "Evaluating baseline model using mean_per_class metric"

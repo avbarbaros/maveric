@@ -44,7 +44,7 @@ class MAVERICConfig:
         'caltech101': 'mean_per_class',
         'oxford_pets': 'mean_per_class',
         'fgvc_aircraft': 'mean_per_class',
-        'flowers102': 'mean_per_class',
+        'oxford_flowers102': 'mean_per_class',  # Fixed: was flowers102
         # Binary classification with ROC AUC
         'hateful_memes': 'roc_auc',
         # Multi-label classification with 11-point mAP
