@@ -278,6 +278,7 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
             enable_image_cache=config.get('enable_image_cache', True),
             enable_sample_cache=config.get('enable_sample_cache', True),
             retrieval_rotation_size=config.get('retrieval_rotation_size', 1000),
+            n_reference_images=config.get('n_reference_images', 10),
             seed=config.get('processing', {}).get('seed', 42),
             enable_target_class_quality=enable_target_class_quality,
             max_retries=config.get('max_retries', 3),
@@ -289,6 +290,7 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
         maveric = MAVERIC(maveric_config)
         print("✅ MAVERIC initialized successfully")
         print(f"🔄 Rotation size configured: {maveric_config.retrieval_rotation_size}")
+        print(f"🖼️  Reference images per class: {maveric_config.n_reference_images}")
         print(f"🔁 Max retries configured: {maveric_config.max_retries}")
         print(f"⏱️  Request timeout configured: {maveric_config.request_timeout}s")
         print(f"💾 Image cache: {'ENABLED' if maveric_config.enable_image_cache else 'DISABLED'}")
