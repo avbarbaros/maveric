@@ -1001,13 +1001,6 @@ class Retriever(BaseComponent):
             target_dataset: Name of target dataset
             class_names: List of class names from target dataset
         """
-        self.log_info(f"\n🎯 TARGET DATASET CLASSES FOR {target_dataset.upper()}")
-        self.log_info("=" * 80)
-        self.log_info("Using CORRECTED algorithm:")
-        self.log_info("1. EfficientNet predicts single ImageNet class per image")
-        self.log_info("2. CLIP calculates similarity between each target class and predicted ImageNet class")
-        self.log_info("3. Final score = CLIP_similarity × imagenet_probability")
-        self.log_info("-" * 80)
         
         # Simply log the target classes
         for i, class_name in enumerate(class_names, 1):
