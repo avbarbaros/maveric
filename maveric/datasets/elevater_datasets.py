@@ -49,16 +49,18 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
         self.num_classes = len(self.class_names)
 
         # Load annotations from ImageSets/Main/<class>_<split>.txt
-        self.images, self.labels, self.difficult = self._load_annotations()
+        self.images, self.labels = self._load_annotations()
 
     def _load_annotations(self):
         """
         Load multi-label annotations from VOC ImageSets/Main files.
 
+        Follows ELEVATER's approach: only flag==1 is positive, flag==0 (difficult)
+        and flag==-1 (absent) are both treated as negative (label=0).
+
         Returns:
             images: List of image IDs
             labels: List of multi-hot label vectors (one per image)
-            difficult: List of multi-hot difficult masks (one per image)
         """
         imagesets_main = self.root / 'ImageSets' / 'Main'
 
@@ -68,10 +70,8 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
                 f"Please ensure VOC2007 dataset is properly downloaded."
             )
 
-        # Dictionaries to store labels and difficult masks
+        # Dictionary to store labels
         image_labels = {}
-        image_difficult = {}
-        difficult_count = {}  # Track difficult examples per class
 
         # Read each class annotation file
         for class_idx, class_name in enumerate(self.class_names):
@@ -83,8 +83,6 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
                     f"Please check VOC2007 dataset structure."
                 )
 
-            difficult_count[class_name] = 0
-
             with open(ann_file, 'r') as f:
                 for line in f:
                     parts = line.strip().split()
@@ -94,47 +92,34 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
                     image_id, flag = parts
                     flag = int(flag)
 
-                    # Initialize multi-hot vectors for new image
+                    # Initialize multi-hot vector for new image
                     if image_id not in image_labels:
                         image_labels[image_id] = np.zeros(self.num_classes, dtype=np.float32)
-                        image_difficult[image_id] = np.zeros(self.num_classes, dtype=np.float32)
 
-                    # Set class presence and difficult flag
-                    # flag: 1 = present (not difficult), 0 = present (difficult), -1 = absent
+                    # ELEVATER approach: only flag==1 is positive
+                    # flag==0 (difficult) and flag==-1 (absent) both remain 0
                     if flag == 1:
                         image_labels[image_id][class_idx] = 1.0
-                        image_difficult[image_id][class_idx] = 0.0  # Not difficult
-                    elif flag == 0:
-                        image_labels[image_id][class_idx] = 1.0  # Still present
-                        image_difficult[image_id][class_idx] = 1.0  # Marked as difficult
-                        difficult_count[class_name] += 1
-                    # elif flag == -1: leave as 0.0 (absent)
 
         # Convert to lists
         images = list(image_labels.keys())
         labels = [image_labels[img_id] for img_id in images]
-        difficult = [image_difficult[img_id] for img_id in images]
 
         # Debug: Print annotation statistics
         total_images = len(images)
         labels_array = np.array(labels)
-        difficult_array = np.array(difficult)
         positives_per_class = labels_array.sum(axis=0)
-        difficult_per_class = difficult_array.sum(axis=0)
         objects_per_image = labels_array.sum(axis=1)
-        total_difficult = sum(difficult_count.values())
 
-        print(f"\n📊 VOC2007 {self.split} set annotation statistics:")
+        print(f"\n📊 VOC2007 {self.split} set annotation statistics (ELEVATER approach):")
         print(f"   Total images: {total_images}")
         print(f"   Positives per class (first 10): {positives_per_class[:10].astype(int).tolist()}")
-        print(f"   Difficult examples (first 10): {difficult_per_class[:10].astype(int).tolist()}")
-        print(f"   Total difficult annotations: {total_difficult}")
-        print(f"   Non-difficult positives: {int((labels_array * (1 - difficult_array)).sum())}")
         print(f"   Images with multiple objects: {(objects_per_image > 1).sum()}")
         print(f"   Average objects per image: {objects_per_image.mean():.2f}")
         print(f"   Max objects in one image: {int(objects_per_image.max())}")
+        print(f"   Note: Difficult examples (flag=0) treated as negatives")
 
-        return images, labels, difficult
+        return images, labels
 
     def __len__(self):
         return len(self.images)
@@ -144,11 +129,9 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
         Returns:
             image: PIL Image
             label: Multi-hot label vector (shape: [num_classes])
-            difficult: Multi-hot difficult mask (shape: [num_classes])
         """
         image_id = self.images[idx]
         label = self.labels[idx]
-        difficult_mask = self.difficult[idx]
 
         # Load image
         image_path = self.root / 'JPEGImages' / f'{image_id}.jpg'
@@ -161,7 +144,7 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, torch.from_numpy(label), torch.from_numpy(difficult_mask)
+        return image, torch.from_numpy(label)
 
 
 class ELEVATERDataset(BaseDataset):

@@ -436,11 +436,10 @@ class ModelCustomizer(BaseComponent):
             # Convert to test samples format
             test_samples = []
             for idx in range(len(dataset)):
-                image, multi_hot_label, difficult_mask = dataset[idx]
+                image, multi_hot_label = dataset[idx]
                 test_samples.append({
                     'image': image,
                     'label': multi_hot_label,  # Multi-hot vector
-                    'difficult': difficult_mask,  # Multi-hot difficult mask
                     'text': '',  # Not used during evaluation
                     'is_multilabel': True  # Flag for evaluation
                 })
@@ -458,7 +457,6 @@ class ModelCustomizer(BaseComponent):
                     sample = self.samples[idx]
                     image = sample['image']
                     label = sample['label']  # Multi-hot vector
-                    difficult = sample['difficult']  # Multi-hot difficult mask
                     text = sample.get('text', '')  # Text field (empty for VOC2007)
 
                     # Process image with CLIP processor
@@ -466,7 +464,7 @@ class ModelCustomizer(BaseComponent):
                         inputs = self.processor(images=image, return_tensors="pt")
                         image = inputs['pixel_values'][0]
 
-                    return image, text, label, difficult  # Returns (image, text, label, difficult)
+                    return image, text, label  # Returns (image, text, label)
 
             test_dataset = VOC2007TestDataset(test_samples, self.processor)
 
