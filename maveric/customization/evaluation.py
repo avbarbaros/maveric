@@ -376,14 +376,19 @@ class Evaluator(BaseComponent):
     def _compute_voc11_map(self,
                            scores: np.ndarray,
                            labels: np.ndarray,
-                           num_classes: int) -> float:
+                           num_classes: int,
+                           difficult: np.ndarray = None) -> float:
         """
         Compute VOC 11-point interpolated mean Average Precision.
+
+        Implements the PASCAL VOC evaluation protocol where difficult examples
+        (flag=0 in VOC annotations) are excluded from both TP and FP counts.
 
         Args:
             scores: Prediction scores (N, num_classes) - continuous similarity scores
             labels: Ground truth multi-label binary matrix (N, num_classes)
             num_classes: Number of classes
+            difficult: Optional difficult mask (N, num_classes) where 1 = difficult, 0 = not difficult
 
         Returns:
             Mean Average Precision across all classes
@@ -395,26 +400,50 @@ class Evaluator(BaseComponent):
             class_scores = scores[:, class_idx]
             class_labels = labels[:, class_idx]
 
-            # Count total positive samples for this class
-            total_positives = np.sum(class_labels)
+            # Get difficult mask for this class if available
+            if difficult is not None:
+                class_difficult = difficult[:, class_idx]
+            else:
+                class_difficult = np.zeros_like(class_labels)
 
-            # Skip if no positive samples
+            # Count total NON-DIFFICULT positive samples for this class (VOC protocol)
+            non_difficult_positives = class_labels * (1 - class_difficult)
+            total_positives = np.sum(non_difficult_positives)
+
+            # Skip if no non-difficult positive samples
             if total_positives == 0:
                 continue
 
             # Sort indices by score descending
             sorted_indices = np.argsort(-class_scores)
             sorted_labels = class_labels[sorted_indices]
+            sorted_difficult = class_difficult[sorted_indices]
 
-            # TP is when we predicted it (it's in our sorted list) AND it is truly positive
-            tp = np.cumsum(sorted_labels == 1)
+            # VOC protocol: difficult examples are IGNORED (don't count as TP or FP)
+            # TP: correctly detected NON-DIFFICULT positives
+            # FP: detections on negatives (detections on DIFFICULT examples are ignored)
 
-            # FP is when we predicted it (it's in our sorted list) BUT it is actually negative
-            fp = np.cumsum(sorted_labels == 0)
+            # Process detections in score order
+            tp = np.zeros(len(sorted_labels))
+            fp = np.zeros(len(sorted_labels))
+
+            for i in range(len(sorted_labels)):
+                if sorted_labels[i] == 1:
+                    if sorted_difficult[i] == 0:
+                        # Non-difficult positive: count as TP
+                        tp[i] = 1
+                    # else: difficult positive - ignore (don't count as TP or FP)
+                else:
+                    # Negative: count as FP
+                    fp[i] = 1
+
+            # Cumulative TP and FP
+            tp = np.cumsum(tp)
+            fp = np.cumsum(fp)
 
             # Calculate recall and precision curve
             recall = tp / total_positives
-            precision = tp / (tp + fp)
+            precision = tp / (tp + fp + 1e-10)  # Add epsilon to avoid division by zero
 
             # 11-point interpolated AP calculation
             ap = 0.0
@@ -482,10 +511,17 @@ class Evaluator(BaseComponent):
         all_predictions = []
         all_labels = []
         all_scores = []  # Continuous scores for ROC AUC and VOC mAP
+        all_difficult = []  # Difficult masks for VOC2007
 
         with torch.no_grad():
             for batch in tqdm(data_loader, desc=f"Evaluating ({metric_type})"):
-                images, texts, labels = batch
+                # Handle both 3-tuple (image, text, label) and 4-tuple (image, text, label, difficult)
+                if len(batch) == 4:
+                    images, texts, labels, difficult = batch
+                    all_difficult.extend(difficult.cpu().numpy())
+                else:
+                    images, texts, labels = batch
+
                 labels = labels.to(self.device)
 
                 # Get logits/scores
@@ -540,10 +576,21 @@ class Evaluator(BaseComponent):
                     f"Ensure VOC2007MultiLabelDataset is being used for data loading."
                 )
 
+            # Check if difficult masks are available
+            difficult_masks = None
+            if all_difficult:
+                difficult_masks = np.array(all_difficult)
+                if difficult_masks.ndim != 2 or difficult_masks.shape[1] != num_classes:
+                    print(f"⚠️  Warning: Difficult masks have incorrect shape {difficult_masks.shape}, ignoring")
+                    difficult_masks = None
+                else:
+                    total_difficult = int(difficult_masks.sum())
+                    print(f"✅ Using VOC difficult-example protocol ({total_difficult} difficult annotations)")
+
             print(f"✅ Using true multi-label annotations ({num_samples} images, {num_classes} classes)")
 
-            # Use raw scores (not softmax) for ranking
-            map_score = self._compute_voc11_map(all_scores, all_labels, num_classes)
+            # Use raw scores (not softmax) for ranking, with optional difficult masks
+            map_score = self._compute_voc11_map(all_scores, all_labels, num_classes, difficult_masks)
             results['voc11_map'] = map_score * 100
             results['accuracy'] = map_score * 100  # Primary metric
 
