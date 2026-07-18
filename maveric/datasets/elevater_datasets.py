@@ -16,6 +16,119 @@ from ..core.exceptions import DatasetError
 from ..retrieval.cache_manager import sanitize_filename
 
 
+class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
+    """
+    Multi-label dataset loader for PASCAL VOC 2007.
+
+    Reads the official VOC annotations from ImageSets/Main/<class>_test.txt files
+    to construct proper multi-hot label vectors, preserving the multi-label nature
+    of the dataset (images can belong to multiple classes).
+
+    This is critical for correct VOC2007 evaluation - using ImageFolder would
+    duplicate images across class folders and destroy the multi-label structure.
+    """
+
+    def __init__(self, root: str, split: str = 'test', transform=None):
+        """
+        Args:
+            root: Path to VOC2007 root directory (should contain ImageSets/ and JPEGImages/)
+            split: 'train', 'val', or 'test'
+            transform: Optional image transforms
+        """
+        self.root = Path(root)
+        self.split = split
+        self.transform = transform
+
+        # VOC2007 class names in order
+        self.class_names = [
+            'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
+            'bus', 'car', 'cat', 'chair', 'cow',
+            'diningtable', 'dog', 'horse', 'motorbike', 'person',
+            'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+        ]
+        self.num_classes = len(self.class_names)
+
+        # Load annotations from ImageSets/Main/<class>_<split>.txt
+        self.images, self.labels = self._load_annotations()
+
+    def _load_annotations(self):
+        """
+        Load multi-label annotations from VOC ImageSets/Main files.
+
+        Returns:
+            images: List of image IDs
+            labels: List of multi-hot label vectors (one per image)
+        """
+        imagesets_main = self.root / 'ImageSets' / 'Main'
+
+        if not imagesets_main.exists():
+            raise FileNotFoundError(
+                f"ImageSets/Main directory not found at {imagesets_main}. "
+                f"Please ensure VOC2007 dataset is properly downloaded."
+            )
+
+        # Dictionary to store labels: image_id -> multi-hot vector
+        image_labels = {}
+
+        # Read each class annotation file
+        for class_idx, class_name in enumerate(self.class_names):
+            ann_file = imagesets_main / f'{class_name}_{self.split}.txt'
+
+            if not ann_file.exists():
+                raise FileNotFoundError(
+                    f"Annotation file not found: {ann_file}. "
+                    f"Please check VOC2007 dataset structure."
+                )
+
+            with open(ann_file, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) != 2:
+                        continue
+
+                    image_id, flag = parts
+                    flag = int(flag)
+
+                    # Initialize multi-hot vector for new image
+                    if image_id not in image_labels:
+                        image_labels[image_id] = np.zeros(self.num_classes, dtype=np.float32)
+
+                    # Set class presence: 1 = present, -1 = absent, 0 = difficult/ignored
+                    if flag == 1:
+                        image_labels[image_id][class_idx] = 1.0
+
+        # Convert to lists
+        images = list(image_labels.keys())
+        labels = [image_labels[img_id] for img_id in images]
+
+        return images, labels
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        """
+        Returns:
+            image: PIL Image
+            label: Multi-hot label vector (shape: [num_classes])
+        """
+        image_id = self.images[idx]
+        label = self.labels[idx]
+
+        # Load image
+        image_path = self.root / 'JPEGImages' / f'{image_id}.jpg'
+
+        if not image_path.exists():
+            raise FileNotFoundError(f"Image not found: {image_path}")
+
+        image = Image.open(image_path).convert('RGB')
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, torch.from_numpy(label)
+
+
 class ELEVATERDataset(BaseDataset):
     """
     Handler for ELEVATER benchmark datasets.

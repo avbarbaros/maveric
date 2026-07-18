@@ -528,16 +528,22 @@ class Evaluator(BaseComponent):
 
         elif metric_type == "voc11_map":
             # VOC 11-point interpolated mAP (multi-label)
-            # Convert single-label to multi-label format for compatibility
+            # all_labels should be multi-hot vectors from VOC2007MultiLabelDataset
             num_samples = len(all_labels)
             num_classes = len(class_names)
 
-            # Create multi-label binary matrix
-            labels_binary = np.zeros((num_samples, num_classes))
-            labels_binary[np.arange(num_samples), all_labels] = 1
+            # Verify multi-label format
+            if all_labels.ndim != 2 or all_labels.shape[1] != num_classes:
+                raise ValueError(
+                    f"VOC 11-point mAP requires multi-label format. "
+                    f"Expected shape ({num_samples}, {num_classes}), got {all_labels.shape}. "
+                    f"Ensure VOC2007MultiLabelDataset is being used for data loading."
+                )
+
+            print(f"✅ Using true multi-label annotations ({num_samples} images, {num_classes} classes)")
 
             # Use raw scores (not softmax) for ranking
-            map_score = self._compute_voc11_map(all_scores, labels_binary, num_classes)
+            map_score = self._compute_voc11_map(all_scores, all_labels, num_classes)
             results['voc11_map'] = map_score * 100
             results['accuracy'] = map_score * 100  # Primary metric
 
@@ -551,8 +557,8 @@ class Evaluator(BaseComponent):
 
             print(f"📊 {dataset_name} - Top-1 Accuracy: {score * 100:.2f}%")
 
-        # Always compute standard accuracy for comparison
-        if metric_type != "accuracy":
+        # Always compute standard accuracy for comparison (except for multi-label metrics)
+        if metric_type not in ["accuracy", "voc11_map"]:
             standard_acc = (all_predictions == all_labels).mean()
             results['top1_accuracy'] = standard_acc * 100
 

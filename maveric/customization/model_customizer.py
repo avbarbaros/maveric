@@ -383,6 +383,100 @@ class ModelCustomizer(BaseComponent):
             class_name = class_name[0]
         return class_name.lower().replace(' ', '_')
 
+    def _create_voc2007_test_loader(self, dataset_cache_dir: Path, class_names: List[str]) -> Optional[Any]:
+        """
+        Create multi-label test loader for VOC2007.
+
+        Uses VOC2007MultiLabelDataset to properly load multi-hot label vectors
+        from the official VOC ImageSets/Main annotation files. This preserves
+        the multi-label nature of VOC2007 (images can have multiple objects).
+        """
+        from ..datasets.elevater_datasets import VOC2007MultiLabelDataset
+        from pathlib import Path
+        import torch
+
+        self.log_info("Using VOC2007MultiLabelDataset for proper multi-label evaluation")
+
+        # Try to find VOC2007 root directory
+        # Expected structures:
+        # 1. {cache_dir}/voc2007/datasets/VOCdevkit/VOC2007/
+        # 2. {cache_dir}/voc2007/datasets/VOC2007/
+        # 3. {cache_dir}/voc2007/VOC2007/
+        possible_roots = [
+            dataset_cache_dir / 'VOCdevkit' / 'VOC2007',
+            dataset_cache_dir / 'VOC2007',
+            dataset_cache_dir.parent / 'VOC2007',
+        ]
+
+        voc_root = None
+        for root in possible_roots:
+            imagesets_main = root / 'ImageSets' / 'Main'
+            if imagesets_main.exists():
+                voc_root = root
+                self.log_info(f"Found VOC2007 at: {voc_root}")
+                break
+
+        if voc_root is None:
+            self.log_warning(
+                f"VOC2007 dataset not found. Tried:\n" +
+                "\n".join(f"  - {r}" for r in possible_roots) +
+                "\n\nPlease download VOC2007 and place it in one of these locations."
+            )
+            return None
+
+        # Create multi-label dataset
+        try:
+            dataset = VOC2007MultiLabelDataset(
+                root=str(voc_root),
+                split='test',
+                transform=None  # We'll apply transforms during evaluation
+            )
+            self.log_info(f"Loaded VOC2007 test set: {len(dataset)} images with multi-label annotations")
+
+            # Convert to test samples format
+            test_samples = []
+            for idx in range(len(dataset)):
+                image, multi_hot_label = dataset[idx]
+                test_samples.append({
+                    'image': image,
+                    'label': multi_hot_label,  # Multi-hot vector, not single class name
+                    'text': '',  # Not used during evaluation
+                    'is_multilabel': True  # Flag for evaluation
+                })
+
+            # Create TestDataset
+            class VOC2007TestDataset(torch.utils.data.Dataset):
+                def __init__(self, samples, processor):
+                    self.samples = samples
+                    self.processor = processor
+
+                def __len__(self):
+                    return len(self.samples)
+
+                def __getitem__(self, idx):
+                    sample = self.samples[idx]
+                    image = sample['image']
+                    label = sample['label']  # Multi-hot vector
+                    text = sample.get('text', '')  # Text field (empty for VOC2007)
+
+                    # Process image with CLIP processor
+                    if self.processor:
+                        inputs = self.processor(images=image, return_tensors="pt")
+                        image = inputs['pixel_values'][0]
+
+                    return image, text, label  # Returns (processed_image, text, multi_hot_vector)
+
+            test_dataset = VOC2007TestDataset(test_samples, self.processor)
+            self.log_info(f"Created VOC2007 test loader with {len(test_dataset)} multi-label samples")
+
+            return test_dataset
+
+        except Exception as e:
+            self.log_warning(f"Error creating VOC2007 multi-label dataset: {e}")
+            import traceback
+            self.log_warning(traceback.format_exc())
+            return None
+
     def _create_test_loader(self, target_dataset_name: str, class_names: List[str]) -> Optional[Any]:
         """Create test data loader from target dataset."""
         try:
@@ -398,6 +492,10 @@ class ModelCustomizer(BaseComponent):
             # Load test split of the target dataset
             self.log_info(f"Loading test data from {target_dataset_name}")
             self.log_info(f"Test dataset root path: {dataset_cache_dir}")
+
+            # Special handling for VOC2007: use multi-label loader
+            if target_dataset_name.lower() == 'voc2007':
+                return self._create_voc2007_test_loader(dataset_cache_dir, class_names)
 
             # Check if path exists for file-based datasets
             expected_test_path = dataset_cache_dir / 'elevater' / target_dataset_name / 'test'
