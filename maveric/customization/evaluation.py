@@ -545,11 +545,11 @@ class Evaluator(BaseComponent):
             print(f"✅ Using true multi-label annotations ({num_samples} images, {num_classes} classes)")
 
             # ELEVATER approach: Apply softmax to scores before mAP computation
-            # logits = (100. * image_features @ text_features).softmax(dim=-1)
+            # Note: CLIP already applies 100x scaling internally, so we don't multiply again
             all_scores_tensor = torch.from_numpy(all_scores)
-            all_scores_softmax = torch.softmax(all_scores_tensor * 100.0, dim=-1).numpy()
+            all_scores_softmax = torch.softmax(all_scores_tensor, dim=-1).numpy()
 
-            print(f"✅ Using ELEVATER approach: softmax(scores * 100)")
+            print(f"✅ Using ELEVATER approach: softmax(scores) [no additional scaling]")
 
             # Compute mAP with softmax probabilities (no difficult masks)
             map_score = self._compute_voc11_map(all_scores_softmax, all_labels, num_classes)
