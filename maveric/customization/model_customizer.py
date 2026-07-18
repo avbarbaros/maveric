@@ -467,9 +467,19 @@ class ModelCustomizer(BaseComponent):
                     return image, text, label  # Returns (processed_image, text, multi_hot_vector)
 
             test_dataset = VOC2007TestDataset(test_samples, self.processor)
-            self.log_info(f"Created VOC2007 test loader with {len(test_dataset)} multi-label samples")
 
-            return test_dataset
+            # Wrap in DataLoader (consistent with train/val loaders)
+            from torch.utils.data import DataLoader
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=self.batch_size if hasattr(self, 'batch_size') else 32,
+                shuffle=False,
+                num_workers=0,
+                pin_memory=torch.cuda.is_available()
+            )
+
+            self.log_info(f"Created VOC2007 test loader with {len(test_dataset)} multi-label samples")
+            return test_loader
 
         except Exception as e:
             self.log_warning(f"Error creating VOC2007 multi-label dataset: {e}")
