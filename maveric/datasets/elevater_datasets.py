@@ -101,6 +101,19 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
         images = list(image_labels.keys())
         labels = [image_labels[img_id] for img_id in images]
 
+        # Debug: Print annotation statistics
+        total_images = len(images)
+        labels_array = np.array(labels)
+        positives_per_class = labels_array.sum(axis=0)
+        objects_per_image = labels_array.sum(axis=1)
+
+        print(f"\n📊 VOC2007 {self.split} set annotation statistics:")
+        print(f"   Total images: {total_images}")
+        print(f"   Positives per class (first 10): {positives_per_class[:10].astype(int).tolist()}")
+        print(f"   Images with multiple objects: {(objects_per_image > 1).sum()}")
+        print(f"   Average objects per image: {objects_per_image.mean():.2f}")
+        print(f"   Max objects in one image: {int(objects_per_image.max())}")
+
         return images, labels
 
     def __len__(self):
