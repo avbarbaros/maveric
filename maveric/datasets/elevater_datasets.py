@@ -69,6 +69,7 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
 
         # Dictionary to store labels: image_id -> multi-hot vector
         image_labels = {}
+        difficult_count = {}  # Track difficult examples per class
 
         # Read each class annotation file
         for class_idx, class_name in enumerate(self.class_names):
@@ -79,6 +80,8 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
                     f"Annotation file not found: {ann_file}. "
                     f"Please check VOC2007 dataset structure."
                 )
+
+            difficult_count[class_name] = 0
 
             with open(ann_file, 'r') as f:
                 for line in f:
@@ -96,6 +99,8 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
                     # Set class presence: 1 = present, -1 = absent, 0 = difficult/ignored
                     if flag == 1:
                         image_labels[image_id][class_idx] = 1.0
+                    elif flag == 0:
+                        difficult_count[class_name] += 1
 
         # Convert to lists
         images = list(image_labels.keys())
@@ -106,10 +111,13 @@ class VOC2007MultiLabelDataset(torch.utils.data.Dataset):
         labels_array = np.array(labels)
         positives_per_class = labels_array.sum(axis=0)
         objects_per_image = labels_array.sum(axis=1)
+        total_difficult = sum(difficult_count.values())
 
         print(f"\n📊 VOC2007 {self.split} set annotation statistics:")
         print(f"   Total images: {total_images}")
         print(f"   Positives per class (first 10): {positives_per_class[:10].astype(int).tolist()}")
+        print(f"   Difficult examples (first 10): {[difficult_count[c] for c in list(difficult_count.keys())[:10]]}")
+        print(f"   Total difficult annotations: {total_difficult}")
         print(f"   Images with multiple objects: {(objects_per_image > 1).sum()}")
         print(f"   Average objects per image: {objects_per_image.mean():.2f}")
         print(f"   Max objects in one image: {int(objects_per_image.max())}")
