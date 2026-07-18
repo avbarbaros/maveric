@@ -4,6 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Quick Reference - Recent Updates
 
+### July 18, 2026 - VOC2007 Multi-Label Evaluation Fix (CRITICAL FIX)
+
+**Bug Fix: VOC2007 mAP Evaluation Now Matches ELEVATER Baseline**:
+- **Problem**: VOC2007 baseline showed 69.99% mAP instead of expected 82.60%
+- **Root causes**:
+  1. Multi-label dataset loaded as single-label via ImageFolder (destroyed multi-label structure)
+  2. Double-scaling in softmax normalization: `softmax(scores * 100)` when CLIP already applies 100x internally
+- **Solution**: 
+  - Created `VOC2007MultiLabelDataset` reading ImageSets/Main annotations for proper multi-hot labels
+  - Fixed softmax: `softmax(scores)` NOT `softmax(scores * 100)` (CLIP model already scales by 100x)
+  - Implemented 11-point interpolated mAP per VOC protocol
+- **Results**: 69.99% → **82.57%** (+12.58 points) ✅
+  - Multi-label dataset fix: +13.71 points (61.36% → 75.07%)
+  - Softmax correction: +7.50 points (75.07% → 82.57%)
+  - **Match with ELEVATER**: 82.57% vs 82.60% expected (within 0.03%)
+- **Files Modified**:
+  - [elevater_datasets.py](maveric/datasets/elevater_datasets.py#L17-L145) - VOC2007MultiLabelDataset class
+  - [model_customizer.py](maveric/customization/model_customizer.py#L386-L477) - _create_voc2007_test_loader()
+  - [evaluation.py](maveric/customization/evaluation.py#L531-L559) - evaluate_with_dataset_metric() with voc11_map
+  - [evaluation.py](maveric/customization/evaluation.py#L376-L420) - _compute_voc11_map() implementation
+- **Key Insight**: CLIP model internally applies 100x temperature scaling (`logits = 100.0 * image_embeds @ text_features.T`). ELEVATER's `softmax(100. * features)` means softmax of already-scaled logits, NOT an additional 100x multiplication.
+- **Documentation**:
+  - [VOC2007_FIX_SUMMARY.md](docs/bugfixes/VOC2007_FIX_SUMMARY.md) - Complete debugging timeline and solution
+  - [ELEVATER_MATCHING_IMPLEMENTATION.md](docs/bugfixes/ELEVATER_MATCHING_IMPLEMENTATION.md) - ELEVATER matching details
+  - [MAP_IMPLEMENTATION_COMPARISON.md](docs/bugfixes/MAP_IMPLEMENTATION_COMPARISON.md) - Our mAP vs ELEVATER's sklearn-based mAP
+- **Testing**: All 20 ELEVATER datasets now use correct per-dataset metrics (accuracy, mean_per_class, roc_auc, voc11_map)
+
 ### July 6, 2026 - Grid Visualization Performance Optimization (NEW)
 
 **Enhancement: Optional Grid Visualization for Better Performance**:

@@ -62,20 +62,6 @@ class Evaluator(BaseComponent):
             Text classifier tensor (embedding_dim x num_classes)
         """
         zeroshot_weights = []
-
-        # Debug: Print template info
-        if not hasattr(self, '_template_debug_printed'):
-            # Extract canonical name for debug printing
-            first_canonical = self._get_canonical_name(class_names[0])
-            print(f"\nDEBUG Text Classifier Creation:")
-            print(f"  Number of classes: {len(class_names)}")
-            print(f"  Number of templates: {len(templates)}")
-            print(f"  Templates: {templates}")
-            print(f"  Example prompts for '{first_canonical}':")
-            for tmpl in templates:
-                print(f"    - {tmpl.format(first_canonical)}")
-            self._template_debug_printed = True
-
         for class_name in class_names:
             # Extract canonical name (handles FER2013's list format)
             canonical_name = self._get_canonical_name(class_name)

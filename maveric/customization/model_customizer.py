@@ -990,19 +990,6 @@ class CustomizedCLIP(nn.Module):
         # Normalize
         image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
 
-        # Debug: Print embedding stats
-        if not hasattr(self, '_forward_debug_printed'):
-            print(f"\nDEBUG Forward pass:")
-            print(f"  Image embeddings shape: {image_embeds.shape}")
-            print(f"  Image embeddings mean: {image_embeds.mean().item():.6f}")
-            print(f"  Image embeddings std: {image_embeds.std().item():.6f}")
-            print(f"  Image embeddings min/max: {image_embeds.min().item():.6f} / {image_embeds.max().item():.6f}")
-            if text_features is not None:
-                print(f"  Text features shape: {text_features.shape}")
-                print(f"  Text features mean: {text_features.mean().item():.6f}")
-                print(f"  Text features std: {text_features.std().item():.6f}")
-            self._forward_debug_printed = True
-
         if text_features is None:
             return image_embeds
 
@@ -1010,16 +997,6 @@ class CustomizedCLIP(nn.Module):
         # Using fixed scale of 100.0 matches the CLIP paper and REACT benchmark
         # This ensures reproducible results and matches zero-shot evaluation practices
         logits = 100.0 * (image_embeds @ text_features.T)
-
-        # Debug: Print logit stats
-        if not hasattr(self, '_logit_debug_printed'):
-            print(f"  Logits shape: {logits.shape}")
-            print(f"  Logits mean: {logits.mean().item():.6f}")
-            print(f"  Logits std: {logits.std().item():.6f}")
-            print(f"  Logits min/max: {logits.min().item():.6f} / {logits.max().item():.6f}")
-            print(f"  Top-1 predictions (first 5): {logits.argmax(dim=1)[:5].tolist()}")
-            print(f"  Top-1 confidence (first 5): {logits.max(dim=1)[0][:5].tolist()}\n")
-            self._logit_debug_printed = True
 
         return logits
     

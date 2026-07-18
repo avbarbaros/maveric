@@ -1,6 +1,48 @@
-# Data Retrieval Bug Fixes Documentation
+# Bug Fixes Documentation
 
-This directory contains comprehensive documentation for the data retrieval bug fixes implemented on 2025-10-30.
+This directory contains comprehensive documentation for bug fixes implemented in MAVERIC.
+
+## Latest: VOC2007 Multi-Label Evaluation Fix (2026-07-18)
+
+**Critical Fix:** VOC2007 mAP evaluation now matches ELEVATER baseline exactly (82.57% vs 82.60% expected).
+
+**Quick Start:** [VOC2007_FIX_SUMMARY.md](VOC2007_FIX_SUMMARY.md) - Complete debugging timeline and solution
+
+### VOC2007 Documentation
+1. **[VOC2007_FIX_SUMMARY.md](VOC2007_FIX_SUMMARY.md)** - **START HERE**
+   - Complete debugging timeline (61.36% → 82.57%)
+   - Root cause analysis (multi-label + softmax double-scaling)
+   - Solution implementation with code examples
+   - Performance impact: +21.21 points improvement
+
+2. **[ELEVATER_MATCHING_IMPLEMENTATION.md](ELEVATER_MATCHING_IMPLEMENTATION.md)**
+   - How we matched ELEVATER's exact implementation
+   - Softmax normalization details
+   - Annotation handling protocol
+
+3. **[MAP_IMPLEMENTATION_COMPARISON.md](MAP_IMPLEMENTATION_COMPARISON.md)**
+   - Our mAP vs ELEVATER's sklearn-based mAP
+   - Algorithm comparison and validation
+
+4. **[ELEVATER_EVALUATION_METRICS.md](ELEVATER_EVALUATION_METRICS.md)**
+   - Per-dataset evaluation metrics configuration
+   - ELEVATER Table 5 specifications
+
+5. **[ELEVATER_INVESTIGATION_SUMMARY.md](ELEVATER_INVESTIGATION_SUMMARY.md)**
+   - Investigation of ELEVATER source code
+   - Key findings and implementation details
+
+6. **[VOC2007_MULTILABEL_FIX.md](VOC2007_MULTILABEL_FIX.md)**
+   - Multi-label dataset implementation
+
+7. **[VOC2007_DIFFICULT_EXAMPLES_FIX.md](VOC2007_DIFFICULT_EXAMPLES_FIX.md)**
+   - Difficult-example protocol analysis
+
+---
+
+## Data Retrieval Bug Fixes (2025-10-30)
+
+This section contains documentation for the data retrieval bug fixes.
 
 ## Quick Start
 
