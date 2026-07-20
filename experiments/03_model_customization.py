@@ -368,9 +368,12 @@ def run_unified_training(config: Dict, args) -> bool:
             'domain_downsample_scale_range': training_cfg.get('domain_downsample_scale_range', [0.5, 0.9])
         }
 
-        # Determine training data directory from config (respects results_dir setting)
-        configured_results_dir = config.get('results_dir', './results')
-        training_data_dir = Path(configured_results_dir).resolve()
+        # Dataset-specific images/ folders live directly under args.input, one per
+        # dataset (args.input/{dataset_name}/images/), matching the structure that
+        # load_datasets_from_directory() scans args.input for. Do NOT use
+        # args.input's parent, and do NOT use config['results_dir'] - neither
+        # points at the actual directory the user passed via --input.
+        training_data_dir = Path(args.input).resolve()
 
         training_dataset = UnifiedELEVATERDataset(
             unified_data=unified_data,
@@ -384,7 +387,7 @@ def run_unified_training(config: Dict, args) -> bool:
             dataset_domain_adaptation=dataset_domain_adaptation,
             global_domain_config=global_domain_config,
             cache_dir=config.get('cache_base_dir', './maveric_cache'),
-            training_data_dir=str(training_data_dir)  # Use configured results_dir
+            training_data_dir=str(training_data_dir)
         )
 
         # Step 7: Create data loader with custom collate function for PIL images
