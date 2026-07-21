@@ -398,7 +398,9 @@ def run_unified_training(config: Dict, args) -> bool:
             training_dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=4,
+            num_workers=0,  # >0 forks workers that each duplicate the in-memory
+                             # image_index/unified_data held by UnifiedELEVATERDataset,
+                             # which can OOM on memory-constrained hosts (e.g. Colab)
             pin_memory=torch.cuda.is_available(),
             collate_fn=custom_collate_fn
         )
