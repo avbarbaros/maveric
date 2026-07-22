@@ -5,6 +5,7 @@ This module provides functions for combining multiple ELEVATER datasets
 into a single unified training session.
 """
 
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -579,6 +580,31 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.valid_samples)
 
+    def _load_dataset_image(self, url, dataset_name):
+        """
+        Load an image from its dataset-specific images/ folder
+        ({training_data_dir}/{dataset_name}/images/img_{hash}.{ext}), matching
+        the lookup _validate_from_dataset_folders() used to confirm the sample
+        is valid. Falls back to the base dataset's global cache if the
+        dataset-specific folder isn't available for some reason.
+        """
+        from PIL import Image
+
+        if url and self.training_data_dir:
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            images_dir = self.training_data_dir / dataset_name / 'images'
+            for ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
+                candidate = images_dir / f'img_{url_hash}{ext}'
+                if candidate.exists():
+                    try:
+                        image = Image.open(candidate)
+                        image.load()
+                        return image.convert('RGB')
+                    except Exception:
+                        break  # Fall through to global cache
+
+        return self.base_dataset._safe_get_image(url)
+
     def __getitem__(self, idx):
         """
         Get a training sample with global label and dataset-specific domain adaptation.
@@ -595,8 +621,12 @@ class UnifiedELEVATERDataset(torch.utils.data.Dataset):
         # Get dataset name for dataset-specific transforms
         dataset_name = sample['source_dataset']
 
-        # Get image using base dataset's methods (handles caching + augmentation)
-        image = self.base_dataset._safe_get_image(sample.get('url'))
+        # Load from the dataset-specific images/ folder (same location
+        # _validate_from_dataset_folders already confirmed the file exists in),
+        # not the global cache. base_dataset._safe_get_image() only knows about
+        # the global cache (training_data_path=None was passed to it above), so
+        # using it here silently misses the fast local copy on every access.
+        image = self._load_dataset_image(sample.get('url'), dataset_name)
         image = self.base_dataset._apply_transforms(image)  # Applies augmentation
 
         # Apply dataset-specific domain adaptation AFTER augmentation
