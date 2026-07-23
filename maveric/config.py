@@ -62,14 +62,18 @@ class MAVERICConfig:
         'target_class_quality', 'multimodal_consistency'
     ])
     
-    # Metric weights for composite scoring  
+    # Metric weights for composite scoring
     metric_weights: Dict[str, float] = field(default_factory=lambda: {
         'img2img': 0.25,
         'txt2txt': 0.25,
         'img2txt': 0.25,
         'txt2img': 0.25
     })
-    
+
+    # Consistency score normalization configuration
+    # Addresses reviewer concern about scale differences across similarity metrics
+    consistency_normalization: str = "none"  # "none" (default) or "zscore" (z-score normalization per metric)
+
     # Default quality thresholds - organized by metric category
     default_thresholds: Dict[str, float] = field(default_factory=lambda: {
         # Visual metrics

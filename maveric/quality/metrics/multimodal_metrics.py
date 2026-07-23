@@ -20,32 +20,40 @@ class MultimodalConsistencyMetric(BaseQualityMetric):
     image-text pair is coherent and represents the intended concept well.
     """
     
-    def __init__(self, 
+    def __init__(self,
                  clip_model: str = "ViT-B/32",
                  device: str = "cuda",
                  reference_embeddings: Optional[Dict[str, np.ndarray]] = None,
-                 text_embeddings: Optional[Dict[str, np.ndarray]] = None):
+                 text_embeddings: Optional[Dict[str, np.ndarray]] = None,
+                 normalization: str = "none"):
         """
         Initialize multimodal consistency metric.
-        
+
         Args:
             clip_model: CLIP model to use
             device: Computation device
             reference_embeddings: Pre-computed reference image embeddings
             text_embeddings: Pre-computed text template embeddings
+            normalization: Normalization method ("none" or "zscore")
         """
         super().__init__("multimodal_consistency")
-        
+
         # Set device
         self.device = device if torch.cuda.is_available() else "cpu"
-        
+
         # Load CLIP model
         self.model, self.preprocess = clip.load(clip_model, device=self.device)
         self.model.eval()
-        
+
         # Store reference embeddings
         self.reference_embeddings = reference_embeddings or {}
         self.text_embeddings = text_embeddings or {}
+
+        # Store normalization setting
+        self.normalization = normalization
+
+        # Accumulate similarities for z-score normalization (per-class)
+        self.class_similarities = {}  # class_name -> list of [img2img, txt2txt, img2txt, txt2img]
     
     @property
     def metric_name(self) -> str:
@@ -109,11 +117,30 @@ class MultimodalConsistencyMetric(BaseQualityMetric):
             txt2txt = cosine_similarity(text_embedding, ref_texts).max()
             img2txt = cosine_similarity(image_embedding, ref_texts).max()
             txt2img = cosine_similarity(text_embedding, ref_images).max()
-            
-            # Calculate consistency as inverse of standard deviation
-            similarities = [img2img, txt2txt, img2txt, txt2img]
-            consistency = 1.0 - np.std(similarities)
-            
+
+            # Store similarities for potential z-score normalization
+            similarities = np.array([img2img, txt2txt, img2txt, txt2img])
+
+            # Accumulate for z-score normalization (if enabled)
+            if self.normalization == "zscore":
+                if label not in self.class_similarities:
+                    self.class_similarities[label] = []
+                self.class_similarities[label].append(similarities.copy())
+
+            # Apply normalization if requested
+            if self.normalization == "zscore" and len(self.class_similarities.get(label, [])) > 1:
+                # Per-class, per-metric z-score normalization
+                # Note: This requires seeing multiple samples per class first
+                class_metrics = np.array(self.class_similarities[label])  # Shape: (N, 4)
+                mu = class_metrics.mean(axis=0)  # Mean per metric
+                sd = class_metrics.std(axis=0)   # Std per metric
+                eps = 1e-8
+                normalized_similarities = (similarities - mu) / (sd + eps)
+                consistency = 1.0 - np.std(normalized_similarities)
+            else:
+                # Standard consistency: 1 - std of raw similarities
+                consistency = 1.0 - np.std(similarities)
+
             return round(float(consistency), 5)
             
         except Exception as e:

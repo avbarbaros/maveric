@@ -42,6 +42,28 @@ metric_weights:
   img2txt: 0.25    # Image-to-text consistency weight
   txt2img: 0.25    # Text-to-image consistency weight
 
+# Consistency score normalization configuration
+# Addresses reviewer concern: "The consistency score is defined as 1 minus the standard
+# deviation of four directional similarity metrics. This assumes metrics share the same
+# scale. Without normalization, the score may mix modality-specific similarities and
+# generate inconsistency that is partly mechanical."
+#
+# Options:
+#   - "none" (default): Use raw similarity values (original MAVERIC behavior)
+#   - "zscore": Apply per-class, per-metric z-score normalization before computing consistency
+#
+# Z-score normalization formula: (metric - mu) / sigma
+# - Computed independently for each of the 4 metrics (img2img, txt2txt, img2txt, txt2img)
+# - Computed per-class to account for class-specific distributions
+# - Applied BEFORE consistency calculation (1 - std)
+# - Weighted average still computed on RAW metrics (not normalized)
+#
+# Usage: Enable zscore normalization for datasets where similarity metrics have
+# different scales/distributions. Test with null-model analysis first:
+#   python -m maveric.utils.consistency_analysis --data results/dataset/curated/data.json
+#
+consistency_normalization: "none"  # Options: "none" (default) or "zscore"
+
 # Per-dataset evaluation metrics (following ELEVATER Table 5)
 # Available metrics:
 #   - accuracy: Standard top-1 accuracy (default for most datasets)

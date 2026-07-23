@@ -47,7 +47,8 @@ class Retriever(BaseComponent):
                  request_timeout: int = 5,
                  enable_sample_cache: bool = True,
                  sample_cache_version: int = 2,
-                 scoring_mode: str = "clip"):
+                 scoring_mode: str = "clip",
+                 consistency_normalization: str = "none"):
         """
         Initialize retriever.
 
@@ -64,6 +65,7 @@ class Retriever(BaseComponent):
             enable_sample_cache: Enable cross-dataset sample caching
             sample_cache_version: Sample cache format version
             scoring_mode: Scoring mode - "clip" (multi-modal) or "hu_moments" (shape-based)
+            consistency_normalization: Consistency score normalization - "none" or "zscore"
         """
         super().__init__("Retriever")
 
@@ -77,6 +79,10 @@ class Retriever(BaseComponent):
         self.max_retries = max_retries
         self.request_timeout = request_timeout
         self.scoring_mode = scoring_mode
+        self.consistency_normalization = consistency_normalization
+
+        # Store similarities per class for z-score normalization (if enabled)
+        self.class_similarities_buffer = {}  # class_name -> list of [img2img, txt2txt, img2txt, txt2img]
 
         # Initialize CLIP model
         self._init_clip_model()
@@ -730,7 +736,18 @@ class Retriever(BaseComponent):
                     hybrid_score = 0.25 * (img2img + txt2txt + img2txt + txt2img)
 
                     # Calculate consistency
-                    similarities = [img2img, txt2txt, img2txt, txt2img]
+                    similarities = np.array([img2img, txt2txt, img2txt, txt2img])
+
+                    # Store for potential z-score normalization post-processing
+                    # Note: Z-score normalization requires seeing all samples per class first,
+                    # so it's applied via post-processing scripts (see maveric/utils/consistency_analysis.py)
+                    if self.consistency_normalization == "zscore":
+                        if class_name not in self.class_similarities_buffer:
+                            self.class_similarities_buffer[class_name] = []
+                        self.class_similarities_buffer[class_name].append(similarities.copy())
+
+                    # Standard consistency: 1 - std of raw similarities
+                    # (z-score normalization applied in post-processing if enabled)
                     consistency = 1.0 - np.std(similarities)
 
                     # Get pre-computed EfficientNet score and CLIP similarity (no additional EfficientNet calls!)

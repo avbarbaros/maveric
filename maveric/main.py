@@ -85,7 +85,8 @@ class MAVERIC(BaseComponent):
             request_timeout=self.config.request_timeout,
             enable_sample_cache=self.config.enable_sample_cache,
             sample_cache_version=self.config.sample_cache_version,
-            scoring_mode=self.config.scoring_mode
+            scoring_mode=self.config.scoring_mode,
+            consistency_normalization=self.config.consistency_normalization
         )
         
         # Quality controller (initialized on demand)
