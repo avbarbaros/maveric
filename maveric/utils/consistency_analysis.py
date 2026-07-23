@@ -122,11 +122,19 @@ def analyze_curated_data(data_path: str,
                         B: int = 1000,
                         seed: int = 0) -> Dict[str, Dict]:
     """
-    Analyze consistency scores and correlations for curated dataset.
+    Analyze consistency scores and correlations from RAW retrieval dataset.
+
+    IMPORTANT: This analysis requires RAW retrieval data (not curated data).
+    Raw data contains individual similarity metrics (img2img, txt2txt, img2txt, txt2img)
+    for all classes, while curated data only has aggregated scores.
+
+    Data format expected:
+        - Raw data: Class_{class_name}_{metric} columns for all classes
+        - Example: Class_airplane_img2img, Class_airplane_txt2txt, etc.
 
     Args:
-        data_path: Path to curated JSON file with retrieval results
-        class_column: Column name containing class labels
+        data_path: Path to RAW retrieval JSON/pickle file
+        class_column: Ignored (kept for API compatibility)
         normalization: Normalization method ("none" or "zscore")
         B: Number of permutation iterations
         seed: Random seed
@@ -135,9 +143,10 @@ def analyze_curated_data(data_path: str,
         Dictionary mapping class_name -> null_test_results
 
     Example:
+        >>> # Use raw retrieval data, not curated data
         >>> results = analyze_curated_data(
-        ...     "results/cifar10/curated/training_data.json",
-        ...     normalization="zscore",
+        ...     "results/cifar10/raw/cifar10_raw_maveric_dataset1.json",
+        ...     normalization="none",
         ...     B=1000
         ... )
         >>> for cls, res in results.items():
@@ -151,38 +160,48 @@ def analyze_curated_data(data_path: str,
     else:
         df = pd.read_pickle(data_path)
 
-    # Get unique classes
-    classes = df[class_column].unique()
+    # Extract classes from column names (Class_{class_name}_img2img)
+    class_cols = [col for col in df.columns if col.startswith('Class_') and col.endswith('_img2img')]
+
+    if not class_cols:
+        raise ValueError(
+            "❌ No class columns found! This analysis requires RAW retrieval data.\n"
+            "   Expected columns: Class_{class_name}_img2img, Class_{class_name}_txt2txt, etc.\n"
+            "   Curated data (with 'label' and 'consistency' columns only) cannot be analyzed.\n"
+            "   Please use raw retrieval data from: results/{dataset}/raw/*.json"
+        )
+
+    classes = [col.replace('Class_', '').replace('_img2img', '') for col in class_cols]
+    print(f"ℹ️  Found {len(classes)} classes in raw data")
+    print(f"   Classes: {', '.join(classes[:5])}{'...' if len(classes) > 5 else ''}")
+    print()
 
     results = {}
     for cls in classes:
-        class_df = df[df[class_column] == cls]
-
-        # Extract similarity metrics
+        # Raw data: use all rows, extract this class's metric columns
         try:
             metrics = np.column_stack([
-                class_df[f'Class_{cls}_img2img'].values,
-                class_df[f'Class_{cls}_txt2txt'].values,
-                class_df[f'Class_{cls}_img2txt'].values,
-                class_df[f'Class_{cls}_txt2img'].values
+                df[f'Class_{cls}_img2img'].values,
+                df[f'Class_{cls}_txt2txt'].values,
+                df[f'Class_{cls}_img2txt'].values,
+                df[f'Class_{cls}_txt2img'].values
             ])
-
-            # Run null test
-            result = null_test_correlation(
-                metrics,
-                B=B,
-                seed=seed,
-                normalization=normalization
-            )
-
-            # Add sample count
-            result['n_samples'] = len(class_df)
-
-            results[cls] = result
-
         except KeyError as e:
-            print(f"Warning: Missing similarity columns for class '{cls}': {e}")
+            print(f"⚠️  Warning: Missing similarity columns for class '{cls}': {e}")
             continue
+
+        # Run null test
+        result = null_test_correlation(
+            metrics,
+            B=B,
+            seed=seed,
+            normalization=normalization
+        )
+
+        # Add sample count
+        result['n_samples'] = len(metrics)
+
+        results[cls] = result
 
     return results
 
@@ -191,20 +210,21 @@ def apply_zscore_normalization_to_data(data_path: str,
                                        output_path: str,
                                        class_column: str = 'label') -> None:
     """
-    Apply z-score normalization to consistency scores and save updated data.
+    Apply z-score normalization to consistency scores in RAW data and save.
 
-    This function recomputes consistency scores using z-score normalized metrics
-    and updates the dataset with new consistency values.
+    IMPORTANT: This function requires RAW retrieval data (not curated data).
+    It recomputes consistency scores using z-score normalized metrics.
 
     Args:
-        data_path: Path to input JSON file
+        data_path: Path to RAW retrieval JSON/pickle file
         output_path: Path to save updated JSON file
-        class_column: Column name containing class labels
+        class_column: Ignored (kept for API compatibility)
 
     Example:
+        >>> # Use raw retrieval data
         >>> apply_zscore_normalization_to_data(
-        ...     "results/cifar10/curated/training_data.json",
-        ...     "results/cifar10/curated/training_data_zscore.json"
+        ...     "results/cifar10/raw/cifar10_raw_maveric_dataset1.json",
+        ...     "results/cifar10/raw/cifar10_raw_maveric_dataset1_zscore.json"
         ... )
     """
     # Load data
@@ -215,34 +235,40 @@ def apply_zscore_normalization_to_data(data_path: str,
     else:
         df = pd.read_pickle(data_path)
 
-    # Process each class
-    classes = df[class_column].unique()
-    for cls in classes:
-        class_mask = df[class_column] == cls
-        class_df = df[class_mask]
+    # Extract classes from column names
+    class_cols = [col for col in df.columns if col.startswith('Class_') and col.endswith('_img2img')]
 
+    if not class_cols:
+        raise ValueError(
+            "❌ No class columns found! This function requires RAW retrieval data.\n"
+            "   Expected columns: Class_{class_name}_img2img, etc.\n"
+            "   Please use raw retrieval data from: results/{dataset}/raw/*.json"
+        )
+
+    classes = [col.replace('Class_', '').replace('_img2img', '') for col in class_cols]
+    print(f"ℹ️  Processing {len(classes)} classes in raw data")
+
+    # Process each class
+    for cls in classes:
         try:
-            # Extract metrics
+            # Extract metrics for this class (from all rows)
             metrics = np.column_stack([
-                class_df[f'Class_{cls}_img2img'].values,
-                class_df[f'Class_{cls}_txt2txt'].values,
-                class_df[f'Class_{cls}_img2txt'].values,
-                class_df[f'Class_{cls}_txt2img'].values
+                df[f'Class_{cls}_img2img'].values,
+                df[f'Class_{cls}_txt2txt'].values,
+                df[f'Class_{cls}_img2txt'].values,
+                df[f'Class_{cls}_txt2img'].values
             ])
 
             # Compute z-score normalized consistency
             consistency_zscore = compute_consistency_score(metrics, normalization="zscore")
 
-            # Update dataframe
-            df.loc[class_mask, f'Class_{cls}_consistency'] = consistency_zscore
+            # Update the consistency column for this class
+            df[f'Class_{cls}_consistency'] = consistency_zscore
 
-            # Also update global consistency column if exists
-            if 'consistency' in df.columns:
-                # For global consistency, use the class-specific score
-                df.loc[class_mask, 'consistency'] = consistency_zscore
+            print(f"   ✓ {cls}: Updated consistency with z-score normalization")
 
         except KeyError as e:
-            print(f"Warning: Missing similarity columns for class '{cls}': {e}")
+            print(f"   ⚠️  Warning: Missing columns for class '{cls}': {e}")
             continue
 
     # Save updated data
@@ -252,7 +278,9 @@ def apply_zscore_normalization_to_data(data_path: str,
     else:
         df.to_pickle(output_path)
 
+    print()
     print(f"✅ Z-score normalized data saved to: {output_path}")
+    print(f"   Original consistency columns preserved, updated with z-score values")
 
 
 def generate_analysis_report(results: Dict[str, Dict],
