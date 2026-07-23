@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List
-from consistency_analysis import analyze_curated_data, generate_analysis_report
+from .consistency_analysis import analyze_curated_data, generate_analysis_report
 
 
 def analyze_multiple_files(data_dir: str,
