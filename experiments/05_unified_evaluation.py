@@ -185,9 +185,13 @@ def build_customized_model(checkpoint: dict, clip_model_name: str,
 
 def evaluate_one_dataset(model, dataset_name: str, class_names: list,
                          evaluator: Evaluator, customizer: ModelCustomizer,
-                         use_templates: bool, detailed: bool):
+                         use_templates: bool, detailed: bool,
+                         metric_type: str = "accuracy"):
     """
-    Create test loader then run evaluation.
+    Create test loader then run evaluation using the dataset's official
+    ELEVATER metric (accuracy / mean_per_class / roc_auc / voc11_map) -
+    same evaluate_with_dataset_metric() path 03_model_customization.py uses,
+    instead of always computing plain top-1 accuracy.
 
     Returns
     -------
@@ -210,15 +214,20 @@ def evaluate_one_dataset(model, dataset_name: str, class_names: list,
         except Exception:
             pass
 
-    if detailed:
-        accuracy, per_class = evaluator.evaluate_detailed(
+    result = evaluator.evaluate_with_dataset_metric(
+        model, test_loader, class_names, dataset_name,
+        metric_type=metric_type, templates=templates
+    )
+    accuracy = result['accuracy']
+
+    # Per-class breakdown only makes sense for single-label metrics -
+    # voc11_map's labels are multi-hot vectors, which evaluate_detailed()
+    # isn't equipped to break down per class.
+    per_class = None
+    if detailed and metric_type != "voc11_map":
+        _, per_class = evaluator.evaluate_detailed(
             model, test_loader, class_names, templates=templates
         )
-    else:
-        accuracy = evaluator.evaluate(
-            model, test_loader, class_names, templates=templates
-        )
-        per_class = None
 
     num_samples = len(test_loader.dataset)
     return accuracy, per_class, num_samples
@@ -305,6 +314,9 @@ def main():
     batch_size = args.batch_size or config.get("batch_size", 32)
     use_templates = not args.no_templates
     cache_base_dir = config.get("cache_base_dir", "./maveric_cache")
+    # Per-dataset official ELEVATER metric (accuracy / mean_per_class / roc_auc /
+    # voc11_map) - same mapping MAVERICConfig.evaluation_metrics uses in main.py.
+    evaluation_metrics_map = config.get("evaluation_metrics", {})
 
     print("=" * 70)
     print("  MAVERIC – Unified Model Evaluation")
@@ -401,8 +413,11 @@ def main():
             print(f"   ⚠️  Unknown dataset '{dataset_name}', skipping.")
             continue
 
+        metric_type = evaluation_metrics_map.get(dataset_name.lower(), "accuracy")
+
         results[dataset_name] = {
             "num_classes": len(class_names),
+            "metric_type": metric_type,
             "baseline_accuracy": None,
             "customized_accuracy": None,
             "improvement": None,
@@ -412,10 +427,11 @@ def main():
         # — Baseline (skipped when --no-baseline) ─────────────────────────
         b_acc = None
         if not args.no_baseline:
-            print(f"   🔷 Baseline CLIP ...")
+            print(f"   🔷 Baseline CLIP ({metric_type}) ...")
             b_acc, b_per_class, n_samples = evaluate_one_dataset(
                 baseline_model, dataset_name, class_names,
-                evaluator, customizer, use_templates, args.detailed
+                evaluator, customizer, use_templates, args.detailed,
+                metric_type=metric_type
             )
             if b_acc is None:
                 print(f"   ⚠️  Test data unavailable, skipping dataset.")
@@ -430,10 +446,11 @@ def main():
             print(f"      Baseline  : {b_acc:.2f}%  ({n_samples:,} samples)")
 
         # — Customized ————————————————————————————————————————————————————
-        print(f"   🔶 Customized model ...")
+        print(f"   🔶 Customized model ({metric_type}) ...")
         c_acc, c_per_class, n_samples_c = evaluate_one_dataset(
             customized_model, dataset_name, class_names,
-            evaluator, customizer, use_templates, args.detailed
+            evaluator, customizer, use_templates, args.detailed,
+            metric_type=metric_type
         )
         if c_acc is None:
             print(f"   ⚠️  Test data unavailable, skipping dataset.")
