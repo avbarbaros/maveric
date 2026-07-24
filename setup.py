@@ -12,7 +12,7 @@ setup(
     name="maveric",
     version="0.1.0",
     author="Anonymous Author(s)",
-    description="Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency (MAVERIC)",
+    description="Mahalanobis-based Adaptive Vision-language Efficient Retrieval with Integrated Curation (MAVERIC)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),

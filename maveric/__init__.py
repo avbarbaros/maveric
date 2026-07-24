@@ -1,5 +1,5 @@
 """
-MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency
+MAVERIC: Mahalanobis-based Adaptive Vision-language Efficient Retrieval with Integrated Curation
 
 A sophisticated quality control system for multi-modal dataset curation.
 """

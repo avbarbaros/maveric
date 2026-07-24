@@ -152,6 +152,10 @@ n_reference_images: 10
 request_timeout: 1
 max_retries: 0
 
+# Scoring mode for class similarity: "clip" (default, multi-modal) or
+# "hu_moments" (shape-based, rotation/scale/translation-invariant alternative)
+scoring_mode: "clip"
+
 # Caching
 enable_image_cache: true
 enable_sample_cache: true            # Cross-dataset CLIP embedding cache (v3)
@@ -164,19 +168,35 @@ metric_weights:
   img2txt: 0.25
   txt2img: 0.25
 
+# Per-dataset official ELEVATER evaluation metric (default: accuracy).
+# Applied by 03_model_customization.py and 05_unified_evaluation.py.
+evaluation_metrics:
+  caltech101: "mean_per_class"
+  oxford_pets: "mean_per_class"
+  fgvc_aircraft: "mean_per_class"
+  oxford_flowers102: "mean_per_class"
+  hateful_memes: "roc_auc"
+  voc2007: "voc11_map"
+
+# Save 10x10 image grids to curationResults/ when clicking "Save Data" in
+# the interactive GUI. Disabled by default for faster curation.
+save_grid_visualization: false
+
 # Training
 training:
   epochs: 50
-  learning_rate: 0.0000003
+  learning_rate: 0.0000001
   weight_decay: 0.05
-  regularization_weight: 0.7        # MSE regularization (prevents catastrophic forgetting)
+  regularization_weight: 0.9        # MSE regularization (prevents catastrophic forgetting)
   use_augmentation: true
-  augmentation_strength: 3
-  augmentation_magnitude: 12
+  augmentation_strength: 2
+  augmentation_magnitude: 8
   optimizer: "adamw"
   scheduler: "cosine"
   gradient_clip_value: 0.5
   use_domain_adaptation: false       # Enable per-dataset domain simulation
+  text_source: "labels"              # "labels" (class-name prompts) or "captions"
+                                      # (per-sample text, InfoNCE contrastive loss)
 ```
 
 ### Environment Variables
@@ -207,17 +227,20 @@ Sets up the environment for Colab or local use: mounts Drive, installs packages,
 
 ### 01_data_retrieval.py — Data Retrieval
 
+This script is interactive: it prompts you to pick a target dataset (by number or name) and a starting index after launch. Output location is derived from `results_dir` in the config (`{results_dir}/{dataset}/raw/`), not a CLI flag.
+
 ```bash
-python experiments/01_data_retrieval.py \
-    --config experiments/maveric_config.yaml \
-    --dataset cifar10 \
-    --output ./maveric_experiments/cifar10/raw/
+python experiments/01_data_retrieval.py --config experiments/maveric_config.yaml
+# → 🎯 Dataset Selection: enter a number or name (e.g. "cifar10") when prompted
+# → 📍 Starting Index Selection: enter 0 to start from the beginning
 
 # With EfficientNet quality scores (slower but more comprehensive)
 python experiments/01_data_retrieval.py \
     --config experiments/maveric_config.yaml \
-    --dataset cifar10 \
     --enable-efficientnet
+
+# Other flags: --dataset-id <int> (output filename suffix, default 1),
+# --debug-timing (per-sample timing breakdown for performance debugging)
 ```
 
 **Output**: Rotation JSON files with per-sample quality scores:
@@ -236,10 +259,11 @@ python experiments/02_data_curation.py \
     --input-dir ./maveric_experiments/cifar10/raw/ \
     --dataset-name cifar10 \
     --config experiments/maveric_config.yaml \
-    --output ./maveric_experiments/cifar10/curated/
+    --output-dir ./maveric_experiments/cifar10/curated/ \
+    --balance-strategy median   # none, median, min, or max
 ```
 
-Applies quality thresholds and balances the dataset. For interactive threshold selection, use the [GUI](#interactive-gui) instead.
+Applies quality thresholds and balances the dataset. For interactive threshold selection, use the [GUI](#interactive-gui) instead. `--output-dir`/`-o` defaults to `{results_dir}/{dataset-name}` from the config if omitted.
 
 ---
 
@@ -272,18 +296,23 @@ The fine-tuning process:
 1. Loads curated training JSON files
 2. Wraps CLIP in `CustomizedCLIP` (locks text encoder, enables MSE regularization)
 3. Trains vision encoder with RandAugment + optional domain adaptation
-4. Evaluates per epoch using REACT-style template ensembling
+4. Evaluates baseline and per-epoch accuracy using REACT-style template ensembling and the dataset's official ELEVATER metric (`evaluation_metrics` in config — see [Datasets](#datasets))
 5. Saves `best_model.pth` checkpoint
+
+`--epochs`, `--learning-rate`, and `--batch-size` override the corresponding config values. Unified training also accepts `--max-samples-per-dataset` to cap per-dataset sample count when balancing across datasets.
 
 ---
 
 ### 04_results_analysis.py — Analysis & Visualization
 
+This script takes **no command-line arguments**. It reads its config path from the `MAVERIC_CONFIG_PATH` environment variable (falling back to a hardcoded Colab path if unset — set this variable rather than relying on the default), then reads `results_dir` from that config.
+
 ```bash
-python experiments/04_results_analysis.py \
-    --input-dir ./maveric_experiments/ \
-    --output-dir ./maveric_experiments/analysis/
+export MAVERIC_CONFIG_PATH=experiments/maveric_config.yaml
+python experiments/04_results_analysis.py
 ```
+
+> **Note**: this script expects `{results_dir}/elevater_experiment_summary.json`, which is produced by a batch multi-dataset experiment runner rather than by the `01`→`02`→`03` single-dataset flow shown above. If you're running datasets individually, this summary file won't exist yet — check for it before relying on this script, or adapt it to read your own experiment logs.
 
 Generates comparison plots, accuracy tables, and a markdown report.
 
@@ -306,9 +335,14 @@ python experiments/05_unified_evaluation.py \
 python experiments/05_unified_evaluation.py \
     --checkpoint ./maveric_experiments/unified_training/models/best_model.pth \
     --datasets cifar10 cifar100 oxford_pets
+
+# Also save per-class accuracy breakdown
+python experiments/05_unified_evaluation.py \
+    --checkpoint ./maveric_experiments/unified_training/models/best_model.pth \
+    --detailed
 ```
 
-Compares baseline zero-shot CLIP vs. customized model per dataset using REACT-style template ensembling.
+Compares baseline zero-shot CLIP vs. customized model per dataset using REACT-style template ensembling and each dataset's official ELEVATER metric (same `evaluation_metrics` config mapping used by `03_model_customization.py` — mean-per-class, ROC AUC, or VOC 11-point mAP where applicable, top-1 accuracy otherwise). `--config` defaults to `experiments/maveric_config.yaml` if omitted.
 
 ---
 
@@ -382,7 +416,7 @@ gui.save_data()           # Export to JSON + auto-generate image grids
 
 Clicking **Save Data** exports:
 - Training JSON files (rotation files, 1000 samples each)
-- 10×10 image grids organized by class for manual inspection (`curationResults/`)
+- 10×10 image grids organized by class for manual inspection (`curationResults/`) — **disabled by default** for faster curation; set `save_grid_visualization: true` in the config to enable
 
 ---
 
@@ -390,50 +424,52 @@ Clicking **Save Data** exports:
 
 MAVERIC supports all 20 official ELEVATER benchmark datasets:
 
-### Torchvision-based (7) — auto-download
+### Torchvision-based (6) — auto-download
 
 | Dataset | Classes | Notes |
 |---------|---------|-------|
 | CIFAR-10 | 10 | |
 | CIFAR-100 | 100 | Alphabetically ordered classes |
-| Country211 | 211 | |
-| EuroSAT | 10 | Satellite imagery |
+| DTD | 47 | Texture recognition |
 | GTSRB | 43 | Traffic signs |
 | Oxford Flowers102 | 102 | |
 | Oxford Pets | 37 | |
 
-### File-based (13) — manual test data required
+### File-based (14) — manual test data required
 
 | Dataset | Classes | Notes |
 |---------|---------|-------|
 | Caltech101 | 102 | Includes `background_google` |
-| DTD | 47 | Texture recognition |
-| FER2013 | 7 | Facial expressions; list-based class names |
+| Country211 | 211 | |
+| EuroSAT | 10 | Satellite imagery |
+| FER2013 | 7 | Facial expressions; list-based class names/synonyms |
 | FGVCAircraft | 100 | Migrated from torchvision Feb 2026 |
 | Food101 | 101 | Migrated from torchvision Feb 2026 |
-| HatefulMemes | 2 | |
+| HatefulMemes | 2 | Evaluated with ROC AUC |
 | Kitti Distance | 4 | |
 | MNIST | 10 | |
 | PatchCamelyon | 2 | Lymph node classification |
 | RenderedSST2 | 2 | Sentiment |
 | RESISC45 | 45 | Remote sensing |
 | StanfordCars | 196 | |
-| VOC2007 | 20 | |
+| VOC2007 | 20 | Multi-label; evaluated with VOC 11-point mAP |
 
 For file-based dataset setup instructions see [docs/newfeatures/FILE_BASED_DATASETS_GUIDE.md](docs/newfeatures/FILE_BASED_DATASETS_GUIDE.md).
 
-Expected directory structure for file-based datasets:
+Expected directory structure for file-based datasets — test data is read from `{cache_base_dir}/{dataset_name}/datasets/elevater/{dataset_name}/`, **not** `results_dir`:
 ```
-{results_dir}/{dataset_name}/
-├── train/
+{cache_base_dir}/{dataset_name}/datasets/elevater/{dataset_name}/
+├── train/                # Optional: used for reference sampling during retrieval
 │   ├── class_name_1/
 │   │   ├── image001.jpg
 │   │   └── ...
 │   └── ...
-└── test/
+└── test/                 # Required: used for baseline/customized model evaluation
     ├── class_name_1/
     └── ...
 ```
+
+Most datasets use a per-class official evaluation metric instead of plain top-1 accuracy (configured via `evaluation_metrics` in `maveric_config.yaml` and applied consistently by `03_model_customization.py` and `05_unified_evaluation.py`): `caltech101`, `oxford_pets`, `fgvc_aircraft`, `oxford_flowers102` use mean-per-class (balanced) accuracy; `hateful_memes` uses ROC AUC; `voc2007` uses 11-point interpolated mAP over multi-hot labels; all other datasets default to standard top-1 accuracy.
 
 ---
 

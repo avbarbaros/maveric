@@ -12,7 +12,7 @@ from .config import MAVERICConfig, TrainingConfig
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency"
+        description="MAVERIC: Mahalanobis-based Adaptive Vision-language Efficient Retrieval with Integrated Curation"
     )
     
     subparsers = parser.add_subparsers(dest='command', help='Commands')
