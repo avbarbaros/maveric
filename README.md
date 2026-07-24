@@ -2,7 +2,7 @@
   <img src="docs/maveric_logo.svg" alt="MAVERIC" width="800" />
 </p>
 
-# MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency
+# MAVERIC: Mahalanobis-based Adaptive Vision-language Efficient Retrieval with Integrated Curation
 
 MAVERIC is a quality-driven dataset curation system for vision-language models. It retrieves training samples from large web-crawled datasets, scores them with multi-modal quality metrics, and fine-tunes CLIP models on the curated data — following the [REACT benchmark](https://react-vl.github.io/) protocol across all 20 ELEVATER datasets.
 
@@ -534,7 +534,7 @@ If you use MAVERIC in your research, please cite:
 
 ```bibtex
 @software{maveric2025,
-  title   = {MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency},
+  title   = {MAVERIC: Mahalanobis-based Adaptive Vision-language Efficient Retrieval with Integrated Curation},
   author  = {Anonymous Author(s)},
   year    = {2025},
   note    = {Under double-blind review}
