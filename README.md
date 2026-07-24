@@ -83,7 +83,7 @@ For multi-dataset training, `03_model_customization.py --unified-training` combi
 ### Standard Install
 
 ```bash
-git clone https://github.com/avbarbaros/maveric.git
+git clone <this-repository-url>
 cd maveric
 pip install -r requirements.txt
 pip install -e ".[dev]"
@@ -535,11 +535,13 @@ If you use MAVERIC in your research, please cite:
 ```bibtex
 @software{maveric2025,
   title   = {MAVERIC: Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency},
-  author  = {Ali V. Barbaros},
+  author  = {Anonymous Author(s)},
   year    = {2025},
-  url     = {https://github.com/avbarbaros/maveric}
+  note    = {Under double-blind review}
 }
 ```
+
+*(Citation details will be updated with author names and publication venue upon acceptance.)*
 
 ---
 

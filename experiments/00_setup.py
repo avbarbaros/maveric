@@ -140,7 +140,14 @@ def install_maveric(config):
     maveric_base_dir = config['maveric_base_dir']
     repo_path = f"{maveric_base_dir}/repo/maveric"
     if not os.path.exists(repo_path):
-        repo_url = "https://github.com/avbarbaros/maveric.git"
+        # Set MAVERIC_REPO_URL to your repository URL (e.g. the anonymized
+        # mirror URL during double-blind review); no default is hardcoded here.
+        repo_url = os.environ.get("MAVERIC_REPO_URL")
+        if not repo_url:
+            print("❌ MAVERIC_REPO_URL environment variable is not set. "
+                  "Set it to this repository's clone URL, or pre-populate "
+                  f"{repo_path} yourself before running setup.")
+            return False
         result = run_command(f"git clone {repo_url} {repo_path}", "Cloning MAVERIC")
         if not result:
             return False

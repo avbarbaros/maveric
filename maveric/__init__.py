@@ -10,4 +10,4 @@ from .main import MAVERIC
 
 __version__ = "0.1.0"
 __all__ = ["MAVERIC", "MAVERICConfig", "TrainingConfig", "MAVERICError"]
-__author__ = "Ali V. Barbaros"
+__author__ = "Anonymous Author(s)"

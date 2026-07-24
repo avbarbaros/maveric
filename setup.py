@@ -11,12 +11,10 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="maveric",
     version="0.1.0",
-    author="Ali V. Barbaros",
-    author_email="alivalabarbaros@gmail.com",
+    author="Anonymous Author(s)",
     description="Multi-modal Adaptive Visual Embedding Retrieval with Integrated Consistency (MAVERIC)",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/avbarbaros/maveric",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
