@@ -283,7 +283,8 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
             enable_target_class_quality=enable_target_class_quality,
             max_retries=config.get('max_retries', 3),
             request_timeout=config.get('request_timeout', 5),
-            scoring_mode=config.get('scoring_mode', 'clip')
+            scoring_mode=config.get('scoring_mode', 'clip'),
+            consistency_normalization=config.get('consistency_normalization', 'none')
         )
 
         # Initialize MAVERIC (real-time stats are enabled by default)
@@ -302,6 +303,7 @@ def setup_maveric(config: Dict, enable_target_class_quality: bool = True) -> MAV
             print("📐 Scoring mode: HU MOMENTS (shape-based similarity)")
         else:
             print("🎨 Scoring mode: CLIP (multi-modal similarity)")
+        print(f"📊 Consistency normalization: {maveric_config.consistency_normalization}")
 
         if not enable_target_class_quality:
             print("⚡ EfficientNet-based TargetClassQualityMetric DISABLED (faster retrieval)")
