@@ -283,6 +283,128 @@ def apply_zscore_normalization_to_data(data_path: str,
     print(f"   Original consistency columns preserved, updated with z-score values")
 
 
+def apply_zscore_normalization_to_directory(input_dir: str,
+                                            output_dir: str,
+                                            pattern: str = "*.json") -> None:
+    """
+    Apply per-class z-score normalization across ALL JSON files in a directory,
+    treating them as one combined population, and write normalized files to
+    output_dir.
+
+    IMPORTANT: Retrieval output is typically split across multiple rotation
+    files (e.g. dataset_001.json, dataset_002.json, ...), each holding only a
+    fraction of the samples for any given class. Normalizing each file on its
+    own (as apply_zscore_normalization_to_data() does) computes mean/std from
+    an incomplete, biased subset of that class's samples. This function instead
+    makes two passes over the directory:
+      1. Scan every file to accumulate each class's raw similarity metrics
+         (img2img, txt2txt, img2txt, txt2img) across the FULL population.
+      2. Re-load each file and recompute its Class_{cls}_consistency column
+         using the global per-class mean/std from step 1, writing the result
+         to output_dir under the same filename.
+
+    Args:
+        input_dir: Directory containing raw retrieval JSON files
+        output_dir: Directory to write z-score normalized JSON files (mirrors
+            input_dir's filenames)
+        pattern: Glob pattern to select files within input_dir (default: "*.json")
+
+    Example:
+        >>> apply_zscore_normalization_to_directory(
+        ...     "results/hateful_memes/raw",
+        ...     "results/hateful_memes/raw_zscore"
+        ... )
+    """
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+
+    json_files = sorted(input_path.glob(pattern))
+    if not json_files:
+        raise ValueError(f"❌ No JSON files found in {input_dir} matching pattern '{pattern}'")
+
+    print(f"ℹ️  Found {len(json_files)} files in {input_dir}")
+
+    # ---- Pass 1: accumulate per-class metrics across ALL files ----
+    class_metrics_chunks: Dict[str, List[np.ndarray]] = {}
+
+    for file_path in json_files:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        df = pd.DataFrame(data)
+
+        class_cols = [col for col in df.columns if col.startswith('Class_') and col.endswith('_img2img')]
+        if not class_cols:
+            print(f"   ⚠️  Skipping {file_path.name}: no Class_*_img2img columns found")
+            continue
+
+        file_classes = [col.replace('Class_', '').replace('_img2img', '') for col in class_cols]
+
+        for cls in file_classes:
+            try:
+                metrics = np.column_stack([
+                    df[f'Class_{cls}_img2img'].values,
+                    df[f'Class_{cls}_txt2txt'].values,
+                    df[f'Class_{cls}_img2txt'].values,
+                    df[f'Class_{cls}_txt2img'].values
+                ])
+            except KeyError as e:
+                print(f"   ⚠️  Warning: Missing columns for class '{cls}' in {file_path.name}: {e}")
+                continue
+            class_metrics_chunks.setdefault(cls, []).append(metrics)
+
+    if not class_metrics_chunks:
+        raise ValueError(
+            "❌ No class columns found in any file! This function requires RAW retrieval data.\n"
+            "   Expected columns: Class_{class_name}_img2img, etc.\n"
+            f"   Checked directory: {input_dir}"
+        )
+
+    # Compute global per-class, per-metric mean/std across the full population
+    eps = 1e-8
+    class_stats: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
+    for cls, chunks in class_metrics_chunks.items():
+        all_metrics = np.concatenate(chunks, axis=0)  # (N_total, 4)
+        mu = all_metrics.mean(axis=0)
+        sd = all_metrics.std(axis=0)
+        class_stats[cls] = (mu, sd)
+        print(f"   ✓ {cls}: global stats computed from {len(all_metrics)} samples across {len(json_files)} files")
+
+    # ---- Pass 2: re-load each file, apply global stats, write to output_dir ----
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    for file_path in json_files:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        df = pd.DataFrame(data)
+
+        class_cols = [col for col in df.columns if col.startswith('Class_') and col.endswith('_img2img')]
+        file_classes = [col.replace('Class_', '').replace('_img2img', '') for col in class_cols]
+
+        for cls in file_classes:
+            if cls not in class_stats:
+                continue
+            try:
+                metrics = np.column_stack([
+                    df[f'Class_{cls}_img2img'].values,
+                    df[f'Class_{cls}_txt2txt'].values,
+                    df[f'Class_{cls}_img2txt'].values,
+                    df[f'Class_{cls}_txt2img'].values
+                ])
+            except KeyError:
+                continue
+
+            mu, sd = class_stats[cls]
+            normalized = (metrics - mu) / (sd + eps)
+            df[f'Class_{cls}_consistency'] = 1.0 - normalized.std(axis=1)
+
+        out_file_path = output_path / file_path.name
+        df.to_json(out_file_path, orient='records', indent=2)
+        print(f"   → {file_path.name} → {out_file_path}")
+
+    print()
+    print(f"✅ Z-score normalized data (global per-class stats across {len(json_files)} files) saved to: {output_dir}")
+
+
 def generate_analysis_report(results: Dict[str, Dict],
                             output_path: Optional[str] = None) -> str:
     """
@@ -373,10 +495,17 @@ if __name__ == "__main__":
     Example usage as standalone script.
 
     Run from command line:
+        # Single-file analysis + optional z-score export
         python -m maveric.utils.consistency_analysis \\
             --data results/cifar10/curated/training_data.json \\
             --normalization zscore \\
             --output analysis_report.txt
+
+        # Batch directory z-score normalization (multiple rotation files treated
+        # as one combined population, output mirrors input filenames)
+        python -m maveric.utils.consistency_analysis \\
+            --input-dir results/hateful_memes/raw \\
+            --output-dir results/hateful_memes/raw_zscore
     """
     import argparse
 
@@ -385,8 +514,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--data",
-        required=True,
-        help="Path to curated JSON data file"
+        help="Path to curated JSON data file (single-file mode)"
+    )
+    parser.add_argument(
+        "--input-dir",
+        help="Directory containing raw retrieval JSON files to z-score normalize "
+             "as one combined population (batch directory mode)"
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="Directory to write z-score normalized JSON files (required with --input-dir)"
     )
     parser.add_argument(
         "--normalization",
@@ -417,33 +554,54 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print("🔬 Running consistency score null-model analysis...")
-    print(f"   Data: {args.data}")
-    print(f"   Normalization: {args.normalization}")
-    print(f"   Iterations: {args.iterations}")
-    print("")
+    if args.input_dir:
+        # Batch directory mode: z-score normalize every JSON file in a
+        # directory using per-class stats pooled across all of them.
+        if not args.output_dir:
+            parser.error("--output-dir is required when using --input-dir")
 
-    # Run analysis
-    results = analyze_curated_data(
-        args.data,
-        normalization=args.normalization,
-        B=args.iterations,
-        seed=args.seed
-    )
-
-    # Generate report
-    report = generate_analysis_report(
-        results,
-        output_path=args.output
-    )
-
-    print(report)
-
-    # Apply z-score normalization if requested
-    if args.apply_zscore:
+        print("📊 Applying z-score normalization to directory...")
+        print(f"   Input directory: {args.input_dir}")
+        print(f"   Output directory: {args.output_dir}")
         print("")
-        print("📊 Applying z-score normalization to data...")
-        apply_zscore_normalization_to_data(
-            args.data,
-            args.apply_zscore
+
+        apply_zscore_normalization_to_directory(
+            args.input_dir,
+            args.output_dir
         )
+    else:
+        # Single-file mode: run null-model analysis (and optionally export a
+        # z-score normalized copy of that one file).
+        if not args.data:
+            parser.error("--data is required (or use --input-dir/--output-dir for batch mode)")
+
+        print("🔬 Running consistency score null-model analysis...")
+        print(f"   Data: {args.data}")
+        print(f"   Normalization: {args.normalization}")
+        print(f"   Iterations: {args.iterations}")
+        print("")
+
+        # Run analysis
+        results = analyze_curated_data(
+            args.data,
+            normalization=args.normalization,
+            B=args.iterations,
+            seed=args.seed
+        )
+
+        # Generate report
+        report = generate_analysis_report(
+            results,
+            output_path=args.output
+        )
+
+        print(report)
+
+        # Apply z-score normalization if requested
+        if args.apply_zscore:
+            print("")
+            print("📊 Applying z-score normalization to data...")
+            apply_zscore_normalization_to_data(
+                args.data,
+                args.apply_zscore
+            )
